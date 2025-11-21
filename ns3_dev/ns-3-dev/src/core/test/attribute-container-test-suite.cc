@@ -123,12 +123,9 @@ operator << (std::ostream &os, const AttributeContainerObject &obj)
 
 // this handles mixed constness and compatible, yet
 // distinct numerical classes (like int and long)
-template <class A, class B, class C, class D>
-bool
-operator ==(const std::pair<A, B> &x, const std::pair<C, D> &y)
-{
-  return x.first == y.first && x.second == y.second;
-}
+// Note: Removed custom operator== for std::pair as it conflicts with
+// the standard library's implementation in C++20/newer libc++.
+// The standard operator== already handles the comparisons needed here.
 
 /* Test instantiation, initialization, access */
 class AttributeContainerTestCase : public TestCase
@@ -224,7 +221,9 @@ AttributeContainerTestCase::DoRun ()
     for (auto v: ref)
       {
         NS_TEST_ASSERT_MSG_NE (true, (aciter == ac.End ()), "AC iterator reached end");
-        NS_TEST_ASSERT_MSG_EQ (v, (*aciter)->Get (), "Incorrect value");
+        auto got = (*aciter)->Get ();
+        NS_TEST_ASSERT_MSG_EQ (v.first, got.first, "Incorrect value (first)");
+        NS_TEST_ASSERT_MSG_EQ (v.second, got.second, "Incorrect value (second)");
         ++aciter;
       }
     NS_TEST_ASSERT_MSG_EQ (true, (aciter == ac.End ()), "AC iterator did not reach end");
@@ -410,19 +409,20 @@ AttributeContainerSetGetTestCase::DoRun (void)
     auto iter = map.begin ();
     for (auto v: mapstrint)
       {
-        NS_TEST_ASSERT_MSG_EQ (v, *iter, "Incorrect value in mapstrint");
+        NS_TEST_ASSERT_MSG_EQ (v.first, iter->first, "Incorrect value in mapstrint (first)");
+        NS_TEST_ASSERT_MSG_EQ (v.second, iter->second, "Incorrect value in mapstrint (second)");
         ++iter;
       }
   }
 }
 
-class AttributeContainerTestSuite : public TestSuite
+class AttributeContainerTestSuiteClass : public TestSuite
 {
   public:
-    AttributeContainerTestSuite ();
+    AttributeContainerTestSuiteClass ();
 };
 
-AttributeContainerTestSuite::AttributeContainerTestSuite ()
+AttributeContainerTestSuiteClass::AttributeContainerTestSuiteClass ()
   : TestSuite ("attribute-container-test-suite", UNIT)
 {
   AddTestCase (new AttributeContainerTestCase (), TestCase::QUICK);
@@ -430,4 +430,4 @@ AttributeContainerTestSuite::AttributeContainerTestSuite ()
   AddTestCase (new AttributeContainerSetGetTestCase (), TestCase::QUICK);
 }
 
-static AttributeContainerTestSuite AttributeContainerTestSuite; //!< Static variable for test initialization
+static AttributeContainerTestSuiteClass g_attributeContainerTestSuite; //!< Static variable for test initialization
