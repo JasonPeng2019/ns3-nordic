@@ -1,0 +1,6 @@
+[submodule "ns3_dev/ns-3-dev/cmake-cache"]
+	path = ns3_dev/ns-3-dev/cmake-cache
+	url = https://github.com/JasonPeng2019/cmake-apple.git
+[submodule "ns3_dev/cmake-cache"]
+	path = ns3_dev/cmake-cache
+	url = https://github.com/JasonPeng2019/cmake-apple.git
