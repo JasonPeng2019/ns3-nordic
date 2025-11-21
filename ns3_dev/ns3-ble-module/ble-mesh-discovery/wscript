@@ -1,0 +1,65 @@
+# -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
+
+# NS-3 BLE Mesh Discovery Protocol Module
+# Based on the protocol specification by jason.peng (November 2025)
+#
+# This module implements a scalable BLE mesh discovery protocol with:
+# - Discovery messages with TTL, PSF (Path So Far), and GPS location
+# - 3-metric message forwarding (Picky Forwarding, GPS Proximity, TTL)
+# - RSSI-based clusterhead election
+# - Cluster capacity limiting (150 devices per cluster)
+# - Multi-path routing with Dijkstra's shortest path
+
+def build(bld):
+    module = bld.create_ns3_module('ble-mesh-discovery', ['core', 'network',
+                                                           'spectrum', 'mobility',
+                                                           'energy', 'propagation',
+                                                           'ble'])
+    module.source = [
+        # Pure C protocol core (portable to embedded systems)
+        'model/protocol-core/ble_discovery_packet.c',
+
+        # C++ wrapper for NS-3 integration
+        'model/ble-discovery-header-wrapper.cc',
+
+        # Future model files
+        # 'model/ble-mesh-node.cc',
+        # 'model/ble-discovery-protocol.cc',
+        # 'model/ble-cluster-election.cc',
+        # 'model/ble-cluster-manager.cc',
+        # 'model/ble-mesh-routing.cc',
+
+        # Helper files will go here
+        # 'helper/ble-mesh-helper.cc',
+        # 'helper/ble-cluster-helper.cc',
+        ]
+
+    module_test = bld.create_ns3_module_test_library('ble-mesh-discovery')
+    module_test.source = [
+        # Test files
+        'test/ble-discovery-header-test.cc',
+        ]
+
+    headers = bld(features='ns3header')
+    headers.module = 'ble-mesh-discovery'
+    headers.source = [
+        # Pure C protocol headers (can be used standalone)
+        'model/protocol-core/ble_discovery_packet.h',
+
+        # C++ wrapper header
+        'model/ble-discovery-header-wrapper.h',
+
+        # Future model headers
+        # 'model/ble-mesh-node.h',
+        # 'model/ble-discovery-protocol.h',
+        # 'model/ble-cluster-election.h',
+        # 'model/ble-cluster-manager.h',
+        # 'model/ble-mesh-routing.h',
+
+        # Helper headers will go here
+        # 'helper/ble-mesh-helper.h',
+        # 'helper/ble-cluster-helper.h',
+        ]
+
+    if bld.env.ENABLE_EXAMPLES:
+        bld.recurse('examples')

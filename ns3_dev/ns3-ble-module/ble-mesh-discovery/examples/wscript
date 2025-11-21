@@ -1,0 +1,18 @@
+# -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
+
+def build(bld):
+    # BLE Discovery Header Example
+    obj = bld.create_ns3_program('ble-discovery-header-example',
+                                  ['ble-mesh-discovery'])
+    obj.source = 'ble-discovery-header-example.cc'
+
+    # Future examples will be added here
+    #
+    # obj = bld.create_ns3_program('ble-mesh-simple', ['ble-mesh-discovery'])
+    # obj.source = 'ble-mesh-simple.cc'
+    #
+    # obj = bld.create_ns3_program('ble-mesh-clustering', ['ble-mesh-discovery'])
+    # obj.source = 'ble-mesh-clustering.cc'
+    #
+    # obj = bld.create_ns3_program('ble-mesh-1000nodes', ['ble-mesh-discovery'])
+    # obj.source = 'ble-mesh-1000nodes.cc'
