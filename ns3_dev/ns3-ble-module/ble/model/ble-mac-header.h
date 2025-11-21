@@ -89,7 +89,7 @@ private:
   bool m_md;
   uint8_t m_llid; // this is only 2 bits
   uint8_t m_length; // 5 bits long
-  uint8_t m_rfu; //6 bits reserved for future use
+  uint8_t m_rfu __attribute__((unused)); //6 bits reserved for future use
 }; //BleMacHeader
 
 }; // namespace ns-3

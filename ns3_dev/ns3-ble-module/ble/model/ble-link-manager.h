@@ -238,7 +238,7 @@ namespace ns3 {
 
       Ptr<BleBBManager> m_bbManager;
       Ptr<Packet> m_currentPacket;
-      bool m_currentIsDummy;
+      bool m_currentIsDummy __attribute__((unused));
 
       bool m_nextExpectedSequenceNumber;
       bool m_sequenceNumber;

@@ -439,10 +439,10 @@ private:
   int pktsize = 20; //!< Size of packtets, in bytes
   int duration = 50; //<! Duration of the simulation in seconds
   int interval = 6; //!< Time between two packets
-  int packetSendDuration = 37; 
-  //<! Time during which new packets should be quied 
+  int packetSendDuration = 37;
+  //<! Time during which new packets should be quied
   bool verbose = false; // Enable logging
-  bool nakagami = false; // enable nakagami path loss
+  bool nakagami __attribute__((unused)) = false; // enable nakagami path loss
   bool dynamic = false; // Wether the nodes are moving yes or no
   bool scheduled = true; // Schedule the TX windows instead of random parameters.
   uint32_t nNodes = 25; // Number of nodes

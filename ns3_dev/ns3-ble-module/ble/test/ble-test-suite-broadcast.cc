@@ -88,10 +88,10 @@ private:
   double length = 30; //<! Square room with length as distance
   int pktsize = 20; //!< Size of packtets, in bytes
   int duration = 110; //<! Duration of the simulation in seconds
-  int packetSendDuration = 100; 
-    //<! Time during which new packets should be quied 
+  int packetSendDuration = 100;
+    //<! Time during which new packets should be quied
   bool verbose = false; // Enable logging
-  bool nakagami = false; // enable nakagami path loss
+  bool nakagami __attribute__((unused)) = false; // enable nakagami path loss
   bool dynamic = false; // Wether the nodes are moving yes or no
   bool scheduled = true; // Schedule the TX windows instead of random parameters.
   bool broadcastAvoidCollisions = true; 
