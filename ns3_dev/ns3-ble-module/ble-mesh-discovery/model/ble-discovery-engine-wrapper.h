@@ -15,7 +15,7 @@
 #include "ble-discovery-header-wrapper.h"
 
 extern "C" {
-#include "engine-core/ble_discovery_engine.h"
+#include "ns3/ble_discovery_engine.h"
 }
 
 namespace ns3 {

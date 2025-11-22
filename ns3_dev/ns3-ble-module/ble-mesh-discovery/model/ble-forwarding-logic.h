@@ -13,6 +13,7 @@
 #include "ns3/object.h"
 #include "ns3/vector.h"
 #include "ble-discovery-header-wrapper.h"
+#include "ns3/random-variable-stream.h"
 
 extern "C" {
 #include "ns3/ble_forwarding_logic.h"
@@ -62,6 +63,7 @@ public:
    * \return true if message should be forwarded
    */
   bool ShouldForwardCrowding (double crowdingFactor, uint32_t directNeighbors);
+  bool ShouldForwardCrowding (double crowdingFactor);
 
   /**
    * \brief Calculate distance between two GPS locations
@@ -96,6 +98,10 @@ public:
                       double crowdingFactor,
                       double proximityThreshold,
                       uint32_t directNeighbors);
+  bool ShouldForward (const BleDiscoveryHeaderWrapper& header,
+                      Vector currentLocation,
+                      double crowdingFactor,
+                      double proximityThreshold);
 
   /**
    * \brief Calculate forwarding priority for a message
@@ -121,9 +127,12 @@ public:
    * \param seed Seed value
    */
   void SeedRandom (uint32_t seed);
+  void SetRandomStream (Ptr<RandomVariableStream> stream);
 
 private:
   double m_proximityThreshold;             //!< GPS proximity threshold (meters)
+  Ptr<RandomVariableStream> m_randomStream; //!< Optional NS-3 RNG hook
+  uint32_t m_defaultNeighbors {20};        //!< Default direct-neighbor count for legacy APIs
 };
 
 } // namespace ns3

@@ -10,6 +10,9 @@
 #include "ble-forwarding-logic.h"
 #include "ns3/log.h"
 #include "ns3/double.h"
+#include "ns3/uinteger.h"
+#include <algorithm>
+#include <limits>
 
 namespace ns3 {
 
@@ -29,6 +32,11 @@ BleForwardingLogic::GetTypeId (void)
                    DoubleValue (10.0),
                    MakeDoubleAccessor (&BleForwardingLogic::m_proximityThreshold),
                    MakeDoubleChecker<double> (0.0))
+    .AddAttribute ("DefaultDirectNeighbors",
+                   "Neighbor count used when legacy overloads are called without an explicit value.",
+                   UintegerValue (20),
+                   MakeUintegerAccessor (&BleForwardingLogic::m_defaultNeighbors),
+                   MakeUintegerChecker<uint32_t> (1))
   ;
   return tid;
 }
@@ -69,6 +77,44 @@ BleForwardingLogic::ShouldForwardCrowding (double crowdingFactor, uint32_t direc
 {
   NS_LOG_FUNCTION (this << crowdingFactor << directNeighbors);
 
+  if (m_randomStream)
+    {
+      double clamped = std::max (0.0, std::min (crowdingFactor, 1.0));
+      uint32_t neighborCount = (directNeighbors == 0) ? 1 : directNeighbors;
+      double baseProbability = 2.0 / static_cast<double> (neighborCount);
+      if (baseProbability > 1.0)
+        {
+          baseProbability = 1.0;
+        }
+
+      const double crowdingLow = 0.1;
+      const double crowdingHigh = 0.9;
+      double forwardProbability;
+      if (clamped <= crowdingLow)
+        {
+          forwardProbability = 1.0;
+        }
+      else if (clamped >= crowdingHigh)
+        {
+          forwardProbability = baseProbability;
+        }
+      else
+        {
+          double t = (clamped - crowdingLow) / (crowdingHigh - crowdingLow);
+          forwardProbability = 1.0 + t * (baseProbability - 1.0);
+        }
+
+      double randomValue = m_randomStream->GetValue ();
+      bool shouldForward = randomValue < forwardProbability;
+
+      NS_LOG_DEBUG ("Crowding check (ns-3 RNG): crowding=" << clamped
+                    << ", neighbors=" << neighborCount
+                    << ", probability=" << forwardProbability
+                    << ", rand=" << randomValue
+                    << " -> " << (shouldForward ? "FORWARD" : "DROP"));
+      return shouldForward;
+    }
+
   bool shouldForward = ble_forwarding_should_forward_crowding (crowdingFactor, directNeighbors);
 
   NS_LOG_DEBUG ("Crowding check: factor=" << crowdingFactor
@@ -76,6 +122,12 @@ BleForwardingLogic::ShouldForwardCrowding (double crowdingFactor, uint32_t direc
                 << " -> " << (shouldForward ? "FORWARD" : "DROP"));
 
   return shouldForward;
+}
+
+bool
+BleForwardingLogic::ShouldForwardCrowding (double crowdingFactor)
+{
+  return ShouldForwardCrowding (crowdingFactor, m_defaultNeighbors);
 }
 
 double
@@ -151,6 +203,19 @@ BleForwardingLogic::ShouldForward (const BleDiscoveryHeaderWrapper& header,
   return shouldForward;
 }
 
+bool
+BleForwardingLogic::ShouldForward (const BleDiscoveryHeaderWrapper& header,
+                                    Vector currentLocation,
+                                    double crowdingFactor,
+                                    double proximityThreshold)
+{
+  return ShouldForward (header,
+                        currentLocation,
+                        crowdingFactor,
+                        proximityThreshold,
+                        m_defaultNeighbors);
+}
+
 uint8_t
 BleForwardingLogic::CalculatePriority (const BleDiscoveryHeaderWrapper& header) const
 {
@@ -181,6 +246,23 @@ void
 BleForwardingLogic::SeedRandom (uint32_t seed)
 {
   ble_forwarding_set_random_seed (seed);
+}
+
+void
+BleForwardingLogic::SetRandomStream (Ptr<RandomVariableStream> stream)
+{
+  m_randomStream = stream;
+
+  if (m_randomStream)
+    {
+      // Use a deterministic seed derived from the stream to keep C engine RNG stable
+      uint32_t seed = m_randomStream->GetInteger ();
+      if (seed == 0)
+        {
+          seed = 1;
+        }
+      ble_forwarding_set_random_seed (seed);
+    }
 }
 
 } // namespace ns3
