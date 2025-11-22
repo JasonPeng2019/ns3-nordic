@@ -13,6 +13,12 @@ def build(bld):
     obj = bld.create_ns3_program('task-9-test', ['ble-mesh-discovery'])
     obj.source = 'task-9-test.cc'
 
+    # Task 10: GPS Proximity Filtering Test
+    obj = bld.create_ns3_program('task-10-test', ['ble-mesh-discovery'])
+    obj.source = 'task-10-test.cc'
+
+    # Task 11: TTL-Based Message Prioritization Test
+    obj = bld.create_ns3_program('task-11-test', ['ble-mesh-discovery'])
+    obj.source = 'task-11-test.cc'
+
     # Future task tests will be added here
-    # obj = bld.create_ns3_program('task-10-test', ['ble-mesh-discovery'])
-    # obj.source = 'task-10-test.cc'
