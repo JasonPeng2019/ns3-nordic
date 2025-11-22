@@ -19,10 +19,12 @@ def build(bld):
         # Pure C protocol core (portable to embedded systems)
         'model/protocol-core/ble_discovery_packet.c',
         'model/protocol-core/ble_mesh_node.c',
+        'model/protocol-core/ble_discovery_cycle.c',
 
         # C++ wrapper for NS-3 integration
         'model/ble-discovery-header-wrapper.cc',
         'model/ble-mesh-node-wrapper.cc',
+        'model/ble-discovery-cycle-wrapper.cc',
 
         # Future model files
         # 'model/ble-discovery-protocol.cc',
@@ -40,6 +42,7 @@ def build(bld):
         # Test files
         'test/ble-discovery-header-test.cc',
         'test/ble-mesh-node-test.cc',
+        'test/ble-discovery-cycle-test.cc',
         ]
 
     headers = bld(features='ns3header')
@@ -48,10 +51,12 @@ def build(bld):
         # Pure C protocol headers (can be used standalone)
         'model/protocol-core/ble_discovery_packet.h',
         'model/protocol-core/ble_mesh_node.h',
+        'model/protocol-core/ble_discovery_cycle.h',
 
         # C++ wrapper header
         'model/ble-discovery-header-wrapper.h',
         'model/ble-mesh-node-wrapper.h',
+        'model/ble-discovery-cycle-wrapper.h',
 
         # Future model headers
         # 'model/ble-discovery-protocol.h',
