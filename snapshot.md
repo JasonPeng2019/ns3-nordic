@@ -51,7 +51,7 @@ All core files are portable C (no NS-3 deps) and are already unit-tested.
 
 ## 5. Current Test Coverage
 
-- **Pure C tests** (`test/ble-discovery-packet-c-test.c`, `ble-mesh-node-c-test.c`, `ble-discovery-cycle-c-test.c`, `ble-forwarding-logic-c-test.c`): Validate serialization, TTL/PSF, candidacy thresholds, RNG behavior, etc.
+- **Pure C tests** (`test/ble-discovery-packet-c-test.c`, `ble-mesh-node-c-test.c`, `ble-discovery-cycle-c-test.c`, `ble-forwarding-logic-c-test.c`, `ble-discovery-header-test.cc`): Validate serialization, TTL/PSF, candidacy thresholds, RNG behavior, ΣΠ+LastΠ tracking, and wrapper round-trips.
 - **NS-3 tests** (`test/ble-forwarding-logic-test.cc`, `ble-message-queue-test.cc`, `ble-mesh-node-test.cc`, `ble-discovery-cycle-test.cc`): Exercise wrappers and integration logic.
 
 No dedicated engine tests exist yet (future work).
@@ -67,5 +67,14 @@ No dedicated engine tests exist yet (future work).
 - **Geographic distribution + forwarding success metrics**.
 - **Routing/multipath (Phase 5)** and logging/helpers.
 - **Engine + wrapper tests/examples** once election features land.
+
+## 7. Documentation & Planning Artifacts
+
+- `TODO.md` – canonically tracks every phase/task; highlights the ΣΠ/Last Π election design, adaptive broadcast timing requirements, and outstanding engine work.
+- `discovery_protocol.txt` – narrative spec; now includes LP (Last Π) description plus the two-phase stochastic slotting design (crowding-heavy RSSI sampling phase vs. neighbor-discovery listen-heavy phase).
+- `merge_report.md` – enumerates upstream changes since the last snapshot so you can diff after pulling.
+- `future_report.md` – lists pending engine features (state transitions, election TX/RX wiring, multi-round flooding) with suggested entry points.
+- `C-engine_TODO.md` – phased plan for the pure-C engine state machine, used when incrementally implementing/test-driving helpers.
+- `bug_report.md` – placeholder for open protocol defects (currently “no bugs reported”).
 
 Use this snapshot to understand the baseline before merging/pulling new work. It highlights what exists and what remains unfinished per the protocol specification.
