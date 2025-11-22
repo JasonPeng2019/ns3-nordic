@@ -817,3 +817,133 @@ Specialized `BleDiscoveryHeaderWrapper` subclass for election announcements:
 - 📋 Section 4: C++ Model Wrappers - **READY FOR REVIEW**
 
 **Last Updated**: 2025-11-22
+
+
+
+Why should we do a time-limited circular buffer? Why not just reset the buffer every cycle instead?
+Excellent question! Let me analyze the trade-offs between a time-limited circular buffer vs. a cycle-reset buffer.
+Why Time-Limited Circular Buffer is Superior
+1. Decoupling from Discovery Cycle Timing
+Time-based approach:
+Independent of protocol cycle duration
+Works regardless of whether cycles are 400ms, 1000ms, or variable
+Portable across different network configurations
+Cycle-reset approach:
+Tightly couples RSSI measurement to discovery timing
+If cycle duration changes, crowding calculation fundamentally changes
+Protocol tuning becomes interdependent (can't tune discovery timing without affecting crowding)
+2. Variable Sampling Rates Across Network Conditions
+From the protocol, nodes receive messages at different rates depending on:
+Network density (dense areas → more messages per cycle)
+Forwarding probability (crowding affects how many messages are forwarded)
+Distance from active nodes
+Scenario: Dense vs. Sparse Areas Time-based (10 seconds):
+Dense area:  50 samples/cycle × 25 cycles = 100+ samples over 10s
+Sparse area: 2 samples/cycle × 25 cycles = 50 samples over 10s
+Result: Both use all available recent data
+Cycle-reset:
+Dense area:  50 samples collected in 400ms cycle
+Sparse area: 2 samples collected in 400ms cycle
+Result: Sparse node has insufficient statistical data!
+A sparse node might only receive 1-3 RSSI samples per cycle, making mean RSSI extremely noisy.
+3. Mobile Node Adaptation Speed
+From RSSI_CIRCULAR_BUFFER_UPGRADE.md:9-13, the original motivation was handling mobile nodes: Time-based (10 seconds):
+Mobile node moves from sparse → dense area
+Old "sparse" samples evicted after 10 seconds regardless of cycle count
+Adaptation time: 10 seconds maximum
+Cycle-reset approach:
+Mobile node moves from sparse → dense area at 10 m/s
+Cycle duration: 400ms (from Task 7)
+Old samples cleared every 400ms
+Sounds good, but...
+The Problem: What if the node is between areas?
+Cycle 1: Node at edge of dense area
+  - Receives 30 samples (RSSI avg -60 dBm) → crowding = 0.6
+
+Cycle 2: Node moves 4 meters, now in transition zone  
+  - Receives 5 samples (RSSI avg -75 dBm) → crowding = 0.3
+  - BUFFER RESET!
+  - Crowding drops by 50% from one cycle to the next!
+
+Cycle 3: Node fully in sparse area
+  - Receives 2 samples (RSSI avg -85 dBm) → crowding = 0.1
+  - BUFFER RESET!
+  - Another 67% drop!
+The cycle-reset approach creates sawtooth oscillations at transition boundaries.
+4. Resistance to Bursty Traffic Patterns
+Real networks have bursty message patterns: Scenario: Burst of Discovery Messages
+Cycle N: Normal operation
+  - 5 nodes broadcast simultaneously (rare but possible)
+  - 15 messages forwarded in this cycle
+  - Collision storm → very high RSSI readings
+Time-based:
+15 burst samples averaged with 85 normal samples from last 10 seconds
+Crowding increases moderately (15/100 influence)
+Node continues operating normally
+Cycle-reset:
+15 burst samples are the ONLY data
+Crowding spikes to 0.9+ (very crowded!)
+Node reduces broadcast to 3 slots (ultra-conservative)
+Next cycle: Only 3 broadcasts, so only 1-2 messages received
+Result: Oscillation between "too crowded" and "not crowded"
+5. Clusterhead Election Stability
+From TODO.md:1072-1079, candidacy determination uses crowding factor: Cycle-reset problem:
+Node evaluating candidacy...
+
+Cycle 10: Crowding = 0.2 (happens to be a quiet cycle)
+  → connection:noise = 15 / (1 + 0.2) = 12.5 → CANDIDATE!
+
+Cycle 11: Crowding = 0.7 (busy cycle with many forwarded messages)  
+  → connection:noise = 15 / (1 + 0.7) = 8.8 → NOT CANDIDATE!
+
+Cycle 12: Crowding = 0.3 (back to normal)
+  → connection:noise = 15 / (1 + 0.3) = 11.5 → CANDIDATE AGAIN!
+This "flickering candidacy" breaks the election protocol:
+Node announces candidacy, then withdraws, then announces again
+Wastes bandwidth with inconsistent announcements
+Other nodes receive contradictory information
+Time-based: Crowding is stable over 10 seconds, so candidacy decision is stable.
+6. Handling Cycle-Asynchronous Events
+Not all RSSI samples are tied to discovery cycles: From TODO.md:879:
+"Add RSSI measurement during listening phase"
+What if measurements happen at different cycle phases? Cycle-reset approach:
+Cycle N: Node listens in slot 2, hears 3 messages → 3 RSSI samples
+Cycle N+1: Node listens in slot 3, hears 8 messages → 8 RSSI samples  
+Sample count varies by when the node listens, not by actual network density! Time-based: All samples from the last 10 seconds contribute, regardless of cycle phase alignment.
+7. Continuous Operation vs. Phase-Dependent Behavior
+From TODO.md:696-702, the discovery cycle has 4 slots:
+Slot 0: Own message
+Slots 1-3: Forwarding
+If you reset every cycle, when do you calculate crowding?
+End of cycle? (Doesn't help for adaptive decisions within the cycle)
+Start of cycle? (Using stale data from previous cycle)
+Time-based: Crowding can be calculated at any time with meaningful results.
+When Would Cycle-Reset Make Sense?
+There's one scenario where cycle-reset could be better: Ultra-fast environmental changes:
+Network goes from 0 to 100 nodes in 1 second
+Time-based buffer takes 10 seconds to reflect change
+Cycle-reset (400ms) adapts in 400ms
+But this is unrealistic for BLE mesh:
+Nodes don't teleport
+Network density changes gradually (nodes move, join, leave over seconds/minutes)
+Even a node moving at 10 m/s takes seconds to traverse sparse → dense transition
+Optimal Compromise: Configurable Window
+The current implementation actually allows tuning: From RSSI_CIRCULAR_BUFFER_UPGRADE.md:189-192:
+// Default is 10 seconds, but can be changed:
+state.rssi_max_age_ms = 5000;  // 5 second window
+state.rssi_max_age_ms = 30000; // 30 second window
+For different scenarios:
+High mobility: Use 5-second window (faster adaptation)
+Stable network: Use 30-second window (more stable crowding)
+Cycle-based: Set rssi_max_age_ms = cycle_duration_ms (effectively cycle-reset)
+Summary: Why Time-Based Wins
+Criterion	Time-Based (10s)	Cycle-Reset (400ms)
+Statistical stability	✅ 100+ samples	❌ 1-50 samples (variable)
+Mobile node adaptation	✅ Predictable 10s lag	⚠️ Fast but oscillates
+Burst resistance	✅ Smoothed over time	❌ Single-cycle spikes
+Candidacy stability	✅ Consistent decisions	❌ Flickering candidacy
+Protocol independence	✅ Decoupled from cycles	❌ Tightly coupled
+Sparse area handling	✅ Accumulates samples	❌ Insufficient data
+Implementation complexity	⚠️ Timestamp tracking	✅ Simple reset
+The time-based approach trades slightly more complexity (timestamp tracking) for significantly more robust crowding estimation that works across diverse network conditions.
+ok, my code is not supposed to work this wayu. the rssi measurement is supposed to measure the noise floor by getting all the devices in a certain 2 second period to talk, and then you listen for the minority of this period to determine how "crowded" the area around you is for this cycle. the rssi measurement ONLY measures for these 2 seconds, and then actual communication is implemented and rssi is never revisited. does my current code do this, or are the problems you described actually relevant?
