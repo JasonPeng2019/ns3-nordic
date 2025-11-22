@@ -372,7 +372,10 @@ void test_score_calculation(void)
     // Score = (0.6 * connections/noise) + (0.4 * geo_dist)
     double score = ble_election_calculate_score(10, 5.0, 0.8);
     double expected = (0.6 * (10.0 / 5.0)) + (0.4 * 0.8);
-    TEST_ASSERT_DOUBLE_EQ(score, expected, "Score calculation should match formula");
+    /* The implementation clamps score to [0.0, 1.0], so apply same clamp to expected */
+    if (expected > 1.0) expected = 1.0;
+    if (expected < 0.0) expected = 0.0;
+    TEST_ASSERT_DOUBLE_EQ(score, expected, "Score calculation should match formula (with clamping)");
 
     // Test clamping to [0.0, 1.0]
     score = ble_election_calculate_score(1000, 1.0, 1.0);
