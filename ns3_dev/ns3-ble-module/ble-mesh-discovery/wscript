@@ -22,14 +22,17 @@ def build(bld):
         'model/protocol-core/ble_discovery_cycle.c',
         'model/protocol-core/ble_message_queue.c',
         'model/protocol-core/ble_forwarding_logic.c',
+        'model/protocol-core/ble_broadcast_timing.c',
         'model/engine-core/ble_discovery_engine.c',
 
         # C++ wrapper for NS-3 integration
         'model/ble-discovery-header-wrapper.cc',
+        'model/ble-election-header.cc',
         'model/ble-mesh-node-wrapper.cc',
         'model/ble-discovery-cycle-wrapper.cc',
         'model/ble-message-queue.cc',
         'model/ble-forwarding-logic.cc',
+        'model/ble-broadcast-timing.cc',
         'model/ble-discovery-engine-wrapper.cc',
 
         # Future model files
@@ -51,6 +54,7 @@ def build(bld):
         'test/ble-discovery-cycle-test.cc',
         'test/ble-message-queue-test.cc',
         'test/ble-forwarding-logic-test.cc',
+        'test/ble-broadcast-timing-test.cc',
         ]
 
     headers = bld(features='ns3header')
@@ -62,14 +66,17 @@ def build(bld):
         'model/protocol-core/ble_discovery_cycle.h',
         'model/protocol-core/ble_message_queue.h',
         'model/protocol-core/ble_forwarding_logic.h',
+        'model/protocol-core/ble_broadcast_timing.h',
         'model/engine-core/ble_discovery_engine.h',
 
         # C++ wrapper header
         'model/ble-discovery-header-wrapper.h',
+        'model/ble-election-header.h',
         'model/ble-mesh-node-wrapper.h',
         'model/ble-discovery-cycle-wrapper.h',
         'model/ble-message-queue.h',
         'model/ble-forwarding-logic.h',
+        'model/ble-broadcast-timing.h',
         'model/ble-discovery-engine-wrapper.h',
 
         # Future model headers
@@ -85,3 +92,6 @@ def build(bld):
 
     if bld.env.ENABLE_EXAMPLES:
         bld.recurse('examples')
+
+    # Always build task tests (standalone test programs)
+    bld.recurse('test/task_tests')

@@ -9,6 +9,7 @@
 
 #include "ble-discovery-header-wrapper.h"
 #include "ns3/log.h"
+#include "ns3/assert.h"
 
 namespace ns3 {
 
@@ -52,6 +53,7 @@ BleDiscoveryHeaderWrapper::Print (std::ostream &os) const
   os << "Type=" << (m_isElection ? "ELECTION" : "DISCOVERY") << ", ";
   os << "ID=" << m_packet.sender_id << ", ";
   os << "TTL=" << (uint32_t)m_packet.ttl << ", ";
+  os << "ClusterheadFlag=" << (m_packet.is_clusterhead_message ? "true" : "false") << ", ";
   os << "Path=[";
   for (uint16_t i = 0; i < m_packet.path_length; ++i)
     {
@@ -93,6 +95,8 @@ BleDiscoveryHeaderWrapper::Serialize (Buffer::Iterator start) const
   uint32_t bytes_written;
   if (m_isElection)
     {
+      NS_ABORT_MSG_IF (!m_election.base.is_clusterhead_message,
+                       "Election packet missing clusterhead flag");
       bytes_written = ble_election_serialize (&m_election, buffer, size);
     }
   else
@@ -126,10 +130,12 @@ BleDiscoveryHeaderWrapper::Deserialize (Buffer::Iterator start)
       bytes_read = ble_election_deserialize (&m_election, buffer, available);
       // Sync the base packet reference
       m_packet = m_election.base;
+      m_isElection = m_packet.is_clusterhead_message;
     }
   else
     {
       bytes_read = ble_discovery_deserialize (&m_packet, buffer, available);
+      m_isElection = m_packet.is_clusterhead_message;
     }
 
   delete[] buffer;
@@ -142,6 +148,36 @@ bool
 BleDiscoveryHeaderWrapper::IsElectionMessage (void) const
 {
   return m_isElection;
+}
+
+void
+BleDiscoveryHeaderWrapper::SetClusterheadFlag (bool isClusterhead)
+{
+  if (isClusterhead && !m_isElection)
+    {
+      SetAsElectionMessage ();
+      return;
+    }
+
+  m_packet.is_clusterhead_message = isClusterhead;
+  if (m_isElection)
+    {
+      m_election.base.is_clusterhead_message = isClusterhead;
+      if (!isClusterhead)
+        {
+          m_isElection = false;
+        }
+    }
+  else
+    {
+      m_isElection = isClusterhead;
+    }
+}
+
+bool
+BleDiscoveryHeaderWrapper::HasClusterheadFlag (void) const
+{
+  return m_packet.is_clusterhead_message;
 }
 
 void
@@ -271,8 +307,10 @@ BleDiscoveryHeaderWrapper::SetAsElectionMessage (void)
     }
   m_election.base.gps_available = temp.gps_available;
   m_election.base.gps_location = temp.gps_location;
+  m_election.base.is_clusterhead_message = true;
   // Sync m_packet with election base
   m_packet = m_election.base;
+  m_packet.is_clusterhead_message = true;
 }
 
 void
@@ -299,6 +337,43 @@ uint32_t
 BleDiscoveryHeaderWrapper::GetPdsf (void) const
 {
   return m_isElection ? m_election.election.pdsf : 0;
+}
+
+void
+BleDiscoveryHeaderWrapper::ResetPdsfHistory (void)
+{
+  if (!m_isElection)
+    {
+      return;
+    }
+  ble_election_pdsf_history_reset (&m_election.election.pdsf_history);
+  m_election.election.pdsf = 0;
+}
+
+uint32_t
+BleDiscoveryHeaderWrapper::UpdatePdsf (uint32_t directConnections, uint32_t alreadyReached)
+{
+  if (!m_isElection)
+    {
+      SetAsElectionMessage ();
+    }
+  return ble_election_update_pdsf (&m_election, directConnections, alreadyReached);
+}
+
+std::vector<uint32_t>
+BleDiscoveryHeaderWrapper::GetPdsfHopHistory (void) const
+{
+  std::vector<uint32_t> history;
+  if (!m_isElection)
+    {
+      return history;
+    }
+
+  for (uint16_t i = 0; i < m_election.election.pdsf_history.hop_count; ++i)
+    {
+      history.push_back (m_election.election.pdsf_history.direct_counts[i]);
+    }
+  return history;
 }
 
 void

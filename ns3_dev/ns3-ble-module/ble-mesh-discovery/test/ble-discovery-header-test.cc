@@ -15,6 +15,7 @@
 #include "ns3/test.h"
 #include "ns3/ble-discovery-header-wrapper.h"
 #include "ns3/packet.h"
+#include "ns3/ble-election-header.h"
 #include "ns3/log.h"
 
 using namespace ns3;
@@ -54,6 +55,8 @@ BleDiscoveryHeaderTestCase::DoRun (void)
 
   NS_TEST_ASSERT_MSG_EQ (header.GetSenderId (), 42, "Sender ID should be 42");
   NS_TEST_ASSERT_MSG_EQ (header.GetTtl (), 10, "TTL should be 10");
+  NS_TEST_ASSERT_MSG_EQ (header.HasClusterheadFlag (), false,
+                         "Default header should not be flagged as clusterhead");
 
   // Test 2: TTL decrement
   bool result = header.DecrementTtl ();
@@ -93,6 +96,8 @@ BleDiscoveryHeaderTestCase::DoRun (void)
 
   NS_TEST_ASSERT_MSG_EQ (header.IsElectionMessage (), true,
                          "Message type should be ELECTION_ANNOUNCEMENT");
+  NS_TEST_ASSERT_MSG_EQ (header.HasClusterheadFlag (), true,
+                         "Election message should raise clusterhead flag");
   NS_TEST_ASSERT_MSG_EQ (header.GetClassId (), 100, "Class ID should be 100");
   NS_TEST_ASSERT_MSG_EQ (header.GetPdsf (), 150, "PDSF should be 150");
   NS_TEST_ASSERT_MSG_EQ (header.GetScore (), 0.85, "Score should be 0.85");
@@ -111,6 +116,8 @@ BleDiscoveryHeaderTestCase::DoRun (void)
                          "Deserialized TTL should match");
   NS_TEST_ASSERT_MSG_EQ (deserializedHeader.GetClassId (), header.GetClassId (),
                          "Deserialized class ID should match");
+  NS_TEST_ASSERT_MSG_EQ (deserializedHeader.HasClusterheadFlag (), header.HasClusterheadFlag (),
+                         "Clusterhead flag should survive serialization");
 
   std::vector<uint32_t> deserializedPath = deserializedHeader.GetPath ();
   NS_TEST_ASSERT_MSG_EQ (deserializedPath.size (), path.size (),
@@ -246,6 +253,8 @@ BleDiscoveryElectionTestCase::DoRun (void)
 
   NS_TEST_ASSERT_MSG_EQ (msg.IsElectionMessage (), true,
                          "Should be election message after conversion");
+  NS_TEST_ASSERT_MSG_EQ (msg.HasClusterheadFlag (), true,
+                         "Clusterhead flag should be set for election");
   NS_TEST_ASSERT_MSG_EQ (msg.GetSenderId (), 100,
                          "Base fields should be preserved during conversion");
   NS_TEST_ASSERT_MSG_EQ (msg.GetPath ().size (), 2,
@@ -262,6 +271,17 @@ BleDiscoveryElectionTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (msg.GetScore (), 0.95, "Score should be set");
   NS_TEST_ASSERT_MSG_EQ (msg.GetHash (), (uint32_t)0xABCDEF, "Hash should be set");
 
+  msg.ResetPdsfHistory ();
+  uint32_t pdsf = msg.UpdatePdsf (12, 0);
+  NS_TEST_ASSERT_MSG_EQ (pdsf, 12, "First hop PDSF should equal direct connections");
+  pdsf = msg.UpdatePdsf (9, 4); // contributes 5 new neighbors
+  NS_TEST_ASSERT_MSG_EQ (pdsf, 72, "PDSF should accumulate ΣΠ contributions");
+
+  std::vector<uint32_t> hopHistory = msg.GetPdsfHopHistory ();
+  NS_TEST_ASSERT_MSG_EQ (hopHistory.size (), 2, "Should track two hop entries");
+  NS_TEST_ASSERT_MSG_EQ (hopHistory[0], 12, "First hop history incorrect");
+  NS_TEST_ASSERT_MSG_EQ (hopHistory[1], 5, "Second hop should record deduplicated count");
+
   // Test: Election serialization size
   uint32_t electionSize = msg.GetSerializedSize ();
   NS_TEST_ASSERT_MSG_GT (electionSize, 50, "Election packet should be substantial size");
@@ -275,10 +295,12 @@ BleDiscoveryElectionTestCase::DoRun (void)
 
   NS_TEST_ASSERT_MSG_EQ (received.IsElectionMessage (), true,
                          "Deserialized message should be election type");
+  NS_TEST_ASSERT_MSG_EQ (received.HasClusterheadFlag (), true,
+                         "Clusterhead flag should be preserved");
   NS_TEST_ASSERT_MSG_EQ (received.GetClassId (), 7,
                          "Deserialized class ID should match");
-  NS_TEST_ASSERT_MSG_EQ (received.GetPdsf (), 200,
-                         "Deserialized PDSF should match");
+  NS_TEST_ASSERT_MSG_EQ (received.GetPdsf (), 72,
+                         "Deserialized PDSF should reflect hop history updates");
   NS_TEST_ASSERT_MSG_EQ (received.GetScore (), 0.95,
                          "Deserialized score should match");
   NS_TEST_ASSERT_MSG_EQ (received.GetHash (), (uint32_t)0xABCDEF,
@@ -412,8 +434,62 @@ BleDiscoveryTypeIdTestCase::DoRun (void)
 
   NS_TEST_ASSERT_MSG_NE (output2.find ("ELECTION"), std::string::npos,
                          "Print should indicate election message");
-  NS_TEST_ASSERT_MSG_NE (output2.find ("ClassID"), std::string::npos,
+NS_TEST_ASSERT_MSG_NE (output2.find ("ClassID"), std::string::npos,
                          "Print should include election fields");
+}
+
+/**
+ * \ingroup ble-mesh-discovery-test
+ * \brief Dedicated BleElectionHeader class test
+ */
+class BleElectionHeaderWrapperTestCase : public TestCase
+{
+public:
+  BleElectionHeaderWrapperTestCase ();
+  virtual ~BleElectionHeaderWrapperTestCase ();
+
+private:
+  virtual void DoRun (void);
+};
+
+BleElectionHeaderWrapperTestCase::BleElectionHeaderWrapperTestCase ()
+  : TestCase ("BleElectionHeader specialized class test")
+{
+}
+
+BleElectionHeaderWrapperTestCase::~BleElectionHeaderWrapperTestCase () = default;
+
+void
+BleElectionHeaderWrapperTestCase::DoRun (void)
+{
+  BleElectionHeader header;
+  NS_TEST_ASSERT_MSG_EQ (header.IsElectionMessage (), true,
+                         "BleElectionHeader should always represent election packets");
+  NS_TEST_ASSERT_MSG_EQ (header.HasClusterheadFlag (), true,
+                         "Clusterhead flag should be set by default");
+
+  header.SetSenderId (555);
+  header.SetClassId (9);
+  header.SetPdsf (75);
+  header.SetScore (0.77);
+  header.SetHash (0x12345678);
+  header.AddToPath (42);
+  header.AddToPath (77);
+
+  Ptr<Packet> pkt = Create<Packet> ();
+  pkt->AddHeader (header);
+
+  BleElectionHeader decoded;
+  pkt->RemoveHeader (decoded);
+
+  NS_TEST_ASSERT_MSG_EQ (decoded.IsElectionMessage (), true,
+                         "Decoded BleElectionHeader should remain election");
+  NS_TEST_ASSERT_MSG_EQ (decoded.GetClassId (), 9,
+                         "Class ID should survive serialization");
+  NS_TEST_ASSERT_MSG_EQ (decoded.HasClusterheadFlag (), true,
+                         "Clusterhead flag must remain set");
+  NS_TEST_ASSERT_MSG_EQ (decoded.GetPath ().size (), 2,
+                         "Path should be preserved");
 }
 
 /**
@@ -434,6 +510,7 @@ BleDiscoveryHeaderTestSuite::BleDiscoveryHeaderTestSuite ()
   AddTestCase (new BleDiscoveryElectionTestCase, TestCase::QUICK);
   AddTestCase (new BleDiscoveryGpsTestCase, TestCase::QUICK);
   AddTestCase (new BleDiscoveryTypeIdTestCase, TestCase::QUICK);
+  AddTestCase (new BleElectionHeaderWrapperTestCase, TestCase::QUICK);
 }
 
 static BleDiscoveryHeaderTestSuite bleMeshDiscoveryHeaderTestSuite;

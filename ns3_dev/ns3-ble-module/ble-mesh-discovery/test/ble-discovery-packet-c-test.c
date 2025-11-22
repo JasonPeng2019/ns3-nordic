@@ -453,6 +453,7 @@ int main(void)
     test_buffer_overflow_protection();
     test_invalid_path_length();
     test_pdsf_calculation();
+    test_pdsf_history_serialization();
     test_score_calculation();
     test_hash_generation();
     test_large_path_serialization();

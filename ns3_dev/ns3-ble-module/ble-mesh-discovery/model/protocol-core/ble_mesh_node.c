@@ -351,6 +351,12 @@ double ble_mesh_node_calculate_candidacy_score(const ble_mesh_node_t *node,
 
     uint16_t direct_connections = ble_mesh_node_count_direct_neighbors(node);
 
+    double forwarding_success = 0.0;
+    if (node->stats.messages_received > 0) {
+        forwarding_success =
+            (double)node->stats.messages_forwarded / (double)node->stats.messages_received;
+    }
+
     return ble_election_calculate_score(direct_connections,
                                           noise_level);
 }
