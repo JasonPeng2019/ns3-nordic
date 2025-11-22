@@ -29,7 +29,7 @@ These documents extend the planning context beyond what `snapshot.md` captured.
 ### 3.1 `model/protocol-core/ble_broadcast_timing.{h,c}`
 Implements stochastic/noisy broadcast scheduling (Tasks 12 & 14). **New functions:**
 
-1. `ble_broadcast_timing_init(state, type, num_slots, slot_duration_ms, listen_ratio)` – Initialize schedule parameters.
+1. `ble_broadcast_timing_init(state, type, num_slots, slot_duration_ms, listen_ratio)` – Initialize schedule parameters (auto-profiles for noisy vs. neighbor phases).
 2. `ble_broadcast_timing_set_seed(state, seed)` – Configure RNG seed.
 3. `ble_broadcast_timing_advance_slot(state)` – Advance to next slot, decide broadcast vs. listen.
 4. `ble_broadcast_timing_should_broadcast(state)` – Query whether current slot is TX.
@@ -41,6 +41,8 @@ Implements stochastic/noisy broadcast scheduling (Tasks 12 & 14). **New function
 10. `ble_broadcast_timing_get_current_slot(state)` – Return current slot index.
 11. `ble_broadcast_timing_get_actual_listen_ratio(state)` – Report observed listen ratio.
 12. `ble_broadcast_timing_rand(seed)` / `ble_broadcast_timing_rand_double(seed)` – Internal RNG helpers used by `advance_slot`.
+13. `ble_broadcast_timing_set_crowding(state, crowding_factor)` – Adjust neighbor-discovery transmit caps and listen ratios based on measured crowding.
+14. `ble_broadcast_timing_get_max_broadcast_slots(state)` – Inspect the current TX slot budget (for diagnostics/tests).
 
 ### 3.2 `model/protocol-core/ble_election.{h,c}`
 Introduces an election-specific state tracker with neighbor analytics. **Key structures & functions:**
@@ -63,6 +65,7 @@ Introduces an election-specific state tracker with neighbor analytics. **Key str
 - Added `ble_score_weights_t` struct + `BLE_DEFAULT_SCORE_WEIGHTS`.
 - Expanded `ble_discovery_packet_t` with `is_clusterhead_message`.
 - New `ble_pdsf_history_t` plus per-hop storage in `ble_election_data_t`.
+- Added explicit Last Π storage/serialization so rebroadcasting nodes can continue ΣΠ prediction without recomputing history.
 - Score calculation now uses weight struct and richer metrics (direct connections, connection:noise ratio, geographic distribution, forwarding success).
 
 ### 3.4 Minor tweaks

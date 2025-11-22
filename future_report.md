@@ -249,8 +249,13 @@ ble_engine_transmit_own_message(ble_engine_t *engine)
 
         // Populate election fields
         engine->tx_buffer.election.class_id = engine->node.node_id; // Simple assignment
-        engine->tx_buffer.election.pdsf = ble_election_calculate_pdsf(0,
-                                            ble_mesh_node_count_direct_neighbors(&engine->node));
+        uint32_t pi_term = 0;
+        engine->tx_buffer.election.pdsf = ble_election_calculate_pdsf(
+                                            0,
+                                            1,
+                                            ble_mesh_node_count_direct_neighbors(&engine->node),
+                                            &pi_term);
+        engine->tx_buffer.election.last_pi = pi_term;
         engine->tx_buffer.election.score = ble_mesh_node_calculate_candidacy_score(&engine->node);
         engine->tx_buffer.election.hash = ble_election_generate_hash(engine->node.node_id);
     }
@@ -357,10 +362,13 @@ ble_engine_forward_next_message(ble_engine_t *engine)
 // After adding self to path, update PDSF
 if (packet_to_process.message_type == BLE_DISCOVERY_MSG_TYPE_ELECTION) {
     uint32_t direct = ble_mesh_node_count_direct_neighbors(&engine->node);
+    uint32_t pi_term = 0;
     packet_to_process.election.pdsf = ble_election_calculate_pdsf(
         packet_to_process.election.pdsf,
-        direct
-    );
+        packet_to_process.election.last_pi,
+        direct,
+        &pi_term);
+    packet_to_process.election.last_pi = pi_term;
 }
 ```
 

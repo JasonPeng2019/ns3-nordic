@@ -13,10 +13,11 @@ This snapshot captures the state before a branch merge so newcomers can diff lat
 
 | File | Purpose |
 |------|---------|
-| `ble_discovery_packet.{c,h}` | Defines discovery/election packets: fields (ID, TTL, PSF, GPS, election extension), serialization/deserialization, TTL + path operations, GPS setters, PDSF/score/hash helpers. |
+| `ble_discovery_packet.{c,h}` | Defines discovery/election packets: fields (ID, TTL, PSF, GPS, election extension), serialization/deserialization, TTL + path operations, GPS setters, ΣΠ-based PDSF helper with Last Π tracking, score/hash helpers. |
 | `ble_discovery_cycle.{c,h}` | 4-slot discovery cycle state machine with callbacks per slot and cycle-complete callback; configurable slot duration. |
 | `ble_message_queue.{c,h}` | Fixed-size queue with loop detection, dedup cache, TTL-based priority, stats counters. |
 | `ble_forwarding_logic.{c,h}` | Implements crowding-factor calculation (RSSI → 0..1), probabilistic forwarding with internal RNG, GPS proximity filtering, TTL gating, and noise-level helper. |
+| `ble_broadcast_timing.{c,h}` | Adaptive scheduling for noisy/RSSI sampling (default heavy TX) and neighbor discovery (200-slot listen-heavy schedule with crowding-aware TX caps via `ble_broadcast_timing_set_crowding`). |
 | `ble_mesh_node.{c,h}` | Node state machine: neighbor table, GPS cache, statistics, noise storage, dynamic candidacy threshold (6→3→1) with helpers, edge/candidate checks, candidacy score. |
 
 All core files are portable C (no NS-3 deps) and are already unit-tested.
@@ -41,7 +42,7 @@ All core files are portable C (no NS-3 deps) and are already unit-tested.
 
 | File | Functionality |
 |------|---------------|
-| `ble-discovery-header-wrapper.{h,cc}` | NS-3 `Header` mapping to the C packet; handles serialization, path/GPS helpers, election fields. |
+| `ble-discovery-header-wrapper.{h,cc}` | NS-3 `Header` mapping to the C packet; handles serialization, path/GPS helpers, election fields (PDSF history + Last Π access/update helpers). |
 | `ble-message-queue.{h,cc}` | `ns3::Object` around C queue; `Enqueue/Dequeue/Peek/Stats`. |
 | `ble-forwarding-logic.{h,cc}` | Wrapper around C forwarding logic; converts `std::vector<int8_t>` + `Vector` to C types; logs decisions. |
 | `ble-discovery-cycle-wrapper.{h,cc}` | Wraps discovery cycle; schedules slots via `Simulator`. |

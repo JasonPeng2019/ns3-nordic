@@ -67,15 +67,19 @@ node tracks:
 2
 2. Process Description: The beginning of discovery operates in the fol-
 lowing order:
-•Crowding Factor: During a specificied period, each device will ”noisy
-broadcast” - send a broadcast base level noise message. Each indi-
-vidual device will pick a stochastically randomized time slot to listen.
-When listening, each device will determine crowding factor as a func-
-tion f (RSSI).
-•: Clusterhead Broadcast: Nodes will then stochastically transmit a
-”broadcast” in a small timeslot. Each node will listen the majority
-of the time, documenting how many nodes heard. This counts as
-”direct connection” count.
+•Crowding Factor: During a specified period, each device will “noisy
+broadcast”—spending roughly 90% of the short micro-slots transmitting
+and 10% listening. The brief listen slots capture aggregate RSSI to infer
+crowding (f(RSSI)) while the heavy transmit duty cycle ensures every node
+contributes to the measured noise floor.
+•Clusterhead Broadcast / Direct Neighbor Counting: After the noise
+measurement pass, devices switch to a much longer neighbor-discovery
+schedule (≈200 micro-slots). They listen the vast majority of the time and
+randomly take a few broadcast slots so nearby nodes can decode them.
+The number of transmit slots is crowding-aware: as low as 3 slots in very
+dense deployments (to avoid collisions) up to 15 slots in sparse deployments
+(to increase robustness). Each decoded broadcast counts toward the direct
+connection total.
 •Clusterhead Candidacy: Each bluetooth node will elect itself a clus-
 terhead or edge, determined by a function of the ratio between direct
 connection count and noise heard. The motivation for using ratio lies
@@ -129,13 +133,19 @@ i
 Πi(xi)
 where x represents the direct connection count at each step i, exclud-
 ing the device(s) message has reached previously.
+•LP (Last Π): Running product term that captures Πi(xi) for the most
+recent hop. Each forwarder multiplies LP by its own unique neighbor
+count so downstream devices can continue the ΣΠ sequence.
 •PSF: Path So Far - the sequence of node IDs the message has traveled
 through
 •Score: Clusterhead’s score as determined by candidacy.
 •Hash h(ID): Unique FDMA / TDMA Hash Function for edges to
 reach that specific clusterhead.
 Election announcements will ”flood” areas by propogation outwards from
-clusterhead through retransmission. When PDSF reaches cluster capacity,
+clusterhead through retransmission. Every hop recomputes `LP = max(1,
+incoming LP) * unique_neighbors` and then updates `PDSF = incoming PDSF + LP`
+before rebroadcasting so the ΣΠ estimate remains accurate. When PDSF
+reaches cluster capacity,
 devices will stop retransmitting the election announcement, and no more
 devices will add themselves to the clusterhead.
 5. Conflict Resolution: If multiple Clusterhead candidates have overlap-

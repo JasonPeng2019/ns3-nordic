@@ -136,6 +136,7 @@ void ble_election_packet_init(ble_election_packet_t *packet)
     packet->election.class_id = 0;
     packet->election.direct_connections = 0;
     packet->election.pdsf = 0;
+    packet->election.last_pi = 1;
     packet->election.score = 0.0;
     packet->election.hash = 0;
     ble_election_pdsf_history_reset(&packet->election.pdsf_history);
@@ -218,8 +219,8 @@ uint32_t ble_election_get_size(const ble_election_packet_t *packet)
     // Base discovery size + election fields
     uint32_t size = ble_discovery_get_size(&packet->base);
 
-    // Class ID (2) + Direct Connections (4) + PDSF (4) + Score (8) + Hash (4)
-    size += 2 + 4 + 4 + 8 + 4;
+    // Class ID (2) + Direct Connections (4) + PDSF (4) + Last Π (4) + Score (8) + Hash (4)
+    size += 2 + 4 + 4 + 4 + 8 + 4;
     // PDSF history: hop count (2) + per-hop counts (4 bytes each)
     size += 2 + (packet->election.pdsf_history.hop_count * 4);
 
@@ -328,6 +329,7 @@ uint32_t ble_election_serialize(const ble_election_packet_t *packet,
     write_u16(&ptr, packet->election.class_id);
     write_u32(&ptr, packet->election.direct_connections);
     write_u32(&ptr, packet->election.pdsf);
+    write_u32(&ptr, packet->election.last_pi);
     write_double(&ptr, packet->election.score);
     write_u32(&ptr, packet->election.hash);
     write_u16(&ptr, packet->election.pdsf_history.hop_count);
@@ -355,6 +357,7 @@ uint32_t ble_election_deserialize(ble_election_packet_t *packet,
     packet->election.class_id = read_u16(&ptr);
     packet->election.direct_connections = read_u32(&ptr);
     packet->election.pdsf = read_u32(&ptr);
+    packet->election.last_pi = read_u32(&ptr);
     packet->election.score = read_double(&ptr);
     packet->election.hash = read_u32(&ptr);
     packet->election.pdsf_history.hop_count = read_u16(&ptr);
@@ -402,27 +405,41 @@ uint32_t ble_election_update_pdsf(ble_election_packet_t *packet,
         return packet->election.pdsf;
     }
 
+    uint32_t new_pi = 0;
     packet->election.pdsf = ble_election_calculate_pdsf(
         packet->election.pdsf,
-        unique_connections);
+        packet->election.last_pi,
+        unique_connections,
+        &new_pi);
+    packet->election.last_pi = new_pi;
 
     return packet->election.pdsf;
 }
 
-uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf, uint32_t direct_neighbors)
+uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf,
+                                     uint32_t previous_pi,
+                                     uint32_t direct_neighbors,
+                                     uint32_t *new_pi_out)
 {
-    /* Caller is expected to pass previous_pdsf = 1 for the originator, but guard against 0 */
-    uint32_t baseline = (previous_pdsf == 0) ? 1 : previous_pdsf;
+    /* Treat zeroed history as baseline 1 so the first hop contributes its direct count */
+    uint64_t baseline_pi = (previous_pi == 0) ? 1ULL : (uint64_t)previous_pi;
+    uint64_t hop_neighbors = (uint64_t)direct_neighbors;
+    uint64_t pi_term = baseline_pi * hop_neighbors;
 
-    /* Predict how many NEW nodes will hear this hop */
-    uint64_t increment = (uint64_t)baseline * (uint64_t)direct_neighbors;
-    uint64_t updated = (uint64_t)baseline + increment;
-
-    if (updated > UINT32_MAX) {
-        return UINT32_MAX;
+    if (pi_term > UINT32_MAX) {
+        pi_term = UINT32_MAX;
     }
 
-    return (uint32_t)updated;
+    uint64_t updated_sum = (uint64_t)previous_pdsf + pi_term;
+    if (updated_sum > UINT32_MAX) {
+        updated_sum = UINT32_MAX;
+    }
+
+    if (new_pi_out) {
+        *new_pi_out = (uint32_t)pi_term;
+    }
+
+    return (uint32_t)updated_sum;
 }
 
 static double clamp_unit(double value)

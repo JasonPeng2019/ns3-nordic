@@ -272,10 +272,13 @@ BleDiscoveryElectionTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (msg.GetHash (), (uint32_t)0xABCDEF, "Hash should be set");
 
   msg.ResetPdsfHistory ();
+  NS_TEST_ASSERT_MSG_EQ (msg.GetLastPi (), 1, "Reset should initialize Last Π to 1");
   uint32_t pdsf = msg.UpdatePdsf (12, 0);
   NS_TEST_ASSERT_MSG_EQ (pdsf, 12, "First hop PDSF should equal direct connections");
+  NS_TEST_ASSERT_MSG_EQ (msg.GetLastPi (), 12, "Last Π should track hop contribution");
   pdsf = msg.UpdatePdsf (9, 4); // contributes 5 new neighbors
   NS_TEST_ASSERT_MSG_EQ (pdsf, 72, "PDSF should accumulate ΣΠ contributions");
+  NS_TEST_ASSERT_MSG_EQ (msg.GetLastPi (), 60, "Last Π should scale by unique neighbor count");
 
   std::vector<uint32_t> hopHistory = msg.GetPdsfHopHistory ();
   NS_TEST_ASSERT_MSG_EQ (hopHistory.size (), 2, "Should track two hop entries");

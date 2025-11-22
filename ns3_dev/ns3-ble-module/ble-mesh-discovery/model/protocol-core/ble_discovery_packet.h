@@ -107,7 +107,8 @@ typedef struct {
 typedef struct {
     uint16_t class_id;           /**< Clusterhead class identifier */
     uint32_t direct_connections; /**< Number of direct (1-hop) neighbors - for conflict resolution */
-    uint32_t pdsf;               /**< Predicted Devices So Far */
+    uint32_t pdsf;               /**< Predicted Devices So Far (sum of Π terms) */
+    uint32_t last_pi;            /**< Last cumulative Π term (product of hops so far) */
     double score;                /**< Clusterhead candidacy score (0.0-1.0) */
     uint32_t hash;               /**< FDMA/TDMA hash function value */
     ble_pdsf_history_t pdsf_history; /**< Hop-by-hop direct connection history */
@@ -226,12 +227,17 @@ uint32_t ble_election_deserialize(ble_election_packet_t *packet,
                                     uint32_t buffer_size);
 
 /**
- * @brief Update PDSF (Predicted Devices So Far) based on local neighbors
- * @param previous_pdsf PDSF value carried with the incoming packet (use 1 for first hop)
- * @param direct_neighbors Number of direct neighbors observed during the crowding measurement
+ * @brief Update PDSF (Predicted Devices So Far) with a new Π contribution
+ * @param previous_pdsf Running Σ of Π terms received with the packet
+ * @param previous_pi Product term carried in the packet (defaults to 1 if zero)
+ * @param direct_neighbors Unique neighbors observed at this hop
+ * @param new_pi_out Optional pointer to receive the updated Π value
  * @return Updated PDSF including this hop's predicted reach
  */
-uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf, uint32_t direct_neighbors);
+uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf,
+                                      uint32_t previous_pi,
+                                      uint32_t direct_neighbors,
+                                      uint32_t *new_pi_out);
 
 /**
  * @brief Calculate clusterhead candidacy score
@@ -265,8 +271,8 @@ bool ble_election_pdsf_history_add(ble_pdsf_history_t *history,
  * @return Updated PDSF value
  */
 uint32_t ble_election_update_pdsf(ble_election_packet_t *packet,
-                                  uint32_t direct_connections,
-                                  uint32_t already_reached);
+                                    uint32_t direct_connections,
+                                    uint32_t already_reached);
 
 /**
  * @brief Generate FDMA/TDMA hash from node ID

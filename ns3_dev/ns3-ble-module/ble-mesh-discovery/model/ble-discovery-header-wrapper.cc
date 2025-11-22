@@ -67,6 +67,7 @@ BleDiscoveryHeaderWrapper::Print (std::ostream &os) const
     {
       os << ", ClassID=" << m_election.election.class_id;
       os << ", PDSF=" << m_election.election.pdsf;
+      os << ", LastPi=" << m_election.election.last_pi;
       os << ", Score=" << m_election.election.score;
     }
 }
@@ -340,6 +341,19 @@ BleDiscoveryHeaderWrapper::GetPdsf (void) const
 }
 
 void
+BleDiscoveryHeaderWrapper::SetLastPi (uint32_t lastPi)
+{
+  if (!m_isElection) SetAsElectionMessage ();
+  m_election.election.last_pi = lastPi;
+}
+
+uint32_t
+BleDiscoveryHeaderWrapper::GetLastPi (void) const
+{
+  return m_isElection ? m_election.election.last_pi : 1;
+}
+
+void
 BleDiscoveryHeaderWrapper::ResetPdsfHistory (void)
 {
   if (!m_isElection)
@@ -348,6 +362,7 @@ BleDiscoveryHeaderWrapper::ResetPdsfHistory (void)
     }
   ble_election_pdsf_history_reset (&m_election.election.pdsf_history);
   m_election.election.pdsf = 0;
+  m_election.election.last_pi = 1;
 }
 
 uint32_t

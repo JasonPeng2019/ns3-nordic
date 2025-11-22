@@ -210,6 +210,18 @@ public:
   uint32_t GetPdsf (void) const;
 
   /**
+   * \brief Set the Last Π term carried with the packet
+   * \param lastPi Product accumulated so far
+   */
+  void SetLastPi (uint32_t lastPi);
+
+  /**
+   * \brief Get the Last Π term carried with the packet
+   * \return product accumulated so far
+   */
+  uint32_t GetLastPi (void) const;
+
+  /**
    * \brief Reset tracked PDSF hop history
    */
   void ResetPdsfHistory (void);

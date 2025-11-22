@@ -193,7 +193,10 @@ uint32_t ble_discovery_deserialize(ble_discovery_packet_t *packet,
 
 ### Election Functions
 ```c
-uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf, uint32_t direct_neighbors);
+uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf,
+                                     uint32_t previous_pi,
+                                     uint32_t direct_neighbors,
+                                     uint32_t *new_pi_out);
 double ble_election_calculate_score(uint32_t direct_connections,
                                       double noise_level);
 uint32_t ble_election_generate_hash(uint32_t node_id);

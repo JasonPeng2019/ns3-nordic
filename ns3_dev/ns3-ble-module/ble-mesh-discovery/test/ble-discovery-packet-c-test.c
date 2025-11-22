@@ -348,21 +348,27 @@ void test_invalid_path_length(void)
  */
 void test_pdsf_calculation(void)
 {
-    // First hop: starting from implicit baseline of 1, with 5 neighbors
-    uint32_t pdsf = ble_election_calculate_pdsf(0, 5);
-    TEST_ASSERT_EQ(pdsf, 6, "Baseline of 1 with 5 neighbors should yield 6 predicted devices");
+    uint32_t pi_term = 0;
 
-    // Second hop: receiving node saw PDSF=6 and has 3 direct neighbors
-    pdsf = ble_election_calculate_pdsf(pdsf, 3);
-    TEST_ASSERT_EQ(pdsf, 24, "Subsequent hop should multiply previous PDSF by neighbor count and add to baseline");
+    // First hop: start with Σ=0, Π=1, contribute 5 neighbors
+    uint32_t pdsf = ble_election_calculate_pdsf(0, 1, 5, &pi_term);
+    TEST_ASSERT_EQ(pdsf, 5, "First hop should contribute direct neighbor count");
+    TEST_ASSERT_EQ(pi_term, 5, "Π term should equal hop product");
 
-    // No new neighbors -> value should remain unchanged
-    pdsf = ble_election_calculate_pdsf(pdsf, 0);
-    TEST_ASSERT_EQ(pdsf, 24, "Zero neighbors should leave PDSF unchanged");
+    // Second hop: Σ=5, Π=5, contribute 3 unique neighbors -> add 15
+    pdsf = ble_election_calculate_pdsf(pdsf, pi_term, 3, &pi_term);
+    TEST_ASSERT_EQ(pdsf, 20, "Second hop should add Π term to running sum");
+    TEST_ASSERT_EQ(pi_term, 15, "Π term should multiply prior Π by new neighbors");
+
+    // No new neighbors -> Π term zero, Σ unchanged
+    pdsf = ble_election_calculate_pdsf(pdsf, pi_term, 0, &pi_term);
+    TEST_ASSERT_EQ(pdsf, 20, "Zero neighbors should leave PDSF unchanged");
+    TEST_ASSERT_EQ(pi_term, 0, "Π term should be zero when no neighbors contribute");
 
     // Large values saturate at UINT32_MAX
-    uint32_t saturated = ble_election_calculate_pdsf(UINT32_MAX, 10);
+    uint32_t saturated = ble_election_calculate_pdsf(UINT32_MAX, UINT32_MAX, 10, &pi_term);
     TEST_ASSERT_EQ(saturated, UINT32_MAX, "PDSF should saturate at UINT32_MAX on overflow");
+    TEST_ASSERT_EQ(pi_term, UINT32_MAX, "Π term should also saturate when overflowing");
 }
 
 /**

@@ -262,7 +262,8 @@ Target performance: End-to-end latency in seconds, supporting thousands of nodes
 
 **Election Fields:**
 - ✅ Class ID (clusterhead identifier)
-- ✅ PDSF (Predicted Devices So Far) with calculation
+- ✅ PDSF (Predicted Devices So Far) with ΣΠ tracking
+- ✅ Last Π (LP) so downstream hops can extend the product term
 - ✅ Score calculation (connection:noise ratio + distribution)
 - ✅ Hash generation (FNV-1a for FDMA/TDMA)
 
@@ -283,7 +284,10 @@ uint32_t ble_discovery_deserialize(ble_discovery_packet_t *packet,
                                      const uint8_t *buffer, uint32_t buffer_size);
 
 // Election calculations
-uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf, uint32_t direct_neighbors);
+uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf,
+                                     uint32_t previous_pi,
+                                     uint32_t direct_neighbors,
+                                     uint32_t *new_pi_out);
 double ble_election_calculate_score(uint32_t direct_connections,
                                       double noise_level);
 uint32_t ble_election_generate_hash(uint32_t node_id);
@@ -868,10 +872,10 @@ PASS: TestSuite ble-message-queue (includes TTL priority tests)
 ### Task 12: Implement Noisy Broadcast Phase ✅ COMPLETED
 - [x] Implement "noisy broadcast" message transmission
 - [x] Create base-level noise message format
-- [x] Implement stochastic randomized listening time slot selection
+- [x] Implement stochastic randomized listening time slot selection (default ~90% TX / 10% listen, adjustable per crowding input)
 - [x] Add RSSI measurement during listening phase
 - [x] Store RSSI samples for crowding factor calculation
-- [x] Test broadcast/listen timing coordination
+- [x] Test broadcast/listen timing coordination (including auto-profile defaults)
 
 **Implementation Summary (Completed 2025-11-22):**
 
@@ -881,15 +885,16 @@ PASS: TestSuite ble-message-queue (includes TTL priority tests)
 
 **Features Implemented:**
 - Stochastic randomized listening time slot selection
-- Configurable listen/broadcast ratio (default: 80% listen, 20% broadcast)
+- Adaptive listen/broadcast ratios (noisy phase defaults to ~90% transmit; neighbor phase defaults to ~90% listening) via `ble_broadcast_timing_set_crowding()`
 - RSSI measurement during listening phase (integrated with ble_election.c)
 - Noisy broadcast message transmission with collision avoidance
 
 **Key Functions:**
-- `ble_broadcast_timing_init()` - Initialize timing state
-- `ble_broadcast_timing_advance_slot()` - Advance slot with stochastic selection
+- `ble_broadcast_timing_init()` - Initialize timing state (auto-profiles for noisy/neighbor phases)
+- `ble_broadcast_timing_advance_slot()` - Advance slot with stochastic selection + transmit caps
 - `ble_broadcast_timing_should_broadcast()` - Check if current slot is for broadcasting
 - `ble_broadcast_timing_should_listen()` - Check if current slot is for listening
+- `ble_broadcast_timing_set_crowding()` - Dynamically adjust neighbor-phase transmit quota based on crowding
 
 **NS-3 Wrapper:**
 - `model/ble-broadcast-timing.h/cc` - Full NS-3 integration with RandomVariableStream support
@@ -954,7 +959,7 @@ PASS: TestSuite ble-broadcast-timing
 
 **Features Implemented:**
 - Random time slot selection for broadcasts
-- Majority-listening (75-80%), minority-broadcasting (20-25%) schedule
+- Adaptive majority-listening schedule (neighbor phase uses 200 slots with crowding-based transmit caps: 3 slots in ultra-dense scenarios up to 15 in sparse ones)
 - Collision avoidance through stochastic randomization
 - Broadcast attempt retry logic (max 3 retries)
 - Success rate tracking and statistics
@@ -965,6 +970,7 @@ PASS: TestSuite ble-broadcast-timing
 - `ble_broadcast_timing_record_failure()` - Retry logic (returns true if should retry)
 - `ble_broadcast_timing_get_success_rate()` - Calculate success rate
 - `ble_broadcast_timing_get_actual_listen_ratio()` - Verify distribution
+- `ble_broadcast_timing_set_crowding()` - Recompute neighbor-discovery transmit/listen ratios based on measured crowding factor
 
 **Algorithm:**
 - Uses Linear Congruential Generator (LCG) for randomization
@@ -978,7 +984,7 @@ PASS: TestSuite ble-broadcast-timing
 - Full NS-3 Object integration
 
 **Test Coverage:**
-- `test/ble-broadcast-timing-c-test.c` (12 test functions):
+- `test/ble-broadcast-timing-c-test.c` (phase-default & crowding-cap tests added):
   - Slot advancement, listen ratio distribution, retry logic
   - Success/failure tracking, collision avoidance
   - Randomness validation
@@ -1112,7 +1118,8 @@ PASS: TestSuite ble-broadcast-timing
 - [x] Extend discovery message format with election fields:
   - Class ID: Clusterhead class identifier
   - ID: Message sender ID
-  - PDSF: Predicted Devices So Far
+  - PDSF: Predicted Devices So Far (Σ of Π terms)
+  - Last Π (LP): running product term forwarded with announcements
   - PSF: Path So Far
   - Score: Clusterhead candidacy score
   - Hash h(ID): FDMA/TDMA hash function
@@ -1144,14 +1151,14 @@ PASS: TestSuite ble-broadcast-timing
 **Implementation Summary (Completed 2025-11-23):**
 
 **C Core Files:** `model/protocol-core/ble_discovery_packet.{h,c}`
-- Added `ble_pdsf_history_t` to capture hop-by-hop direct connections and serialize them
-- Implemented `ble_election_update_pdsf()` for ΣΠ calculation with duplicate exclusion and automatic history tracking
+- Added `ble_pdsf_history_t` to capture hop-by-hop direct connections, serialize them, and store the running Last Π product
+- Implemented `ble_election_update_pdsf()` with ΣΠ calculation, duplicate exclusion, and automatic Last Π updates that propagate through serialization
 
 **C++ Wrappers:** `model/ble-discovery-header-wrapper.{h,cc}`
-- Exposed `ResetPdsfHistory()`, `UpdatePdsf()`, and `GetPdsfHopHistory()` so NS-3 nodes can update announcements as they forward them
+- Exposed `ResetPdsfHistory()`, `UpdatePdsf()`, `GetPdsfHopHistory()`, and direct Last Π accessors so NS-3 nodes can update announcements as they forward them
 
 **Tests:** `test/ble-discovery-packet-c-test.c`, `test/ble-discovery-header-test.cc`
-- Added unit tests covering multi-hop PDSF updates, history serialization/deserialization, and wrapper-level integration
+- Added unit tests covering multi-hop PDSF updates, history serialization/deserialization, and wrapper-level integration (including Last Π state)
 
 ### Task 21: Implement Clusterhead Score Calculation ✅ COMPLETED
 - [x] Define score formula based on candidacy metrics:
