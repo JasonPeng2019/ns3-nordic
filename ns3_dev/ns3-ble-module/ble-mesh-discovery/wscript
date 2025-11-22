@@ -81,3 +81,6 @@ def build(bld):
 
     if bld.env.ENABLE_EXAMPLES:
         bld.recurse('examples')
+
+    # Always build task tests (standalone test programs)
+    bld.recurse('test/task_tests')
