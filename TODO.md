@@ -1136,36 +1136,74 @@ PASS: TestSuite ble-broadcast-timing
 
 ## Phase 4: Clusterhead Election - Announcement & Conflict Resolution
 
-### Task 19: Design Election Announcement Message Structure
-- [ ] Extend discovery message format with election fields:
+### Task 19: Design Election Announcement Message Structure ✅ COMPLETED
+- [x] Extend discovery message format with election fields:
   - Class ID: Clusterhead class identifier
   - ID: Message sender ID
   - PDSF: Predicted Devices So Far
   - PSF: Path So Far
   - Score: Clusterhead candidacy score
   - Hash h(ID): FDMA/TDMA hash function
-- [ ] Create `BleElectionHeader` class
-- [ ] Implement serialization/deserialization
-- [ ] Add clusterhead flag to identify election messages
+- [x] Create `BleElectionHeader` class
+- [x] Implement serialization/deserialization
+- [x] Add clusterhead flag to identify election messages
 
-### Task 20: Implement PDSF Calculation Function
-- [ ] Implement t(x) = Σᵢ Πᵢ(xᵢ) formula
-- [ ] Track direct connection count at each hop (xᵢ)
-- [ ] Exclude previously reached devices from calculation
-- [ ] Update PDSF as message propagates through network
-- [ ] Test PDSF accuracy vs actual devices reached
-- [ ] Validate mathematical correctness of calculation
+**Implementation Summary (Completed 2025-11-23):**
 
-### Task 21: Implement Clusterhead Score Calculation
-- [ ] Define score formula based on candidacy metrics:
+**C Core Files:** `model/protocol-core/ble_discovery_packet.{h,c}`
+- Added `is_clusterhead_message` flag to the base packet structure and serialized layout
+- Election packets default to the flag being true and continue to carry class/score/hash fields
+
+**C++ Wrappers:** `model/ble-discovery-header-wrapper.{h,cc}`, `model/ble-election-header.{h,cc}`
+- Wrapper exposes `SetClusterheadFlag()` / `HasClusterheadFlag()` and keeps C structs synchronized
+- New `BleElectionHeader` guarantees serialized packets are election announcements
+
+**Tests:** `test/ble-discovery-header-test.cc`
+- Added coverage for the clusterhead flag round-trip and the dedicated `BleElectionHeader` class
+
+### Task 20: Implement PDSF Calculation Function ✅ COMPLETED
+- [x] Implement t(x) = Σᵢ Πᵢ(xᵢ) formula
+- [x] Track direct connection count at each hop (xᵢ)
+- [x] Exclude previously reached devices from calculation
+- [x] Update PDSF as message propagates through network
+- [x] Test PDSF accuracy vs actual devices reached
+- [x] Validate mathematical correctness of calculation
+
+**Implementation Summary (Completed 2025-11-23):**
+
+**C Core Files:** `model/protocol-core/ble_discovery_packet.{h,c}`
+- Added `ble_pdsf_history_t` to capture hop-by-hop direct connections and serialize them
+- Implemented `ble_election_update_pdsf()` for ΣΠ calculation with duplicate exclusion and automatic history tracking
+
+**C++ Wrappers:** `model/ble-discovery-header-wrapper.{h,cc}`
+- Exposed `ResetPdsfHistory()`, `UpdatePdsf()`, and `GetPdsfHopHistory()` so NS-3 nodes can update announcements as they forward them
+
+**Tests:** `test/ble-discovery-packet-c-test.c`, `test/ble-discovery-header-test.cc`
+- Added unit tests covering multi-hop PDSF updates, history serialization/deserialization, and wrapper-level integration
+
+### Task 21: Implement Clusterhead Score Calculation ✅ COMPLETED
+- [x] Define score formula based on candidacy metrics:
   - Direct connection count
   - Connection:noise ratio
   - Geographic distribution quality
   - Successful forwarding rate
-- [ ] Implement score calculation function
-- [ ] Add configurable weights for different metrics
-- [ ] Test score correlation with node quality
-- [ ] Validate score-based ranking
+- [x] Implement score calculation function
+- [x] Add configurable weights for different metrics
+- [x] Test score correlation with node quality
+- [x] Validate score-based ranking
+
+**Implementation Summary (Completed 2025-11-23):**
+
+**C Core Files:** `model/protocol-core/ble_discovery_packet.{h,c}`, `model/protocol-core/ble_election.{h,c}`, `model/protocol-core/ble_mesh_node.{h,c}`
+- Added `ble_score_weights_t`, default weights, and `ble_election_set_score_weights()` so Phase 3 state can tune direct/ratio/geo/forwarding influence
+- Reworked `ble_election_calculate_score()` and `ble_election_calculate_candidacy_score()` to normalize each metric, apply weights, and return a 0-1 score
+- `ble_mesh_node_calculate_candidacy_score()` now feeds connection:noise ratio and forwarding success into the shared helper
+
+**C++ Wrappers:** `model/ble-election.{h,cc}`
+- Exposed `SetScoreWeights()` for NS-3 scenarios that want to rebalance the metrics
+
+**Tests:** `test/ble-discovery-packet-c-test.c`, `test/ble-mesh-node-c-test.c`
+- Added unit tests validating the weighted formula, custom weight emphasis, normalized output, and ranking improvements when connectivity or forwarding stats improve
 
 ### Task 22: Implement FDMA/TDMA Hash Function Generation
 - [ ] Design hash function h(ID) for cluster communication
