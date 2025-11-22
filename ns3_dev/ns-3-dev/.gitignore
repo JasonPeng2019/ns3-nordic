@@ -39,4 +39,4 @@ build/
 
 version.cache
 
-./cmake-apple/
+cmake-apple/
