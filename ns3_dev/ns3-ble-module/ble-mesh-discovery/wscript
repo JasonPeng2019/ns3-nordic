@@ -15,6 +15,12 @@ def build(bld):
                                                            'spectrum', 'mobility',
                                                            'energy', 'propagation',
                                                            'ble'])
+    module.includes = [
+        '.',
+        'model',
+        'model/protocol-core',
+        'model/engine-core',
+    ]
     module.source = [
         # Pure C protocol core (portable to embedded systems)
         'model/protocol-core/ble_discovery_packet.c',
@@ -92,6 +98,7 @@ def build(bld):
 
     if bld.env.ENABLE_EXAMPLES:
         bld.recurse('examples')
+        bld.recurse('engine_sim')
 
     # Always build task tests (standalone test programs)
     bld.recurse('test/task_tests')

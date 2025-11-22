@@ -15,6 +15,7 @@
 #include <stdbool.h>
 #include "ble_discovery_cycle.h"
 #include "ble_discovery_packet.h"
+#include "ble_forwarding_logic.h"
 #include "ble_message_queue.h"
 #include "ble_mesh_node.h"
 

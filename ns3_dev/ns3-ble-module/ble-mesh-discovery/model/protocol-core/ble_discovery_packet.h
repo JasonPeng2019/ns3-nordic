@@ -243,6 +243,32 @@ double ble_election_calculate_score(uint32_t direct_connections,
                                       double noise_level);
 
 /**
+ * @brief Reset PDSF history accumulator
+ * @param history History structure to reset
+ */
+void ble_election_pdsf_history_reset(ble_pdsf_history_t *history);
+
+/**
+ * @brief Append a direct-connection count to the PDSF history
+ * @param history History structure
+ * @param direct_connections Count recorded at this hop
+ * @return true if appended successfully
+ */
+bool ble_election_pdsf_history_add(ble_pdsf_history_t *history,
+                                   uint32_t direct_connections);
+
+/**
+ * @brief Recalculate running PDSF after observing new neighbors
+ * @param packet Election packet being updated (history consumed)
+ * @param direct_connections New neighbor count at this hop
+ * @param already_reached Nodes already covered by previous hops
+ * @return Updated PDSF value
+ */
+uint32_t ble_election_update_pdsf(ble_election_packet_t *packet,
+                                  uint32_t direct_connections,
+                                  uint32_t already_reached);
+
+/**
  * @brief Generate FDMA/TDMA hash from node ID
  * @param node_id Node identifier
  * @return Hash value for time/frequency slot assignment
