@@ -54,6 +54,14 @@ typedef struct {
 } ble_connectivity_metrics_t;
 
 /**
+ * @brief RSSI sample with timestamp for temporal filtering
+ */
+typedef struct {
+    int8_t rssi;                         /**< RSSI measurement (dBm) */
+    uint32_t timestamp_ms;               /**< When sample was collected */
+} ble_rssi_sample_t;
+
+/**
  * @brief Clusterhead election state
  */
 typedef struct {
@@ -62,8 +70,11 @@ typedef struct {
 
     ble_connectivity_metrics_t metrics;  /**< Connectivity metrics */
 
-    int8_t rssi_samples[100];            /**< Recent RSSI samples for crowding */
-    uint32_t rssi_sample_count;          /**< Number of RSSI samples */
+    ble_rssi_sample_t rssi_samples[100]; /**< Circular buffer of RSSI samples */
+    uint32_t rssi_head;                  /**< Index of oldest sample */
+    uint32_t rssi_tail;                  /**< Index where next sample goes */
+    uint32_t rssi_count;                 /**< Current number of samples (0-100) */
+    uint32_t rssi_max_age_ms;            /**< Maximum age for samples (default 10000ms) */
 
     bool is_candidate;                   /**< Whether node is candidate */
     double candidacy_score;              /**< Candidacy score */
@@ -100,8 +111,9 @@ void ble_election_update_neighbor(ble_election_state_t *state,
  * @brief Add RSSI sample for crowding factor calculation
  * @param state Election state
  * @param rssi RSSI sample (dBm)
+ * @param current_time_ms Current time in milliseconds
  */
-void ble_election_add_rssi_sample(ble_election_state_t *state, int8_t rssi);
+void ble_election_add_rssi_sample(ble_election_state_t *state, int8_t rssi, uint32_t current_time_ms);
 
 /**
  * @brief Calculate crowding factor from RSSI samples
