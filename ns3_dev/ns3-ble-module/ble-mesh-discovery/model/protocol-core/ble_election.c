@@ -16,6 +16,9 @@
 #define DEFAULT_MIN_CN_RATIO 5.0
 #define DEFAULT_MIN_GEO_DIST 0.3
 
+/* Default maximum age for RSSI samples (10 seconds) */
+#define DEFAULT_RSSI_MAX_AGE_MS 10000
+
 void
 ble_election_init(ble_election_state_t *state)
 {
@@ -31,6 +34,12 @@ ble_election_init(ble_election_state_t *state)
     state->min_geographic_distribution = DEFAULT_MIN_GEO_DIST;
     state->direct_connection_rssi_threshold = DEFAULT_DIRECT_RSSI_THRESHOLD;
     state->score_weights = BLE_DEFAULT_SCORE_WEIGHTS;
+
+    /* Initialize circular buffer state */
+    state->rssi_head = 0;
+    state->rssi_tail = 0;
+    state->rssi_count = 0;
+    state->rssi_max_age_ms = DEFAULT_RSSI_MAX_AGE_MS;
 }
 
 void
@@ -75,36 +84,60 @@ ble_election_update_neighbor(ble_election_state_t *state,
 }
 
 void
-ble_election_add_rssi_sample(ble_election_state_t *state, int8_t rssi)
+ble_election_add_rssi_sample(ble_election_state_t *state, int8_t rssi, uint32_t current_time_ms)
 {
     if (!state) {
         return;
     }
 
-    if (state->rssi_sample_count < 100) {
-        state->rssi_samples[state->rssi_sample_count++] = rssi;
+    /* Add new sample to tail */
+    state->rssi_samples[state->rssi_tail].rssi = rssi;
+    state->rssi_samples[state->rssi_tail].timestamp_ms = current_time_ms;
+
+    /* Advance tail with wraparound */
+    state->rssi_tail = (state->rssi_tail + 1) % 100;
+
+    /* Update count and handle buffer full case */
+    if (state->rssi_count < 100) {
+        state->rssi_count++;
     } else {
-        /* Circular buffer - overwrite oldest */
-        for (uint32_t i = 0; i < 99; i++) {
-            state->rssi_samples[i] = state->rssi_samples[i + 1];
+        /* Buffer full, advance head (evict oldest) */
+        state->rssi_head = (state->rssi_head + 1) % 100;
+    }
+
+    /* Evict stale samples older than max_age_ms */
+    while (state->rssi_count > 0) {
+        uint32_t oldest_index = state->rssi_head;
+        uint32_t age = current_time_ms - state->rssi_samples[oldest_index].timestamp_ms;
+
+        if (age > state->rssi_max_age_ms) {
+            /* Evict this sample */
+            state->rssi_head = (state->rssi_head + 1) % 100;
+            state->rssi_count--;
+        } else {
+            /* Samples are in temporal order, so we can stop */
+            break;
         }
-        state->rssi_samples[99] = rssi;
     }
 }
 
 double
 ble_election_calculate_crowding(const ble_election_state_t *state)
 {
-    if (!state || state->rssi_sample_count == 0) {
+    if (!state || state->rssi_count == 0) {
         return 0.0;
     }
 
-    /* Calculate mean RSSI */
+    /* Calculate mean RSSI from all valid samples in circular buffer */
     double sum = 0.0;
-    for (uint32_t i = 0; i < state->rssi_sample_count; i++) {
-        sum += state->rssi_samples[i];
+    uint32_t index = state->rssi_head;
+
+    for (uint32_t i = 0; i < state->rssi_count; i++) {
+        sum += state->rssi_samples[index].rssi;
+        index = (index + 1) % 100;
     }
-    double mean_rssi = sum / state->rssi_sample_count;
+
+    double mean_rssi = sum / state->rssi_count;
 
     /* Convert RSSI to crowding factor
      * Higher (less negative) RSSI = stronger signals = more crowded
@@ -249,11 +282,9 @@ ble_election_calculate_candidacy_score(const ble_election_state_t *state)
         return 0.0;
     }
 
+    /* Calculate score using simplified formula */
     return ble_election_calculate_score(state->metrics.direct_connections,
-                                        state->metrics.connection_noise_ratio,
-                                        state->metrics.geographic_distribution,
-                                        state->metrics.forwarding_success_rate,
-                                        &state->score_weights);
+                                        state->metrics.crowding_factor);
 }
 
 bool
