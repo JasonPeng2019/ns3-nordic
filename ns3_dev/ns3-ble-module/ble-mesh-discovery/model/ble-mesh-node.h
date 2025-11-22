@@ -19,6 +19,7 @@
 #include "ble-message-queue.h"
 #include "ble-forwarding-logic.h"
 #include "ble-discovery-header-wrapper.h"
+#include "ble-election.h"
 #include <map>
 #include <vector>
 
@@ -34,19 +35,6 @@ enum BleMeshNodeState
   BLE_STATE_EDGE,                   //!< Edge node - assigned to a clusterhead
   BLE_STATE_CLUSTERHEAD_CANDIDATE,  //!< Candidate to become clusterhead
   BLE_STATE_CLUSTERHEAD             //!< Clusterhead - managing a cluster
-};
-
-/**
- * \ingroup ble-mesh-discovery
- * \brief Neighbor information for connectivity tracking
- */
-struct NeighborInfo
-{
-  uint32_t nodeId;                  //!< Neighbor node ID
-  Vector location;                  //!< Last known GPS location
-  int8_t lastRssi;                  //!< Last RSSI measurement (dBm)
-  Time lastSeen;                    //!< Last time we heard from this neighbor
-  uint32_t messageCount;            //!< Number of messages received from neighbor
 };
 
 /**
@@ -213,11 +201,7 @@ private:
   Ptr<BleDiscoveryCycle> m_cycle;             //!< Discovery cycle manager
   Ptr<BleMessageQueue> m_queue;               //!< Message forwarding queue
   Ptr<BleForwardingLogic> m_forwarding;       //!< Forwarding logic
-
-  // Neighbor tracking
-  std::map<uint32_t, NeighborInfo> m_neighbors; //!< Neighbor database
-  std::vector<int8_t> m_recentRssi;           //!< Recent RSSI samples for crowding
-  Time m_rssiWindow;                          //!< Time window for RSSI samples
+  Ptr<BleElection> m_election;                //!< Clusterhead election (Phase 3)
 
   // Clusterhead information
   uint32_t m_clusterheadId;                   //!< Assigned clusterhead (if edge node)
