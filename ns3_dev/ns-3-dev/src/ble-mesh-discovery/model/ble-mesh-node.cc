@@ -51,7 +51,6 @@ BleMeshNode::GetTypeId (void)
 BleMeshNode::BleMeshNode ()
   : m_nodeId (0),
     m_state (BLE_STATE_DISCOVERY),
-    m_rssiWindow (Seconds (5.0)),
     m_clusterheadId (0),
     m_initialTtl (10),
     m_proximityThreshold (10.0),
@@ -67,6 +66,7 @@ BleMeshNode::BleMeshNode ()
   m_cycle = CreateObject<BleDiscoveryCycle> ();
   m_queue = CreateObject<BleMessageQueue> ();
   m_forwarding = CreateObject<BleForwardingLogic> ();
+  m_election = CreateObject<BleElection> ();  // Phase 3
 }
 
 BleMeshNode::~BleMeshNode ()
@@ -180,8 +180,9 @@ BleMeshNode::ReceiveMessage (Ptr<Packet> packet, int8_t rssi)
 
   m_messagesReceived++;
 
-  // Store RSSI for crowding factor calculation
-  m_recentRssi.push_back (rssi);
+  // Store RSSI for crowding factor calculation (Phase 3)
+  m_election->AddRssiSample (rssi);
+  m_election->RecordMessageReceived ();
 
   // Parse header
   BleDiscoveryHeaderWrapper header;
@@ -212,18 +213,13 @@ BleMeshNode::ReceiveMessage (Ptr<Packet> packet, int8_t rssi)
 uint32_t
 BleMeshNode::GetDirectNeighborCount () const
 {
-  return m_neighbors.size ();
+  return m_election->CountDirectConnections ();
 }
 
 double
 BleMeshNode::GetCrowdingFactor () const
 {
-  if (m_recentRssi.empty ())
-    {
-      return 0.0;
-    }
-
-  return m_forwarding->CalculateCrowdingFactor (m_recentRssi);
+  return m_election->CalculateCrowding ();
 }
 
 void
@@ -391,6 +387,7 @@ BleMeshNode::ForwardQueuedMessage ()
   packet->AddHeader (header);
 
   m_messagesForwarded++;
+  m_election->RecordMessageForwarded ();  // Phase 3: Track forwarding success
 
   NS_LOG_INFO ("Node " << m_nodeId << " forwarding message from "
                << header.GetSenderId () << " (TTL="
@@ -438,15 +435,11 @@ BleMeshNode::UpdateNeighbor (uint32_t nodeId, Vector location, int8_t rssi)
 {
   NS_LOG_FUNCTION (this << nodeId << location << static_cast<int32_t> (rssi));
 
-  NeighborInfo& neighbor = m_neighbors[nodeId];
-  neighbor.nodeId = nodeId;
-  neighbor.location = location;
-  neighbor.lastRssi = rssi;
-  neighbor.lastSeen = Simulator::Now ();
-  neighbor.messageCount++;
+  // Use Phase 3 election module for neighbor tracking
+  m_election->UpdateNeighbor (nodeId, location, rssi);
 
   NS_LOG_DEBUG ("Updated neighbor " << nodeId << " (RSSI=" << static_cast<int32_t> (rssi)
-                << " dBm, total neighbors=" << m_neighbors.size () << ")");
+                << " dBm, total neighbors=" << m_election->CountDirectConnections () << ")");
 }
 
 bool
@@ -454,28 +447,8 @@ BleMeshNode::ShouldBecomeCandidate ()
 {
   NS_LOG_FUNCTION (this);
 
-  // Check if we have enough direct neighbors
-  uint32_t neighborCount = GetDirectNeighborCount ();
-  if (neighborCount < m_candidacyThreshold)
-    {
-      NS_LOG_DEBUG ("Not enough neighbors for candidacy: " << neighborCount
-                    << " < " << m_candidacyThreshold);
-      return false;
-    }
-
-  // Check connection:noise ratio
-  double crowdingFactor = GetCrowdingFactor ();
-  double connectionNoiseRatio = neighborCount / (1.0 + crowdingFactor);
-
-  // TODO: Add geographic distribution check
-  // TODO: Add successful forwarding requirement check
-
-  NS_LOG_DEBUG ("Candidacy check: neighbors=" << neighborCount
-                << ", crowding=" << crowdingFactor
-                << ", ratio=" << connectionNoiseRatio);
-
-  // Simple threshold for now (will be refined in Phase 3)
-  return connectionNoiseRatio > 10.0;
+  // Phase 3: Use election module for candidacy determination
+  return m_election->ShouldBecomeCandidate ();
 }
 
 double
@@ -483,18 +456,8 @@ BleMeshNode::CalculateConnectivityScore ()
 {
   NS_LOG_FUNCTION (this);
 
-  uint32_t directConnections = GetDirectNeighborCount ();
-  double crowdingFactor = GetCrowdingFactor ();
-
-  // Simple score: direct connections / (1 + crowding)
-  // TODO: Add geographic distribution factor
-  // TODO: Add successful forwarding rate
-
-  double score = directConnections / (1.0 + crowdingFactor);
-
-  NS_LOG_DEBUG ("Connectivity score: " << score);
-
-  return score;
+  // Phase 3: Use election module for score calculation
+  return m_election->CalculateCandidacyScore ();
 }
 
 } // namespace ns3
