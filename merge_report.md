@@ -26,6 +26,8 @@ These documents extend the planning context beyond what `snapshot.md` captured.
 
 ## 3. Pure C Core – New Modules & Functions
 
+#############BEN: START HERE: TO BEGIN REVIEWING CODE AND STRUCTURES/IMPLEMENTATIONS#########################
+
 ### 3.1 `model/protocol-core/ble_broadcast_timing.{h,c}`
 Implements stochastic/noisy broadcast scheduling (Tasks 12 & 14). **New functions:**
 

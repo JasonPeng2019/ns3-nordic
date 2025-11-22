@@ -873,6 +873,9 @@ PASS: TestSuite ble-message-queue (includes TTL priority tests)
 - [x] Implement "noisy broadcast" message transmission
 - [x] Create base-level noise message format
 - [x] Implement stochastic randomized listening time slot selection (default ~90% TX / 10% listen, adjustable per crowding input)
+
+#############BEN: START HERE: TO BEGIN REVIEWING CODE AND STRUCTURES/IMPLEMENTATIONS#########################
+
 - [x] Add RSSI measurement during listening phase
 - [x] Store RSSI samples for crowding factor calculation
 - [x] Test broadcast/listen timing coordination (including auto-profile defaults)
