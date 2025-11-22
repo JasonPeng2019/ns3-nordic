@@ -23,7 +23,7 @@ NS_LOG_COMPONENT_DEFINE ("BleDiscoveryHeaderTest");
 
 /**
  * \ingroup ble-mesh-discovery-test
- * \brief BLE Discovery Header Test Case
+ * \brief BLE Discovery Header Basic Test Case
  */
 class BleDiscoveryHeaderTestCase : public TestCase
 {
@@ -36,7 +36,7 @@ private:
 };
 
 BleDiscoveryHeaderTestCase::BleDiscoveryHeaderTestCase ()
-  : TestCase ("BleDiscoveryHeader test case")
+  : TestCase ("BleDiscoveryHeader basic test case")
 {
 }
 
@@ -119,6 +119,305 @@ BleDiscoveryHeaderTestCase::DoRun (void)
 
 /**
  * \ingroup ble-mesh-discovery-test
+ * \brief Comprehensive NS-3 Packet Integration Test
+ */
+class BleDiscoveryPacketIntegrationTestCase : public TestCase
+{
+public:
+  BleDiscoveryPacketIntegrationTestCase ();
+  virtual ~BleDiscoveryPacketIntegrationTestCase ();
+
+private:
+  virtual void DoRun (void);
+};
+
+BleDiscoveryPacketIntegrationTestCase::BleDiscoveryPacketIntegrationTestCase ()
+  : TestCase ("BleDiscoveryHeader NS-3 packet integration")
+{
+}
+
+BleDiscoveryPacketIntegrationTestCase::~BleDiscoveryPacketIntegrationTestCase ()
+{
+}
+
+void
+BleDiscoveryPacketIntegrationTestCase::DoRun (void)
+{
+  // Test: Multiple serialize/deserialize cycles
+  BleDiscoveryHeaderWrapper original;
+  original.SetSenderId (999);
+  original.SetTtl (15);
+  original.AddToPath (10);
+  original.AddToPath (20);
+  original.AddToPath (30);
+  original.SetGpsLocation (Vector (1.0, 2.0, 3.0));
+
+  for (int cycle = 0; cycle < 3; cycle++)
+    {
+      Ptr<Packet> pkt = Create<Packet> (100); // Add payload
+      pkt->AddHeader (original);
+
+      NS_TEST_ASSERT_MSG_EQ (pkt->GetSize (), original.GetSerializedSize () + 100,
+                             "Packet size should include header and payload");
+
+      BleDiscoveryHeaderWrapper copy;
+      pkt->RemoveHeader (copy);
+
+      NS_TEST_ASSERT_MSG_EQ (copy.GetSenderId (), original.GetSenderId (),
+                             "Sender ID should survive multiple cycles");
+      NS_TEST_ASSERT_MSG_EQ (copy.GetPath ().size (), original.GetPath ().size (),
+                             "Path should survive multiple cycles");
+
+      original = copy; // Use for next cycle
+    }
+
+  // Test: Packet copy constructor
+  Ptr<Packet> pkt1 = Create<Packet> ();
+  BleDiscoveryHeaderWrapper hdr1;
+  hdr1.SetSenderId (777);
+  hdr1.SetTtl (5);
+  pkt1->AddHeader (hdr1);
+
+  Ptr<Packet> pkt2 = pkt1->Copy ();
+  BleDiscoveryHeaderWrapper hdr2;
+  pkt2->RemoveHeader (hdr2);
+
+  NS_TEST_ASSERT_MSG_EQ (hdr2.GetSenderId (), 777, "Packet copy should preserve header");
+  NS_TEST_ASSERT_MSG_EQ (hdr2.GetTtl (), 5, "Packet copy should preserve TTL");
+
+  // Test: Packet fragmentation doesn't corrupt header
+  Ptr<Packet> largePkt = Create<Packet> (2000);
+  BleDiscoveryHeaderWrapper largeHdr;
+  largeHdr.SetSenderId (12345);
+  for (uint32_t i = 0; i < 10; i++)
+    {
+      largeHdr.AddToPath (i * 100);
+    }
+  largePkt->AddHeader (largeHdr);
+
+  BleDiscoveryHeaderWrapper retrievedHdr;
+  Ptr<Packet> fragment = largePkt->Copy ();
+  fragment->RemoveHeader (retrievedHdr);
+
+  NS_TEST_ASSERT_MSG_EQ (retrievedHdr.GetSenderId (), 12345,
+                         "Large packet should preserve sender ID");
+  NS_TEST_ASSERT_MSG_EQ (retrievedHdr.GetPath ().size (), 10,
+                         "Large packet should preserve full path");
+}
+
+/**
+ * \ingroup ble-mesh-discovery-test
+ * \brief Election Message Comprehensive Test
+ */
+class BleDiscoveryElectionTestCase : public TestCase
+{
+public:
+  BleDiscoveryElectionTestCase ();
+  virtual ~BleDiscoveryElectionTestCase ();
+
+private:
+  virtual void DoRun (void);
+};
+
+BleDiscoveryElectionTestCase::BleDiscoveryElectionTestCase ()
+  : TestCase ("BleDiscoveryHeader election message test")
+{
+}
+
+BleDiscoveryElectionTestCase::~BleDiscoveryElectionTestCase ()
+{
+}
+
+void
+BleDiscoveryElectionTestCase::DoRun (void)
+{
+  // Test: Convert discovery to election
+  BleDiscoveryHeaderWrapper msg;
+  msg.SetSenderId (100);
+  msg.SetTtl (8);
+  msg.AddToPath (1);
+  msg.AddToPath (2);
+  msg.SetGpsLocation (Vector (10.0, 20.0, 30.0));
+
+  NS_TEST_ASSERT_MSG_EQ (msg.IsElectionMessage (), false,
+                         "Should start as discovery message");
+
+  msg.SetAsElectionMessage ();
+
+  NS_TEST_ASSERT_MSG_EQ (msg.IsElectionMessage (), true,
+                         "Should be election message after conversion");
+  NS_TEST_ASSERT_MSG_EQ (msg.GetSenderId (), 100,
+                         "Base fields should be preserved during conversion");
+  NS_TEST_ASSERT_MSG_EQ (msg.GetPath ().size (), 2,
+                         "Path should be preserved during conversion");
+
+  // Test: Election-specific fields
+  msg.SetClassId (7);
+  msg.SetPdsf (200);
+  msg.SetScore (0.95);
+  msg.SetHash (0xABCDEF);
+
+  NS_TEST_ASSERT_MSG_EQ (msg.GetClassId (), 7, "Class ID should be set");
+  NS_TEST_ASSERT_MSG_EQ (msg.GetPdsf (), 200, "PDSF should be set");
+  NS_TEST_ASSERT_MSG_EQ (msg.GetScore (), 0.95, "Score should be set");
+  NS_TEST_ASSERT_MSG_EQ (msg.GetHash (), (uint32_t)0xABCDEF, "Hash should be set");
+
+  // Test: Election serialization size
+  uint32_t electionSize = msg.GetSerializedSize ();
+  NS_TEST_ASSERT_MSG_GT (electionSize, 50, "Election packet should be substantial size");
+
+  // Test: Election round-trip serialization
+  Ptr<Packet> pkt = Create<Packet> ();
+  pkt->AddHeader (msg);
+
+  BleDiscoveryHeaderWrapper received;
+  pkt->RemoveHeader (received);
+
+  NS_TEST_ASSERT_MSG_EQ (received.IsElectionMessage (), true,
+                         "Deserialized message should be election type");
+  NS_TEST_ASSERT_MSG_EQ (received.GetClassId (), 7,
+                         "Deserialized class ID should match");
+  NS_TEST_ASSERT_MSG_EQ (received.GetPdsf (), 200,
+                         "Deserialized PDSF should match");
+  NS_TEST_ASSERT_MSG_EQ (received.GetScore (), 0.95,
+                         "Deserialized score should match");
+  NS_TEST_ASSERT_MSG_EQ (received.GetHash (), (uint32_t)0xABCDEF,
+                         "Deserialized hash should match");
+}
+
+/**
+ * \ingroup ble-mesh-discovery-test
+ * \brief GPS Unavailable Handling Test
+ */
+class BleDiscoveryGpsTestCase : public TestCase
+{
+public:
+  BleDiscoveryGpsTestCase ();
+  virtual ~BleDiscoveryGpsTestCase ();
+
+private:
+  virtual void DoRun (void);
+};
+
+BleDiscoveryGpsTestCase::BleDiscoveryGpsTestCase ()
+  : TestCase ("BleDiscoveryHeader GPS unavailable test")
+{
+}
+
+BleDiscoveryGpsTestCase::~BleDiscoveryGpsTestCase ()
+{
+}
+
+void
+BleDiscoveryGpsTestCase::DoRun (void)
+{
+  // Test: Message without GPS should have smaller size
+  BleDiscoveryHeaderWrapper noGps;
+  noGps.SetSenderId (1);
+  noGps.SetTtl (10);
+  noGps.AddToPath (1);
+
+  uint32_t sizeNoGps = noGps.GetSerializedSize ();
+
+  BleDiscoveryHeaderWrapper withGps;
+  withGps.SetSenderId (1);
+  withGps.SetTtl (10);
+  withGps.AddToPath (1);
+  withGps.SetGpsLocation (Vector (1.0, 2.0, 3.0));
+
+  uint32_t sizeWithGps = withGps.GetSerializedSize ();
+
+  NS_TEST_ASSERT_MSG_EQ (sizeWithGps, sizeNoGps + 24,
+                         "GPS adds 24 bytes (3 doubles)");
+
+  // Test: Serialization without GPS
+  Ptr<Packet> pkt = Create<Packet> ();
+  pkt->AddHeader (noGps);
+
+  BleDiscoveryHeaderWrapper received;
+  pkt->RemoveHeader (received);
+
+  NS_TEST_ASSERT_MSG_EQ (received.IsGpsAvailable (), false,
+                         "GPS should not be available");
+
+  // Test: Can set GPS availability independently
+  BleDiscoveryHeaderWrapper manual;
+  manual.SetGpsLocation (Vector (5.0, 6.0, 7.0));
+  NS_TEST_ASSERT_MSG_EQ (manual.IsGpsAvailable (), true,
+                         "SetGpsLocation should enable GPS");
+
+  manual.SetGpsAvailable (false);
+  NS_TEST_ASSERT_MSG_EQ (manual.IsGpsAvailable (), false,
+                         "Should be able to disable GPS");
+
+  // GPS coordinates should still be retrievable even if marked unavailable
+  Vector loc = manual.GetGpsLocation ();
+  NS_TEST_ASSERT_MSG_EQ (loc.x, 5.0, "GPS coordinates preserved");
+}
+
+/**
+ * \ingroup ble-mesh-discovery-test
+ * \brief TypeId and Print Test
+ */
+class BleDiscoveryTypeIdTestCase : public TestCase
+{
+public:
+  BleDiscoveryTypeIdTestCase ();
+  virtual ~BleDiscoveryTypeIdTestCase ();
+
+private:
+  virtual void DoRun (void);
+};
+
+BleDiscoveryTypeIdTestCase::BleDiscoveryTypeIdTestCase ()
+  : TestCase ("BleDiscoveryHeader TypeId and Print test")
+{
+}
+
+BleDiscoveryTypeIdTestCase::~BleDiscoveryTypeIdTestCase ()
+{
+}
+
+void
+BleDiscoveryTypeIdTestCase::DoRun (void)
+{
+  // Test: TypeId
+  BleDiscoveryHeaderWrapper hdr;
+  TypeId tid = hdr.GetInstanceTypeId ();
+  NS_TEST_ASSERT_MSG_EQ (tid.GetName (), "ns3::BleDiscoveryHeaderWrapper",
+                         "TypeId name should match");
+
+  // Test: Print output (basic check it doesn't crash)
+  std::ostringstream oss;
+  hdr.SetSenderId (42);
+  hdr.SetTtl (10);
+  hdr.AddToPath (1);
+  hdr.AddToPath (2);
+  hdr.Print (oss);
+
+  std::string output = oss.str ();
+  NS_TEST_ASSERT_MSG_NE (output.size (), 0, "Print should produce output");
+  NS_TEST_ASSERT_MSG_NE (output.find ("42"), std::string::npos,
+                         "Print should include sender ID");
+
+  // Test: Print election message
+  BleDiscoveryHeaderWrapper election;
+  election.SetAsElectionMessage ();
+  election.SetClassId (5);
+  election.SetPdsf (100);
+
+  std::ostringstream oss2;
+  election.Print (oss2);
+  std::string output2 = oss2.str ();
+
+  NS_TEST_ASSERT_MSG_NE (output2.find ("ELECTION"), std::string::npos,
+                         "Print should indicate election message");
+  NS_TEST_ASSERT_MSG_NE (output2.find ("ClassID"), std::string::npos,
+                         "Print should include election fields");
+}
+
+/**
+ * \ingroup ble-mesh-discovery-test
  * \brief BLE Discovery Header Test Suite
  */
 class BleDiscoveryHeaderTestSuite : public TestSuite
@@ -131,6 +430,10 @@ BleDiscoveryHeaderTestSuite::BleDiscoveryHeaderTestSuite ()
   : TestSuite ("ble-discovery-header", UNIT)
 {
   AddTestCase (new BleDiscoveryHeaderTestCase, TestCase::QUICK);
+  AddTestCase (new BleDiscoveryPacketIntegrationTestCase, TestCase::QUICK);
+  AddTestCase (new BleDiscoveryElectionTestCase, TestCase::QUICK);
+  AddTestCase (new BleDiscoveryGpsTestCase, TestCase::QUICK);
+  AddTestCase (new BleDiscoveryTypeIdTestCase, TestCase::QUICK);
 }
 
 static BleDiscoveryHeaderTestSuite bleMeshDiscoveryHeaderTestSuite;
