@@ -318,6 +318,60 @@ void test_reset_retry(void)
     TEST_PASS();
 }
 
+/* Test: Phase defaults (auto slots/listen ratio) */
+void test_phase_defaults(void)
+{
+    TEST_START("Phase defaults (auto configuration)");
+
+    ble_broadcast_timing_t state;
+    /* Noise/crowding phase: expect 90% transmit (listen_ratio ~ 0.1) */
+    ble_broadcast_timing_init(&state,
+                              BLE_BROADCAST_SCHEDULE_NOISY,
+                              BLE_BROADCAST_AUTO_SLOTS,
+                              100,
+                              BLE_BROADCAST_AUTO_RATIO);
+    assert(state.num_slots == BLE_BROADCAST_NOISE_DEFAULT_SLOTS ||
+           state.num_slots == BLE_BROADCAST_MAX_SLOTS);
+    assert(fabs(state.listen_ratio - BLE_BROADCAST_NOISE_LISTEN_RATIO) < 1e-6);
+
+    /* Neighbor phase: expect 90% listening */
+    ble_broadcast_timing_init(&state,
+                              BLE_BROADCAST_SCHEDULE_STOCHASTIC,
+                              BLE_BROADCAST_AUTO_SLOTS,
+                              100,
+                              BLE_BROADCAST_AUTO_RATIO);
+    assert(state.num_slots == BLE_BROADCAST_NEIGHBOR_DEFAULT_SLOTS ||
+           state.num_slots == BLE_BROADCAST_MAX_SLOTS);
+    assert(fabs(state.listen_ratio - BLE_BROADCAST_NEIGHBOR_LISTEN_RATIO) < 1e-6);
+
+    TEST_PASS();
+}
+
+/* Test: Neighbor phase broadcast cap */
+void test_neighbor_broadcast_cap(void)
+{
+    TEST_START("Neighbor phase broadcast cap");
+
+    ble_broadcast_timing_t state;
+    ble_broadcast_timing_init(&state,
+                              BLE_BROADCAST_SCHEDULE_STOCHASTIC,
+                              BLE_BROADCAST_AUTO_SLOTS,
+                              100,
+                              BLE_BROADCAST_AUTO_RATIO);
+    ble_broadcast_timing_set_seed(&state, 555);
+
+    uint32_t broadcasts = 0;
+    for (uint32_t i = 0; i < state.num_slots; ++i) {
+        if (ble_broadcast_timing_advance_slot(&state)) {
+            broadcasts++;
+        }
+    }
+
+    assert(broadcasts <= BLE_BROADCAST_NEIGHBOR_MAX_TX_SLOTS);
+
+    TEST_PASS();
+}
+
 int main(void)
 {
     printf("=== BLE Broadcast Timing C Core Tests (Tasks 12 & 14) ===\n\n");
@@ -334,6 +388,8 @@ int main(void)
     test_stochastic_timing();
     test_collision_avoidance();
     test_reset_retry();
+    test_phase_defaults();
+    test_neighbor_broadcast_cap();
 
     printf("\n=== Test Summary ===\n");
     printf("Total tests: %d\n", test_count);

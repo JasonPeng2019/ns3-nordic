@@ -99,6 +99,12 @@ public:
     void ResetRetry();
 
     /**
+     * @brief Adjust schedule based on crowding factor
+     * @param crowdingFactor Crowding value (0.0-1.0)
+     */
+    void SetCrowdingFactor(double crowdingFactor);
+
+    /**
      * @brief Get broadcast success rate
      * @return Success rate (0.0-1.0)
      */

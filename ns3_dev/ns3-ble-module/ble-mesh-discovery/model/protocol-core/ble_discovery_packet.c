@@ -403,8 +403,8 @@ uint32_t ble_election_update_pdsf(ble_election_packet_t *packet,
     }
 
     packet->election.pdsf = ble_election_calculate_pdsf(
-        packet->election.pdsf_history.direct_counts,
-        packet->election.pdsf_history.hop_count);
+        packet->election.pdsf,
+        unique_connections);
 
     return packet->election.pdsf;
 }

@@ -20,7 +20,17 @@ extern "C" {
 #endif
 
 /* Constants */
-#define BLE_BROADCAST_MAX_SLOTS 10          /**< Maximum number of time slots */
+#define BLE_BROADCAST_MAX_SLOTS 256         /**< Maximum number of time slots stored per node */
+#define BLE_BROADCAST_AUTO_SLOTS 0          /**< Use schedule-specific default slot count */
+#define BLE_BROADCAST_AUTO_RATIO (-1.0)     /**< Use schedule-specific default listen ratio */
+
+/* Default profiles for the two broadcast phases */
+#define BLE_BROADCAST_NOISE_DEFAULT_SLOTS 10
+#define BLE_BROADCAST_NEIGHBOR_DEFAULT_SLOTS 200
+#define BLE_BROADCAST_NOISE_LISTEN_RATIO 0.1   /**< 10% listening, 90% transmitting */
+#define BLE_BROADCAST_NEIGHBOR_LISTEN_RATIO 0.9 /**< 90% listening, 10% transmitting */
+#define BLE_BROADCAST_NEIGHBOR_MIN_TX_SLOTS 3   /**< Min transmit slots for neighbor discovery */
+#define BLE_BROADCAST_NEIGHBOR_MAX_TX_SLOTS 15  /**< Max transmit slots for neighbor discovery */
 #define BLE_BROADCAST_DEFAULT_LISTEN_RATIO 0.8  /**< 80% listen, 20% broadcast */
 #define BLE_BROADCAST_MAX_RETRIES 3         /**< Maximum broadcast retry attempts */
 
@@ -46,6 +56,9 @@ typedef struct {
     uint32_t current_slot;             /**< Current slot index */
     bool is_broadcast_slot;            /**< True if current slot is for broadcasting */
     uint32_t broadcast_attempts;       /**< Number of broadcast attempts so far */
+    uint32_t broadcasts_this_cycle;    /**< Broadcast slots used in current cycle */
+    uint32_t max_broadcast_slots;      /**< Maximum broadcast slots allowed per cycle */
+    double crowding_factor;            /**< Current crowding factor (0.0-1.0) */
 
     /* Stochastic parameters */
     double listen_ratio;               /**< Probability of listening (0.0-1.0) */
@@ -66,10 +79,10 @@ typedef struct {
 /**
  * @brief Initialize broadcast timing state
  * @param state Pointer to broadcast timing structure
- * @param schedule_type Type of schedule (noisy or stochastic)
- * @param num_slots Number of time slots
- * @param slot_duration_ms Duration of each slot in milliseconds
- * @param listen_ratio Probability of listening (0.0-1.0)
+ * @param schedule_type Type of schedule (noisy/crowding vs stochastic/neighbor)
+ * @param num_slots Number of slots for this phase (use BLE_BROADCAST_AUTO_SLOTS for defaults)
+ * @param slot_duration_ms Duration of each slot (ms)
+ * @param listen_ratio Probability of listening (use BLE_BROADCAST_AUTO_RATIO for defaults)
  */
 void ble_broadcast_timing_init(ble_broadcast_timing_t *state,
                                  ble_broadcast_schedule_type_t schedule_type,
@@ -138,6 +151,21 @@ bool ble_broadcast_timing_record_failure(ble_broadcast_timing_t *state);
  * @param state Broadcast timing state
  */
 void ble_broadcast_timing_reset_retry(ble_broadcast_timing_t *state);
+
+/**
+ * @brief Update schedule parameters based on measured crowding factor
+ * @param state Broadcast timing state
+ * @param crowding_factor Crowding measurement (0.0 sparse, 1.0 very crowded)
+ */
+void ble_broadcast_timing_set_crowding(ble_broadcast_timing_t *state,
+                                       double crowding_factor);
+
+/**
+ * @brief Get maximum broadcast slots allowed in current cycle
+ * @param state Broadcast timing state
+ * @return Max broadcast slots
+ */
+uint32_t ble_broadcast_timing_get_max_broadcast_slots(const ble_broadcast_timing_t *state);
 
 /**
  * @brief Get broadcast success rate

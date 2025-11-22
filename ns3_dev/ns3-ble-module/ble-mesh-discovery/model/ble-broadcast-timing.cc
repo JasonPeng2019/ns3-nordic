@@ -163,6 +163,13 @@ BleBroadcastTiming::ResetRetry()
     ble_broadcast_timing_reset_retry(&m_state);
 }
 
+void
+BleBroadcastTiming::SetCrowdingFactor(double crowdingFactor)
+{
+    NS_LOG_FUNCTION(this << crowdingFactor);
+    ble_broadcast_timing_set_crowding(&m_state, crowdingFactor);
+}
+
 double
 BleBroadcastTiming::GetSuccessRate() const
 {

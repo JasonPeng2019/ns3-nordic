@@ -11,6 +11,84 @@
 #define LCG_A 1664525U
 #define LCG_C 1013904223U
 
+static void
+ble_broadcast_apply_phase_defaults(ble_broadcast_schedule_type_t schedule_type,
+                                   uint32_t *num_slots,
+                                   double *listen_ratio)
+{
+    if (!num_slots || !listen_ratio) {
+        return;
+    }
+
+    if (schedule_type == BLE_BROADCAST_SCHEDULE_NOISY) {
+        if (*num_slots == BLE_BROADCAST_AUTO_SLOTS) {
+            *num_slots = BLE_BROADCAST_NOISE_DEFAULT_SLOTS;
+        }
+        if (*listen_ratio == BLE_BROADCAST_AUTO_RATIO) {
+            *listen_ratio = BLE_BROADCAST_NOISE_LISTEN_RATIO;
+        }
+    } else {
+        if (*num_slots == BLE_BROADCAST_AUTO_SLOTS) {
+            *num_slots = BLE_BROADCAST_NEIGHBOR_DEFAULT_SLOTS;
+        }
+        if (*listen_ratio == BLE_BROADCAST_AUTO_RATIO) {
+            *listen_ratio = BLE_BROADCAST_NEIGHBOR_LISTEN_RATIO;
+        }
+    }
+}
+
+static double
+ble_broadcast_clamp(double value, double min, double max)
+{
+    if (value < min) {
+        return min;
+    }
+    if (value > max) {
+        return max;
+    }
+    return value;
+}
+
+static uint32_t
+ble_broadcast_compute_neighbor_tx_slots(double crowding_factor)
+{
+    crowding_factor = ble_broadcast_clamp(crowding_factor, 0.0, 1.0);
+    double range = (double)(BLE_BROADCAST_NEIGHBOR_MAX_TX_SLOTS - BLE_BROADCAST_NEIGHBOR_MIN_TX_SLOTS);
+    double value = (double)BLE_BROADCAST_NEIGHBOR_MIN_TX_SLOTS +
+                   (1.0 - crowding_factor) * range;
+    uint32_t slots = (uint32_t)ceil(value);
+    if (slots < BLE_BROADCAST_NEIGHBOR_MIN_TX_SLOTS) {
+        slots = BLE_BROADCAST_NEIGHBOR_MIN_TX_SLOTS;
+    }
+    if (slots > BLE_BROADCAST_NEIGHBOR_MAX_TX_SLOTS) {
+        slots = BLE_BROADCAST_NEIGHBOR_MAX_TX_SLOTS;
+    }
+    return slots;
+}
+
+static void
+ble_broadcast_apply_neighbor_profile(ble_broadcast_timing_t *state)
+{
+    if (!state || state->schedule_type != BLE_BROADCAST_SCHEDULE_STOCHASTIC) {
+        return;
+    }
+
+    if (state->num_slots < BLE_BROADCAST_NEIGHBOR_DEFAULT_SLOTS) {
+        state->num_slots = BLE_BROADCAST_NEIGHBOR_DEFAULT_SLOTS;
+    }
+    if (state->num_slots > BLE_BROADCAST_MAX_SLOTS) {
+        state->num_slots = BLE_BROADCAST_MAX_SLOTS;
+    }
+
+    uint32_t tx_slots = ble_broadcast_compute_neighbor_tx_slots(state->crowding_factor);
+    state->max_broadcast_slots = tx_slots;
+
+    if (state->num_slots > 0) {
+        double listen_ratio = 1.0 - ((double)tx_slots / (double)state->num_slots);
+        state->listen_ratio = ble_broadcast_clamp(listen_ratio, 0.0, 1.0);
+    }
+}
+
 void ble_broadcast_timing_init(ble_broadcast_timing_t *state,
                                  ble_broadcast_schedule_type_t schedule_type,
                                  uint32_t num_slots,
@@ -21,16 +99,40 @@ void ble_broadcast_timing_init(ble_broadcast_timing_t *state,
 
     memset(state, 0, sizeof(ble_broadcast_timing_t));
 
+    double resolved_ratio = listen_ratio;
+    uint32_t resolved_slots = num_slots;
+
+    ble_broadcast_apply_phase_defaults(schedule_type, &resolved_slots, &resolved_ratio);
+
+    if (resolved_ratio < 0.0 || resolved_ratio > 1.0) {
+        resolved_ratio = BLE_BROADCAST_DEFAULT_LISTEN_RATIO;
+    }
+
+    if (resolved_slots == 0) {
+        resolved_slots = BLE_BROADCAST_NOISE_DEFAULT_SLOTS;
+    }
+
+    if (resolved_slots > BLE_BROADCAST_MAX_SLOTS) {
+        resolved_slots = BLE_BROADCAST_MAX_SLOTS;
+    }
+
     state->schedule_type = schedule_type;
-    state->num_slots = (num_slots > 0 && num_slots <= BLE_BROADCAST_MAX_SLOTS)
-                        ? num_slots : BLE_BROADCAST_MAX_SLOTS;
+    state->num_slots = resolved_slots;
     state->slot_duration_ms = slot_duration_ms;
-    state->listen_ratio = (listen_ratio >= 0.0 && listen_ratio <= 1.0)
-                           ? listen_ratio : BLE_BROADCAST_DEFAULT_LISTEN_RATIO;
+    state->listen_ratio = resolved_ratio;
 
     state->current_slot = 0;
     state->is_broadcast_slot = false;
     state->broadcast_attempts = 0;
+    state->broadcasts_this_cycle = 0;
+    state->max_broadcast_slots = BLE_BROADCAST_MAX_SLOTS;
+    state->crowding_factor = 0.5;
+
+    if (schedule_type == BLE_BROADCAST_SCHEDULE_STOCHASTIC) {
+        ble_broadcast_apply_neighbor_profile(state);
+    } else {
+        state->max_broadcast_slots = BLE_BROADCAST_MAX_SLOTS;
+    }
 
     state->seed = 12345;  /* Default seed */
     state->max_retries = BLE_BROADCAST_MAX_RETRIES;
@@ -69,6 +171,9 @@ bool ble_broadcast_timing_advance_slot(ble_broadcast_timing_t *state)
 
     /* Advance slot */
     state->current_slot = (state->current_slot + 1) % state->num_slots;
+    if (state->current_slot == 0) {
+        state->broadcasts_this_cycle = 0;
+    }
 
     /* Determine if this slot is broadcast or listen */
     double random_value = ble_broadcast_timing_rand_double(&state->seed);
@@ -94,7 +199,12 @@ bool ble_broadcast_timing_advance_slot(ble_broadcast_timing_t *state)
          * - Majority-listening, minority-broadcasting schedule
          * - Collision avoidance through randomization
          */
-        if (random_value < state->listen_ratio) {
+        bool forced_listen = false;
+        if (state->broadcasts_this_cycle >= state->max_broadcast_slots) {
+            forced_listen = true;
+        }
+
+        if (forced_listen || random_value < state->listen_ratio) {
             /* Majority: Listen */
             state->is_broadcast_slot = false;
             state->total_listen_slots++;
@@ -103,6 +213,7 @@ bool ble_broadcast_timing_advance_slot(ble_broadcast_timing_t *state)
             state->is_broadcast_slot = true;
             state->total_broadcast_slots++;
             state->broadcast_attempts++;
+            state->broadcasts_this_cycle++;
         }
     }
 
@@ -179,4 +290,25 @@ double ble_broadcast_timing_get_actual_listen_ratio(const ble_broadcast_timing_t
     if (total_slots == 0) return 0.0;
 
     return (double)state->total_listen_slots / (double)total_slots;
+}
+void ble_broadcast_timing_set_crowding(ble_broadcast_timing_t *state,
+                                       double crowding_factor)
+{
+    if (!state) return;
+
+    state->crowding_factor = ble_broadcast_clamp(crowding_factor, 0.0, 1.0);
+
+    if (state->schedule_type == BLE_BROADCAST_SCHEDULE_STOCHASTIC) {
+        ble_broadcast_apply_neighbor_profile(state);
+        /* Reset cycle counters so the new limits apply cleanly */
+        state->broadcasts_this_cycle = 0;
+    }
+}
+
+uint32_t ble_broadcast_timing_get_max_broadcast_slots(const ble_broadcast_timing_t *state)
+{
+    if (!state) {
+        return 0;
+    }
+    return state->max_broadcast_slots;
 }
