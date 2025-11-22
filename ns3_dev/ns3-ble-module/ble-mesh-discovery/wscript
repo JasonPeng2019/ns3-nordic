@@ -20,11 +20,15 @@ def build(bld):
         'model/protocol-core/ble_discovery_packet.c',
         'model/protocol-core/ble_mesh_node.c',
         'model/protocol-core/ble_discovery_cycle.c',
+        'model/protocol-core/ble_message_queue.c',
+        'model/protocol-core/ble_forwarding_logic.c',
 
         # C++ wrapper for NS-3 integration
         'model/ble-discovery-header-wrapper.cc',
         'model/ble-mesh-node-wrapper.cc',
         'model/ble-discovery-cycle-wrapper.cc',
+        'model/ble-message-queue.cc',
+        'model/ble-forwarding-logic.cc',
 
         # Future model files
         # 'model/ble-discovery-protocol.cc',
@@ -43,6 +47,8 @@ def build(bld):
         'test/ble-discovery-header-test.cc',
         'test/ble-mesh-node-test.cc',
         'test/ble-discovery-cycle-test.cc',
+        'test/ble-message-queue-test.cc',
+        'test/ble-forwarding-logic-test.cc',
         ]
 
     headers = bld(features='ns3header')
@@ -52,11 +58,15 @@ def build(bld):
         'model/protocol-core/ble_discovery_packet.h',
         'model/protocol-core/ble_mesh_node.h',
         'model/protocol-core/ble_discovery_cycle.h',
+        'model/protocol-core/ble_message_queue.h',
+        'model/protocol-core/ble_forwarding_logic.h',
 
         # C++ wrapper header
         'model/ble-discovery-header-wrapper.h',
         'model/ble-mesh-node-wrapper.h',
         'model/ble-discovery-cycle-wrapper.h',
+        'model/ble-message-queue.h',
+        'model/ble-forwarding-logic.h',
 
         # Future model headers
         # 'model/ble-discovery-protocol.h',

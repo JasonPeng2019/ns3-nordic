@@ -17,6 +17,7 @@
 
 #include "ns3/object.h"
 #include "ns3/packet.h"
+#include "ns3/nstime.h"
 #include "ble-discovery-header-wrapper.h"
 
 extern "C" {
