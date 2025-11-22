@@ -67,6 +67,7 @@ typedef struct {
 
     bool is_candidate;                   /**< Whether node is candidate */
     double candidacy_score;              /**< Candidacy score */
+    ble_score_weights_t score_weights;   /**< Configurable score weights */
 
     /* Thresholds (configurable) */
     uint32_t min_neighbors_for_candidacy; /**< Minimum direct neighbors */
@@ -132,6 +133,14 @@ double ble_election_calculate_geographic_distribution(const ble_election_state_t
  * @param state Election state
  */
 void ble_election_update_metrics(ble_election_state_t *state);
+
+/**
+ * @brief Set weights for candidacy score calculation
+ * @param state Election state
+ * @param weights Optional weights (NULL resets to defaults)
+ */
+void ble_election_set_score_weights(ble_election_state_t *state,
+                                      const ble_score_weights_t *weights);
 
 /**
  * @brief Calculate candidacy score

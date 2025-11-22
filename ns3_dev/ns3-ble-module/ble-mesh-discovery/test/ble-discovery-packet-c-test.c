@@ -365,26 +365,67 @@ void test_pdsf_calculation(void)
 }
 
 /**
+ * Test: PDSF history tracking and serialization
+ */
+void test_pdsf_history_serialization(void)
+{
+    ble_election_packet_t packet;
+    ble_election_packet_init(&packet);
+
+    uint32_t pdsf = ble_election_update_pdsf(&packet, 10, 0);
+    TEST_ASSERT_EQ(pdsf, 10, "First hop should contribute full direct connections");
+    TEST_ASSERT_EQ(packet.election.pdsf_history.hop_count, 1, "History should track first hop");
+    TEST_ASSERT_EQ(packet.election.pdsf_history.direct_counts[0], 10, "First hop count incorrect");
+
+    // Second hop has 8 direct neighbors, 3 already reached → unique = 5
+    pdsf = ble_election_update_pdsf(&packet, 8, 3);
+    TEST_ASSERT_EQ(pdsf, 60, "PDSF should accumulate ΣΠ contributions");
+    TEST_ASSERT_EQ(packet.election.pdsf_history.hop_count, 2, "History should have two hops");
+    TEST_ASSERT_EQ(packet.election.pdsf_history.direct_counts[1], 5, "Second hop should store unique count");
+
+    // Serialize / deserialize to ensure history survives
+    uint8_t buffer[512];
+    uint32_t bytes_written = ble_election_serialize(&packet, buffer, sizeof(buffer));
+    TEST_ASSERT(bytes_written > 0, "Election serialization should include history");
+
+    ble_election_packet_t restored;
+    ble_election_packet_init(&restored);
+    uint32_t bytes_read = ble_election_deserialize(&restored, buffer, bytes_written);
+    TEST_ASSERT_EQ(bytes_read, bytes_written, "Deserialization should consume all bytes");
+    TEST_ASSERT_EQ(restored.election.pdsf, packet.election.pdsf, "PDSF should persist after round-trip");
+    TEST_ASSERT_EQ(restored.election.pdsf_history.hop_count, packet.election.pdsf_history.hop_count,
+                   "History hop count should match after deserialization");
+    TEST_ASSERT_EQ(restored.election.pdsf_history.direct_counts[0], 10,
+                   "First hop count should persist after deserialization");
+    TEST_ASSERT_EQ(restored.election.pdsf_history.direct_counts[1], 5,
+                   "Second hop count should persist after deserialization");
+}
+
+/**
  * Test: Score calculation
  */
 void test_score_calculation(void)
 {
-    // Score = (0.6 * connections/noise) + (0.4 * geo_dist)
-    double score = ble_election_calculate_score(10, 5.0, 0.8);
-    double expected = (0.6 * (10.0 / 5.0)) + (0.4 * 0.8);
-    /* The implementation clamps score to [0.0, 1.0], so apply same clamp to expected */
-    if (expected > 1.0) expected = 1.0;
-    if (expected < 0.0) expected = 0.0;
-    TEST_ASSERT_DOUBLE_EQ(score, expected, "Score calculation should match formula (with clamping)");
+    // Defaults: weights = 0.35/0.30/0.20/0.15
+    double score = ble_election_calculate_score(10, 4.0, 0.8, 0.6, NULL);
+    double expected =
+        0.35 * (10.0 / 30.0) +   // direct contribution
+        0.30 * (4.0 / 10.0) +    // connection:noise ratio contribution
+        0.20 * 0.8 +             // geographic contribution
+        0.15 * 0.6;              // forwarding contribution
+    TEST_ASSERT_DOUBLE_EQ(score, expected, "Score calculation should follow weighted formula");
 
-    // Test clamping to [0.0, 1.0]
-    score = ble_election_calculate_score(1000, 1.0, 1.0);
-    TEST_ASSERT(score <= 1.0, "Score should be clamped to max 1.0");
-    TEST_ASSERT(score >= 0.0, "Score should be clamped to min 0.0");
+    // Test clamping behavior
+    score = ble_election_calculate_score(1000, 100.0, 2.0, 2.0, NULL);
+    TEST_ASSERT(score <= 1.0, "Score should be clamped to max 1.0 after normalization");
+    TEST_ASSERT(score >= 0.0, "Score should be non-negative");
 
-    // Test zero noise protection
-    score = ble_election_calculate_score(10, 0.0, 0.5);
-    TEST_ASSERT_DOUBLE_EQ(score, 0.0, "Zero noise should return 0.0");
+    // Test custom weights emphasize geographic distribution
+    ble_score_weights_t weights = {0.1, 0.1, 0.7, 0.1};
+    double geoHeavyScore = ble_election_calculate_score(5, 1.0, 0.9, 0.2, &weights);
+    double geoLightScore = ble_election_calculate_score(5, 1.0, 0.2, 0.2, &weights);
+    TEST_ASSERT(geoHeavyScore > geoLightScore,
+                "Higher geographic distribution should yield better score when weighted");
 }
 
 /**
@@ -456,6 +497,7 @@ int main(void)
     test_buffer_overflow_protection();
     test_invalid_path_length();
     test_pdsf_calculation();
+    test_pdsf_history_serialization();
     test_score_calculation();
     test_hash_generation();
     test_large_path_serialization();

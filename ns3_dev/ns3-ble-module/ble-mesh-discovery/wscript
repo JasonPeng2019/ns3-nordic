@@ -26,6 +26,7 @@ def build(bld):
 
         # C++ wrapper for NS-3 integration
         'model/ble-discovery-header-wrapper.cc',
+        'model/ble-election-header.cc',
         'model/ble-mesh-node-wrapper.cc',
         'model/ble-discovery-cycle-wrapper.cc',
         'model/ble-message-queue.cc',
@@ -67,6 +68,7 @@ def build(bld):
 
         # C++ wrapper header
         'model/ble-discovery-header-wrapper.h',
+        'model/ble-election-header.h',
         'model/ble-mesh-node-wrapper.h',
         'model/ble-discovery-cycle-wrapper.h',
         'model/ble-message-queue.h',

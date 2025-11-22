@@ -247,6 +247,21 @@ BleElection::SetDirectRssiThreshold (int8_t threshold)
 }
 
 void
+BleElection::SetScoreWeights (double directWeight,
+                              double ratioWeight,
+                              double geoWeight,
+                              double forwardingWeight)
+{
+  NS_LOG_FUNCTION (this << directWeight << ratioWeight << geoWeight << forwardingWeight);
+  ble_score_weights_t weights;
+  weights.direct_weight = directWeight;
+  weights.connection_noise_weight = ratioWeight;
+  weights.geographic_weight = geoWeight;
+  weights.forwarding_weight = forwardingWeight;
+  ble_election_set_score_weights (&m_state, &weights);
+}
+
+void
 BleElection::RecordMessageForwarded ()
 {
   m_state.metrics.messages_forwarded++;

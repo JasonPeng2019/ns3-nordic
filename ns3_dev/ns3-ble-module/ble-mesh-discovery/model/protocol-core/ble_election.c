@@ -5,6 +5,7 @@
 
 #include "ble_election.h"
 #include <string.h>
+
 #include <math.h>
 
 /* RSSI threshold for considering a connection "direct" (1-hop) */
@@ -29,6 +30,7 @@ ble_election_init(ble_election_state_t *state)
     state->min_connection_noise_ratio = DEFAULT_MIN_CN_RATIO;
     state->min_geographic_distribution = DEFAULT_MIN_GEO_DIST;
     state->direct_connection_rssi_threshold = DEFAULT_DIRECT_RSSI_THRESHOLD;
+    state->score_weights = BLE_DEFAULT_SCORE_WEIGHTS;
 }
 
 void
@@ -225,6 +227,21 @@ ble_election_update_metrics(ble_election_state_t *state)
     }
 }
 
+void
+ble_election_set_score_weights(ble_election_state_t *state,
+                                 const ble_score_weights_t *weights)
+{
+    if (!state) {
+        return;
+    }
+
+    if (weights) {
+        state->score_weights = *weights;
+    } else {
+        state->score_weights = BLE_DEFAULT_SCORE_WEIGHTS;
+    }
+}
+
 double
 ble_election_calculate_candidacy_score(const ble_election_state_t *state)
 {
@@ -232,24 +249,11 @@ ble_election_calculate_candidacy_score(const ble_election_state_t *state)
         return 0.0;
     }
 
-    /* Score formula (weighted combination):
-     * Score = w1 * direct_connections +
-     *         w2 * connection_noise_ratio +
-     *         w3 * geographic_distribution +
-     *         w4 * forwarding_success_rate
-     */
-
-    const double w1 = 1.0;   /* Weight for direct connections */
-    const double w2 = 2.0;   /* Weight for CN ratio (most important) */
-    const double w3 = 1.5;   /* Weight for geographic distribution */
-    const double w4 = 1.0;   /* Weight for forwarding success */
-
-    double score = w1 * state->metrics.direct_connections +
-                   w2 * state->metrics.connection_noise_ratio +
-                   w3 * state->metrics.geographic_distribution * 10.0 +
-                   w4 * state->metrics.forwarding_success_rate * 10.0;
-
-    return score;
+    return ble_election_calculate_score(state->metrics.direct_connections,
+                                        state->metrics.connection_noise_ratio,
+                                        state->metrics.geographic_distribution,
+                                        state->metrics.forwarding_success_rate,
+                                        &state->score_weights);
 }
 
 bool

@@ -93,6 +93,18 @@ public:
   bool IsElectionMessage (void) const;
 
   /**
+   * \brief Explicitly set clusterhead flag
+   * \param isClusterhead true if packet announces a clusterhead
+   */
+  void SetClusterheadFlag (bool isClusterhead);
+
+  /**
+   * \brief Check clusterhead flag
+   * \return true if packet flagged as clusterhead announcement
+   */
+  bool HasClusterheadFlag (void) const;
+
+  /**
    * \brief Set sender ID
    * \param id the sender ID
    */
@@ -196,6 +208,25 @@ public:
    * \return the PDSF value
    */
   uint32_t GetPdsf (void) const;
+
+  /**
+   * \brief Reset tracked PDSF hop history
+   */
+  void ResetPdsfHistory (void);
+
+  /**
+   * \brief Update PDSF with current hop direct connections
+   * \param directConnections Unique direct connections this hop contributes
+   * \param alreadyReached Estimated number of previously reached devices
+   * \return Updated PDSF value
+   */
+  uint32_t UpdatePdsf (uint32_t directConnections, uint32_t alreadyReached);
+
+  /**
+   * \brief Get PDSF hop history counts
+   * \return vector of per-hop direct connection counts
+   */
+  std::vector<uint32_t> GetPdsfHopHistory (void) const;
 
   /**
    * \brief Set score

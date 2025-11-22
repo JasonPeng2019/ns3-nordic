@@ -322,16 +322,24 @@ uint16_t ble_mesh_node_prune_stale_neighbors(ble_mesh_node_t *node, uint32_t max
 /* ===== Election & Decision Logic ===== */
 
 double ble_mesh_node_calculate_candidacy_score(const ble_mesh_node_t *node,
-                                                 double noise_level,
+                                                 double connection_noise_ratio,
                                                  double geographic_distribution)
 {
     if (!node) return 0.0;
 
     uint16_t direct_connections = ble_mesh_node_count_direct_neighbors(node);
 
+    double forwarding_success = 0.0;
+    if (node->stats.messages_received > 0) {
+        forwarding_success =
+            (double)node->stats.messages_forwarded / (double)node->stats.messages_received;
+    }
+
     return ble_election_calculate_score(direct_connections,
-                                          noise_level,
-                                          geographic_distribution);
+                                          connection_noise_ratio,
+                                          geographic_distribution,
+                                          forwarding_success,
+                                          NULL);
 }
 
 bool ble_mesh_node_should_become_edge(const ble_mesh_node_t *node)

@@ -274,7 +274,7 @@ uint16_t ble_mesh_node_prune_stale_neighbors(ble_mesh_node_t *node, uint32_t max
  * @return Candidacy score (0.0-1.0)
  */
 double ble_mesh_node_calculate_candidacy_score(const ble_mesh_node_t *node,
-                                                 double noise_level,
+                                                 double connection_noise_ratio,
                                                  double geographic_distribution);
 
 /**

@@ -169,6 +169,18 @@ public:
   void SetDirectRssiThreshold (int8_t threshold);
 
   /**
+   * \brief Configure score weights used in candidacy calculation
+   * \param directWeight Weight for direct connections
+   * \param ratioWeight Weight for connection:noise ratio
+   * \param geoWeight Weight for geographic distribution
+   * \param forwardingWeight Weight for forwarding success
+   */
+  void SetScoreWeights (double directWeight,
+                        double ratioWeight,
+                        double geoWeight,
+                        double forwardingWeight);
+
+  /**
    * \brief Record a message was forwarded (for success rate)
    */
   void RecordMessageForwarded ();
