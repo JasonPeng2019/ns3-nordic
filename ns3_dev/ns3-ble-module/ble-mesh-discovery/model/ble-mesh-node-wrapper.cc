@@ -259,6 +259,18 @@ BleMeshNodeWrapper::SetPdsf (uint32_t pdsf)
   m_node.pdsf = pdsf;
 }
 
+void
+BleMeshNodeWrapper::SetNoiseLevel (double noiseLevel)
+{
+  ble_mesh_node_set_noise_level (&m_node, noiseLevel);
+}
+
+void
+BleMeshNodeWrapper::MarkCandidateHeard (void)
+{
+  ble_mesh_node_mark_candidate_heard (&m_node);
+}
+
 uint32_t
 BleMeshNodeWrapper::GetElectionHash (void) const
 {

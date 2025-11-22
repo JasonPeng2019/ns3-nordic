@@ -243,6 +243,17 @@ public:
   void SetPdsf (uint32_t pdsf);
 
   /**
+   * \brief Set the most recent noise level measurement
+   * \param noiseLevel Noise value (>=0)
+   */
+  void SetNoiseLevel (double noiseLevel);
+
+  /**
+   * \brief Mark that another clusterhead candidate was heard
+   */
+  void MarkCandidateHeard (void);
+
+  /**
    * \brief Get election hash
    * \return Hash value
    */

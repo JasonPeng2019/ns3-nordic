@@ -34,8 +34,9 @@ Portable C event loop driving the discovery cycle, message handling, and node st
    - Ensure dedupe, proximity checks, and capacity limits are enforced before TX.
 
 7. **Node State Machine Hooks**
-   - Invoke `ble_mesh_node_*` transitions based on metrics gathered each cycle.
-   - Update candidacy scores, neighbor stats, and GPS cache within the engine.
+   - Invoke `ble_mesh_node_*` transitions based on metrics gathered each cycle (edge vs. candidate states).
+   - Update candidacy scores, neighbor stats, GPS cache, and noise level inputs within the engine.
+   - Track when other clusterhead candidates were last heard and apply the dynamic (6→3→1) candidacy threshold logic; trigger election-announcement preparation when becoming candidate.
 
 8. **Election Flooding & Capacity Controls**
    - Handle multi-round election announcements, PDSF thresholds, renouncement logic once those helpers are implemented.

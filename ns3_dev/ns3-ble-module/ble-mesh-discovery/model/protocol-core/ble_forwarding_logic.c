@@ -51,6 +51,9 @@ double
 ble_forwarding_calculate_crowding_factor(const int8_t *rssi_samples,
                                            uint32_t num_samples)
 {
+    const double RSSI_MIN = -90.0;  /* Weakest signal considered */
+    const double RSSI_MAX = -40.0;  /* Strongest signal considered */
+
     if (!rssi_samples || num_samples == 0) {
         return 0.0; /* No crowding if no samples */
     }
@@ -67,9 +70,6 @@ ble_forwarding_calculate_crowding_factor(const int8_t *rssi_samples,
      * - RSSI <= -90 dBm: crowding = 0.0 (not crowded)
      */
 
-    const double RSSI_MIN = -90.0;  /* Weakest signal considered */
-    const double RSSI_MAX = -40.0;  /* Strongest signal considered */
-
     if (mean_rssi >= RSSI_MAX) {
         return 1.0;
     }
@@ -81,6 +81,14 @@ ble_forwarding_calculate_crowding_factor(const int8_t *rssi_samples,
     double crowding = (mean_rssi - RSSI_MIN) / (RSSI_MAX - RSSI_MIN);
 
     return crowding;
+}
+
+double
+ble_forwarding_calculate_noise_level(const int8_t *rssi_samples,
+                                       uint32_t num_samples)
+{
+    double crowding = ble_forwarding_calculate_crowding_factor(rssi_samples, num_samples);
+    return crowding * 100.0;
 }
 
 bool

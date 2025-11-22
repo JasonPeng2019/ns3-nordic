@@ -92,6 +92,12 @@ higher direct connection count : noise heard ratios, making them
 more suitable for clusterheads. As a result, the more reachable
 direct connections in a noisy area a node has, the more likely it
 is to become clusterhead.
+- A dynamic threshold ensures at least one viable candidate emerges:
+initially the ratio must exceed `(6^2 / (0.5 * cluster_capacity))`, then
+relaxes to `(3^2 / (0.5 * cluster_capacity))` after one discovery cycle with
+no other candidate announcements heard, and finally to `(1^2 / (0.5 *
+cluster_capacity))` if two consecutive silent cycles pass. Hearing another
+candidate resets the requirement back to the highest level.
 •3) Clusterhead Comparison & Election Announcement: Clusterheads
 will broadcast their direct device count to remove nearby lower count
 clusterheads.

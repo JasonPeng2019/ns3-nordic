@@ -372,6 +372,7 @@ void test_should_become_candidate(void)
 
     ble_mesh_node_t node;
     ble_mesh_node_init(&node, 50);
+    ble_mesh_node_set_noise_level(&node, 0.0);
 
     // Node with few neighbors should not be candidate
     ble_mesh_node_add_neighbor(&node, 100, -50, 1);
@@ -385,8 +386,34 @@ void test_should_become_candidate(void)
     ble_mesh_node_add_neighbor(&node, 103, -60, 1);
     ble_mesh_node_add_neighbor(&node, 104, -60, 1);
 
+    // Initial cycle (n=6) should still fail
     result = ble_mesh_node_should_become_candidate(&node);
-    TEST_ASSERT(result == true, "Node with 5 direct neighbors and good RSSI should be candidate");
+    TEST_ASSERT(result == false, "High threshold should block candidacy initially");
+
+    // After one cycle with no candidates heard (n=3)
+    node.current_cycle = 1;
+    result = ble_mesh_node_should_become_candidate(&node);
+    TEST_ASSERT(result == false, "Threshold of 3 should still block candidacy");
+
+    // After two silent cycles (n=1) candidacy should pass
+    node.current_cycle = 2;
+    result = ble_mesh_node_should_become_candidate(&node);
+    TEST_ASSERT(result == true, "Node should become candidate once requirement drops to 1");
+
+    // Hearing another candidate should reset the threshold
+    ble_mesh_node_mark_candidate_heard(&node);
+    result = ble_mesh_node_should_become_candidate(&node);
+    TEST_ASSERT(result == false, "Hearing another candidate should reset requirement");
+
+    // Noise reduces the ratio further
+    node.current_cycle = 4;
+    ble_mesh_node_set_noise_level(&node, 50.0);
+    result = ble_mesh_node_should_become_candidate(&node);
+    TEST_ASSERT(result == false, "High noise level should block candidacy even when requirement is minimal");
+
+    ble_mesh_node_set_noise_level(&node, 0.0);
+    result = ble_mesh_node_should_become_candidate(&node);
+    TEST_ASSERT(result == true, "Removing noise after cooldown should allow candidacy again");
 }
 
 void test_candidacy_score_calculation(void)

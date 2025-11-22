@@ -356,13 +356,18 @@ uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf, uint32_t direct_nei
 double ble_election_calculate_score(uint32_t direct_connections,
                                       double noise_level)
 {
-    /* Favor nodes with many direct links and good signal quality */
-    double connection_ratio = 0.0;
-    if (noise_level > 0.0) {
-        connection_ratio = (double)direct_connections / noise_level;
+    double base_score = (double)direct_connections;
+
+    double neighbor_ratio = 0.0;
+    if (BLE_DISCOVERY_MAX_CLUSTER_SIZE > 0) {
+        neighbor_ratio = (double)direct_connections / (double)BLE_DISCOVERY_MAX_CLUSTER_SIZE;
     }
 
-    return (double)direct_connections + connection_ratio;
+    double noise_modifier = 1.0 / (noise_level + 1.0);
+
+    double ratio_bonus = neighbor_ratio * noise_modifier;
+
+    return base_score + ratio_bonus;
 }
 
 uint32_t ble_election_generate_hash(uint32_t node_id)

@@ -8,6 +8,27 @@
 #include "ble_mesh_node.h"
 #include <string.h>
 
+static uint32_t
+ble_mesh_node_get_candidate_requirement(const ble_mesh_node_t *node)
+{
+    if (node == NULL) {
+        return 6;
+    }
+
+    uint32_t cycles_since_heard = 0;
+    if (node->current_cycle >= node->last_candidate_heard_cycle) {
+        cycles_since_heard = node->current_cycle - node->last_candidate_heard_cycle;
+    }
+
+    if (cycles_since_heard == 0) {
+        return 6;
+    }
+    if (cycles_since_heard == 1) {
+        return 3;
+    }
+    return 1;
+}
+
 /* ===== Node Initialization ===== */
 
 void ble_mesh_node_init(ble_mesh_node_t *node, uint32_t node_id)
@@ -34,6 +55,8 @@ void ble_mesh_node_init(ble_mesh_node_t *node, uint32_t node_id)
     node->pdsf = 0;
     node->candidacy_score = 0.0;
     node->election_hash = ble_election_generate_hash(node_id);
+    node->noise_level = 0.0;
+    node->last_candidate_heard_cycle = 0;
 
     node->current_cycle = 0;
 
@@ -349,16 +372,58 @@ bool ble_mesh_node_should_become_candidate(const ble_mesh_node_t *node)
 {
     if (!node) return false;
 
-    // Node becomes candidate if:
-    // 1. Has good connectivity (>= 5 direct neighbors)
-    // 2. AND not already at capacity (< 150 total neighbors)
-    // 3. AND average RSSI is reasonable
-    uint16_t direct_neighbors = ble_mesh_node_count_direct_neighbors(node);
-    int8_t avg_rssi = ble_mesh_node_calculate_avg_rssi(node);
+    if (node->neighbors.count >= BLE_MESH_MAX_NEIGHBORS) {
+        return false;
+    }
 
-    return (direct_neighbors >= 5 &&
-            node->neighbors.count < BLE_MESH_MAX_NEIGHBORS &&
-            avg_rssi >= BLE_MESH_EDGE_RSSI_THRESHOLD);
+    int8_t avg_rssi = ble_mesh_node_calculate_avg_rssi(node);
+    if (avg_rssi < BLE_MESH_EDGE_RSSI_THRESHOLD) {
+        return false;
+    }
+
+    uint16_t direct_neighbors = ble_mesh_node_count_direct_neighbors(node);
+
+    double neighbor_ratio = 0.0;
+    if (BLE_DISCOVERY_MAX_CLUSTER_SIZE > 0) {
+        neighbor_ratio = (double)direct_neighbors / (double)BLE_DISCOVERY_MAX_CLUSTER_SIZE;
+    }
+
+    double noise = node->noise_level;
+    if (noise < 0.0) {
+        noise = 0.0;
+    }
+
+    double ratio = neighbor_ratio / (noise + 1.0);
+
+    uint32_t requirement = ble_mesh_node_get_candidate_requirement(node);
+    double threshold = 0.0;
+    if (BLE_DISCOVERY_MAX_CLUSTER_SIZE > 0) {
+        threshold = ((double)requirement * (double)requirement) /
+                    ((double)BLE_DISCOVERY_MAX_CLUSTER_SIZE * 0.5);
+    }
+
+    return ratio >= threshold;
+}
+
+void ble_mesh_node_set_noise_level(ble_mesh_node_t *node, double noise_level)
+{
+    if (!node) {
+        return;
+    }
+
+    if (noise_level < 0.0) {
+        noise_level = 0.0;
+    }
+
+    node->noise_level = noise_level;
+}
+
+void ble_mesh_node_mark_candidate_heard(ble_mesh_node_t *node)
+{
+    if (!node) {
+        return;
+    }
+    node->last_candidate_heard_cycle = node->current_cycle;
 }
 
 /* ===== Statistics ===== */

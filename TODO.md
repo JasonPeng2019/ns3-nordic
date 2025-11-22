@@ -773,11 +773,13 @@ Build Time:          <1 second incremental
 - [ ] Log connectivity metrics for analysis
 
 ### Task 17: Implement Clusterhead Candidacy Determination
-- [ ] Calculate direct connection count : noise heard ratio
-- [ ] Implement candidacy threshold calculation (dynamic based on crowding)
+- [ ] Calculate the `(direct neighbors / max neighbors) / (noise + 1)` ratio from crowding/noisy-broadcast data
+- [ ] Track when other clusterhead candidates were last heard and dynamically relax the threshold (n = 6 → 3 → 1 cycles) when no announcements are received
+- [ ] Invoke `ble_mesh_node_should_become_edge()` / `_should_become_candidate()` inside the discovery engine each cycle and update node state via `ble_mesh_node_set_state()`
+- [ ] Trigger election-announcement generation when entering `BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE`
 - [ ] Add geographic distribution check (neighbors not all clustered)
 - [ ] Implement successful forwarding requirement check
-- [ ] Create candidacy decision logic combining all criteria
+- [ ] Create candidacy decision logic combining all criteria and reset when a better candidate is heard
 - [ ] Test candidacy election in various network topologies
 
 ### Task 18: Implement Geographic Distribution Analysis
@@ -1150,3 +1152,6 @@ These tasks are mentioned in the protocol document but noted as "not implemented
 
 **Last Updated**: 2025-11-19
 **Status**: Ready to begin implementation
+- [ ] Add engine/runtime hooks to process election messages (PDSF comparisons, score/conflict resolution) and reset candidacy timers when stronger announcements are heard
+- [ ] Ensure PDSF-based capacity limiting applies when forwarding election announcements (stop forwarding once cluster capacity reached)
+- [ ] Implement 3-round announcement flooding (track rounds per candidate and retransmit in subsequent cycles)

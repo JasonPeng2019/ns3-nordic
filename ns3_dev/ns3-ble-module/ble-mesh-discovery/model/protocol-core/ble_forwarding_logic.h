@@ -37,6 +37,15 @@ double ble_forwarding_calculate_crowding_factor(const int8_t *rssi_samples,
                                                   uint32_t num_samples);
 
 /**
+ * @brief Convert a single RSSI reading to a normalized noise level (0-100)
+ * @param rssi_samples Array of RSSI samples (dBm)
+ * @param num_samples Number of samples
+ * @return Noise level scaled 0 (quiet) to 100 (very noisy)
+ */
+double ble_forwarding_calculate_noise_level(const int8_t *rssi_samples,
+                                              uint32_t num_samples);
+
+/**
  * @brief Determine if message should be forwarded based on crowding factor
  *
  * Uses picky forwarding algorithm with direct-neighbor awareness.
