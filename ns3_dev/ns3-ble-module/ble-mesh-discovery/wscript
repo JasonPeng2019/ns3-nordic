@@ -22,6 +22,7 @@ def build(bld):
         'model/protocol-core/ble_discovery_cycle.c',
         'model/protocol-core/ble_message_queue.c',
         'model/protocol-core/ble_forwarding_logic.c',
+        'model/protocol-core/ble_broadcast_timing.c',
 
         # C++ wrapper for NS-3 integration
         'model/ble-discovery-header-wrapper.cc',
@@ -29,6 +30,7 @@ def build(bld):
         'model/ble-discovery-cycle-wrapper.cc',
         'model/ble-message-queue.cc',
         'model/ble-forwarding-logic.cc',
+        'model/ble-broadcast-timing.cc',
 
         # Future model files
         # 'model/ble-discovery-protocol.cc',
@@ -49,6 +51,7 @@ def build(bld):
         'test/ble-discovery-cycle-test.cc',
         'test/ble-message-queue-test.cc',
         'test/ble-forwarding-logic-test.cc',
+        'test/ble-broadcast-timing-test.cc',
         ]
 
     headers = bld(features='ns3header')
@@ -60,6 +63,7 @@ def build(bld):
         'model/protocol-core/ble_discovery_cycle.h',
         'model/protocol-core/ble_message_queue.h',
         'model/protocol-core/ble_forwarding_logic.h',
+        'model/protocol-core/ble_broadcast_timing.h',
 
         # C++ wrapper header
         'model/ble-discovery-header-wrapper.h',
@@ -67,6 +71,7 @@ def build(bld):
         'model/ble-discovery-cycle-wrapper.h',
         'model/ble-message-queue.h',
         'model/ble-forwarding-logic.h',
+        'model/ble-broadcast-timing.h',
 
         # Future model headers
         # 'model/ble-discovery-protocol.h',
