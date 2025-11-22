@@ -227,11 +227,10 @@ BleMeshNodeWrapper::PruneStaleNeighbors (uint32_t maxAge)
 // ===== Election & Clustering =====
 
 double
-BleMeshNodeWrapper::CalculateCandidacyScore (double noiseLevel, double geographicDistribution)
+BleMeshNodeWrapper::CalculateCandidacyScore (double noiseLevel)
 {
   double score = ble_mesh_node_calculate_candidacy_score (&m_node,
-                                                            noiseLevel,
-                                                            geographicDistribution);
+                                                            noiseLevel);
   m_node.candidacy_score = score;
   return score;
 }

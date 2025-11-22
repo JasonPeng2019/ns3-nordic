@@ -354,10 +354,13 @@ BleMeshNode::ForwardQueuedMessage ()
   double crowdingFactor = GetCrowdingFactor ();
 
   // Check if should forward using all 3 metrics
+  uint32_t directNeighbors = GetDirectNeighborCount ();
+
   bool shouldForward = m_forwarding->ShouldForward (header,
                                                      currentLocation,
                                                      crowdingFactor,
-                                                     m_proximityThreshold);
+                                                     m_proximityThreshold,
+                                                     directNeighbors);
 
   if (!shouldForward)
     {

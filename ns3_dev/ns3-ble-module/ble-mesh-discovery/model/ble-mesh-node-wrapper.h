@@ -214,10 +214,9 @@ public:
   /**
    * \brief Calculate candidacy score
    * \param noiseLevel Measured noise level
-   * \param geographicDistribution Geographic distribution metric (0.0-1.0)
-   * \return Candidacy score (0.0-1.0)
+   * \return Candidacy score (higher = better)
    */
-  double CalculateCandidacyScore (double noiseLevel, double geographicDistribution);
+  double CalculateCandidacyScore (double noiseLevel);
 
   /**
    * \brief Get candidacy score

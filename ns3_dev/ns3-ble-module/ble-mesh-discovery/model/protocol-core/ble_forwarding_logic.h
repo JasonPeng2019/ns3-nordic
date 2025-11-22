@@ -22,6 +22,12 @@ extern "C" {
 #endif
 
 /**
+ * @brief Seed the internal forwarding RNG
+ * @param seed New seed (0 selects default)
+ */
+void ble_forwarding_set_random_seed(uint32_t seed);
+
+/**
  * @brief Calculate crowding factor from RSSI measurements
  * @param rssi_samples Array of RSSI samples (dBm)
  * @param num_samples Number of samples
@@ -33,14 +39,14 @@ double ble_forwarding_calculate_crowding_factor(const int8_t *rssi_samples,
 /**
  * @brief Determine if message should be forwarded based on crowding factor
  *
- * Uses picky forwarding algorithm: higher crowding = lower probability of forwarding
+ * Uses picky forwarding algorithm with direct-neighbor awareness.
  *
  * @param crowding_factor Crowding factor (0.0 to 1.0)
- * @param random_value Random value between 0.0 and 1.0
+ * @param direct_neighbors Number of direct neighbors observed
  * @return true if message should be forwarded
  */
 bool ble_forwarding_should_forward_crowding(double crowding_factor,
-                                              double random_value);
+                                              uint32_t direct_neighbors);
 
 /**
  * @brief Calculate distance between two GPS coordinates (meters)
@@ -77,14 +83,14 @@ bool ble_forwarding_should_forward_proximity(const ble_gps_location_t *current_l
  * @param current_location This node's GPS location
  * @param crowding_factor Local crowding factor
  * @param proximity_threshold GPS proximity threshold (meters)
- * @param random_value Random value 0.0-1.0 for probabilistic forwarding
+ * @param direct_neighbors Number of direct neighbors observed
  * @return true if message should be forwarded
  */
 bool ble_forwarding_should_forward(const ble_discovery_packet_t *packet,
                                      const ble_gps_location_t *current_location,
                                      double crowding_factor,
                                      double proximity_threshold,
-                                     double random_value);
+                                     uint32_t direct_neighbors);
 
 /**
  * @brief Calculate forwarding priority (lower = higher priority)

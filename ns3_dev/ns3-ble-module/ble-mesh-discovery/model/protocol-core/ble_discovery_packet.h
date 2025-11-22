@@ -23,6 +23,7 @@ extern "C" {
 
 /* ===== Constants ===== */
 
+//JASON - change TTL and path length as needed
 #define BLE_DISCOVERY_MAX_PATH_LENGTH 50    /**< Maximum nodes in path */
 #define BLE_DISCOVERY_DEFAULT_TTL 10        /**< Default Time To Live */
 #define BLE_DISCOVERY_MAX_CLUSTER_SIZE 150  /**< Maximum devices per cluster */
@@ -192,23 +193,21 @@ uint32_t ble_election_deserialize(ble_election_packet_t *packet,
                                     uint32_t buffer_size);
 
 /**
- * @brief Calculate PDSF (Predicted Devices So Far)
- * @param direct_counts Array of direct connection counts at each hop
- * @param hop_count Number of hops
- * @return PDSF value
+ * @brief Update PDSF (Predicted Devices So Far) based on local neighbors
+ * @param previous_pdsf PDSF value carried with the incoming packet (use 1 for first hop)
+ * @param direct_neighbors Number of direct neighbors observed during the crowding measurement
+ * @return Updated PDSF including this hop's predicted reach
  */
-uint32_t ble_election_calculate_pdsf(const uint32_t *direct_counts, uint16_t hop_count);
+uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf, uint32_t direct_neighbors);
 
 /**
  * @brief Calculate clusterhead candidacy score
  * @param direct_connections Number of direct connections
  * @param noise_level Measured noise level (RSSI-based)
- * @param geographic_distribution Geographic distribution metric (0.0-1.0)
- * @return Candidacy score (0.0-1.0)
+ * @return Candidacy score (higher = better)
  */
 double ble_election_calculate_score(uint32_t direct_connections,
-                                      double noise_level,
-                                      double geographic_distribution);
+                                      double noise_level);
 
 /**
  * @brief Generate FDMA/TDMA hash from node ID

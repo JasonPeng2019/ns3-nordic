@@ -28,13 +28,13 @@ void ble_discovery_cycle_init(ble_discovery_cycle_t *cycle)
     }
 }
 
+//need to change cycle->running to a mutex in zephyr implementation
 bool ble_discovery_cycle_set_slot_duration(ble_discovery_cycle_t *cycle, uint32_t duration_ms)
 {
     if (cycle == NULL) {
         return false;
     }
 
-    /* Cannot change duration while running */
     if (cycle->running) {
         return false;
     }
@@ -43,6 +43,7 @@ bool ble_discovery_cycle_set_slot_duration(ble_discovery_cycle_t *cycle, uint32_
     return true;
 }
 
+// instead of flipping true/false, in zephyr, should work on mutex
 uint32_t ble_discovery_cycle_get_slot_duration(const ble_discovery_cycle_t *cycle)
 {
     if (cycle == NULL) {
@@ -152,6 +153,7 @@ void ble_discovery_cycle_set_user_data(ble_discovery_cycle_t *cycle, void *user_
     cycle->user_data = user_data;
 }
 
+//doesn’t advance the slot—that’s the caller’s job.
 void ble_discovery_cycle_execute_slot(ble_discovery_cycle_t *cycle)
 {
     if (cycle == NULL || !cycle->running) {

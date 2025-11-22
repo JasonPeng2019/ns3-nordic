@@ -283,10 +283,9 @@ uint32_t ble_discovery_deserialize(ble_discovery_packet_t *packet,
                                      const uint8_t *buffer, uint32_t buffer_size);
 
 // Election calculations
-uint32_t ble_election_calculate_pdsf(const uint32_t *direct_counts, uint16_t hop_count);
+uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf, uint32_t direct_neighbors);
 double ble_election_calculate_score(uint32_t direct_connections,
-                                      double noise_level,
-                                      double geographic_distribution);
+                                      double noise_level);
 uint32_t ble_election_generate_hash(uint32_t node_id);
 ```
 

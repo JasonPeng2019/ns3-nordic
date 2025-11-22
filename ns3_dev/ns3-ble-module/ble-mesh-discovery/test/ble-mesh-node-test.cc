@@ -249,7 +249,7 @@ BleMeshNodeElectionTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (shouldBeCandidate, true, "Node with 10 neighbors should be candidate");
 
   // Test candidacy score
-  double score = candidateNode->CalculateCandidacyScore (0.5, 0.8);
+  double score = candidateNode->CalculateCandidacyScore (0.5);
   NS_TEST_ASSERT_MSG_GT (score, 0.0, "Candidacy score should be positive");
 
   candidateNode->SetCandidacyScore (42.5);

@@ -25,9 +25,9 @@ extern "C" {
 #endif
 
 /**
- * @brief Number of slots in a discovery cycle
+ * @brief Number of slots in a discovery cycle - NOT stochastic slots, but messaging protocol slots
  */
-#define BLE_DISCOVERY_NUM_SLOTS 4
+#define BLE_DISCOVERY_NUM_SLOTS 4 
 
 /**
  * @brief Default slot duration in milliseconds

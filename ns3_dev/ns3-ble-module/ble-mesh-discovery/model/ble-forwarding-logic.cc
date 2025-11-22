@@ -37,9 +37,6 @@ BleForwardingLogic::BleForwardingLogic ()
   : m_proximityThreshold (10.0)
 {
   NS_LOG_FUNCTION (this);
-  m_random = CreateObject<UniformRandomVariable> ();
-  m_random->SetAttribute ("Min", DoubleValue (0.0));
-  m_random->SetAttribute ("Max", DoubleValue (1.0));
 }
 
 BleForwardingLogic::~BleForwardingLogic ()
@@ -68,19 +65,15 @@ BleForwardingLogic::CalculateCrowdingFactor (const std::vector<int8_t>& rssiSamp
 }
 
 bool
-BleForwardingLogic::ShouldForwardCrowding (double crowdingFactor)
+BleForwardingLogic::ShouldForwardCrowding (double crowdingFactor, uint32_t directNeighbors)
 {
-  NS_LOG_FUNCTION (this << crowdingFactor);
+  NS_LOG_FUNCTION (this << crowdingFactor << directNeighbors);
 
-  // Generate random value
-  double randomValue = m_random->GetValue ();
-
-  // Call C core function
-  bool shouldForward = ble_forwarding_should_forward_crowding (crowdingFactor, randomValue);
+  bool shouldForward = ble_forwarding_should_forward_crowding (crowdingFactor, directNeighbors);
 
   NS_LOG_DEBUG ("Crowding check: factor=" << crowdingFactor
-                << ", random=" << randomValue
-                << ", forward=" << (shouldForward ? "YES" : "NO"));
+                << ", neighbors=" << directNeighbors
+                << " -> " << (shouldForward ? "FORWARD" : "DROP"));
 
   return shouldForward;
 }
@@ -131,9 +124,10 @@ bool
 BleForwardingLogic::ShouldForward (const BleDiscoveryHeaderWrapper& header,
                                     Vector currentLocation,
                                     double crowdingFactor,
-                                    double proximityThreshold)
+                                    double proximityThreshold,
+                                    uint32_t directNeighbors)
 {
-  NS_LOG_FUNCTION (this << crowdingFactor << proximityThreshold);
+  NS_LOG_FUNCTION (this << crowdingFactor << proximityThreshold << directNeighbors);
 
   // Get C packet from wrapper
   const ble_discovery_packet_t& c_packet = header.GetCPacket ();
@@ -141,20 +135,17 @@ BleForwardingLogic::ShouldForward (const BleDiscoveryHeaderWrapper& header,
   // Convert current location to C GPS
   ble_gps_location_t c_current = {currentLocation.x, currentLocation.y, currentLocation.z};
 
-  // Generate random value
-  double randomValue = m_random->GetValue ();
-
   // Call C core function (performs all 3 checks)
   bool shouldForward = ble_forwarding_should_forward (&c_packet,
                                                        &c_current,
                                                        crowdingFactor,
                                                        proximityThreshold,
-                                                       randomValue);
+                                                       directNeighbors);
 
   NS_LOG_DEBUG ("Forwarding decision for sender=" << c_packet.sender_id
                 << ", TTL=" << static_cast<uint32_t> (c_packet.ttl)
                 << ", crowding=" << crowdingFactor
-                << ", random=" << randomValue
+                << ", neighbors=" << directNeighbors
                 << " -> " << (shouldForward ? "FORWARD" : "DROP"));
 
   return shouldForward;
@@ -174,13 +165,6 @@ BleForwardingLogic::CalculatePriority (const BleDiscoveryHeaderWrapper& header) 
 }
 
 void
-BleForwardingLogic::SetRandomStream (Ptr<UniformRandomVariable> stream)
-{
-  NS_LOG_FUNCTION (this << stream);
-  m_random = stream;
-}
-
-void
 BleForwardingLogic::SetProximityThreshold (double threshold)
 {
   NS_LOG_FUNCTION (this << threshold);
@@ -191,6 +175,12 @@ double
 BleForwardingLogic::GetProximityThreshold () const
 {
   return m_proximityThreshold;
+}
+
+void
+BleForwardingLogic::SeedRandom (uint32_t seed)
+{
+  ble_forwarding_set_random_seed (seed);
 }
 
 } // namespace ns3

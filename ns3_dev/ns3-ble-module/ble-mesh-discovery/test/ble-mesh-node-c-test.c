@@ -401,7 +401,7 @@ void test_candidacy_score_calculation(void)
         ble_mesh_node_add_neighbor(&node, 100 + i, -50, 1);
     }
 
-    double score = ble_mesh_node_calculate_candidacy_score(&node, 10.0, 0.2);
+    double score = ble_mesh_node_calculate_candidacy_score(&node, 10.0);
     TEST_ASSERT(score > 0.0, "Candidacy score should be positive");
 
     // Higher connectivity should give higher score
@@ -411,7 +411,7 @@ void test_candidacy_score_calculation(void)
         ble_mesh_node_add_neighbor(&node2, 100 + i, -50, 1);
     }
 
-    double score2 = ble_mesh_node_calculate_candidacy_score(&node2, 10.0, 0.2);
+    double score2 = ble_mesh_node_calculate_candidacy_score(&node2, 10.0);
     TEST_ASSERT(score2 > score, "More connected node should have higher score");
 }
 

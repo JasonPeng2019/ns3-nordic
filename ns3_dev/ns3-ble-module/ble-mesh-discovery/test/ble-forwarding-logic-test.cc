@@ -31,7 +31,6 @@
 #include "ns3/ble-discovery-header-wrapper.h"
 #include "ns3/vector.h"
 #include "ns3/double.h"
-#include "ns3/random-variable-stream.h"
 #include <cmath>
 
 using namespace ns3;
@@ -122,18 +121,13 @@ BleForwardingPickyAlgorithmTestCase::DoRun (void)
 {
   Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic> ();
 
-  // Use deterministic random for testing
-  Ptr<UniformRandomVariable> deterministicRandom = CreateObject<UniformRandomVariable> ();
-  deterministicRandom->SetAttribute ("Min", DoubleValue (0.0));
-  deterministicRandom->SetAttribute ("Max", DoubleValue (1.0));
-  logic->SetRandomStream (deterministicRandom);
-
   // Test with zero crowding (should always forward)
   // Run multiple times to verify probability
+  logic->SeedRandom (0x1234abcd);
   uint32_t forwardCountZero = 0;
   for (uint32_t i = 0; i < 100; ++i)
     {
-      if (logic->ShouldForwardCrowding (0.0))
+      if (logic->ShouldForwardCrowding (0.0, 5))
         {
           forwardCountZero++;
         }
@@ -141,10 +135,11 @@ BleForwardingPickyAlgorithmTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (forwardCountZero, 100, "Zero crowding should always forward");
 
   // Test with high crowding (should forward less often)
+  logic->SeedRandom (0x1234abcd);
   uint32_t forwardCountHigh = 0;
   for (uint32_t i = 0; i < 100; ++i)
     {
-      if (logic->ShouldForwardCrowding (0.9))
+      if (logic->ShouldForwardCrowding (0.9, 20))
         {
           forwardCountHigh++;
         }
@@ -157,13 +152,14 @@ BleForwardingPickyAlgorithmTestCase::DoRun (void)
   uint32_t forwardMed = 0;
   uint32_t forwardHighNew = 0;
 
+  logic->SeedRandom (0x1234abcd);
   for (uint32_t i = 0; i < 1000; ++i)
     {
-      if (logic->ShouldForwardCrowding (0.2))
+      if (logic->ShouldForwardCrowding (0.2, 20))
         forwardLow++;
-      if (logic->ShouldForwardCrowding (0.5))
+      if (logic->ShouldForwardCrowding (0.5, 20))
         forwardMed++;
-      if (logic->ShouldForwardCrowding (0.8))
+      if (logic->ShouldForwardCrowding (0.8, 20))
         forwardHighNew++;
     }
 
@@ -336,13 +332,9 @@ BleForwardingGpsUnavailableTestCase::DoRun (void)
   // The ShouldForward function handles this internally
   Vector currentLoc (0.0, 0.0, 0.0);
 
-  // Use deterministic random that always returns low value (would pass crowding)
-  Ptr<UniformRandomVariable> lowRandom = CreateObject<UniformRandomVariable> ();
-  lowRandom->SetAttribute ("Min", DoubleValue (0.0));
-  lowRandom->SetAttribute ("Max", DoubleValue (0.01)); // Always low
-  logic->SetRandomStream (lowRandom);
+  logic->SeedRandom (0x1);
 
-  bool shouldForward = logic->ShouldForward (headerNoGps, currentLoc, 0.0, 10.0);
+  bool shouldForward = logic->ShouldForward (headerNoGps, currentLoc, 0.0, 10.0, 5);
   // With no GPS, TTL > 0, and low crowding, should forward
   NS_TEST_ASSERT_MSG_EQ (shouldForward, true, "Should forward when GPS unavailable");
 
@@ -437,11 +429,7 @@ BleForwardingTtlExpirationTestCase::DoRun (void)
 {
   Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic> ();
 
-  // Use deterministic random
-  Ptr<UniformRandomVariable> lowRandom = CreateObject<UniformRandomVariable> ();
-  lowRandom->SetAttribute ("Min", DoubleValue (0.0));
-  lowRandom->SetAttribute ("Max", DoubleValue (0.01));
-  logic->SetRandomStream (lowRandom);
+  logic->SeedRandom (0x1);
 
   Vector currentLoc (0.0, 0.0, 0.0);
 
@@ -451,7 +439,7 @@ BleForwardingTtlExpirationTestCase::DoRun (void)
   headerTtlZero.SetTtl (0);
   headerTtlZero.AddToPath (100);
 
-  bool forwardTtlZero = logic->ShouldForward (headerTtlZero, currentLoc, 0.0, 0.0);
+  bool forwardTtlZero = logic->ShouldForward (headerTtlZero, currentLoc, 0.0, 0.0, 5);
   NS_TEST_ASSERT_MSG_EQ (forwardTtlZero, false, "TTL=0 message should not be forwarded");
 
   // Message with TTL = 1 should be forwarded (will become 0 after forwarding)
@@ -460,7 +448,7 @@ BleForwardingTtlExpirationTestCase::DoRun (void)
   headerTtlOne.SetTtl (1);
   headerTtlOne.AddToPath (101);
 
-  bool forwardTtlOne = logic->ShouldForward (headerTtlOne, currentLoc, 0.0, 0.0);
+  bool forwardTtlOne = logic->ShouldForward (headerTtlOne, currentLoc, 0.0, 0.0, 5);
   NS_TEST_ASSERT_MSG_EQ (forwardTtlOne, true, "TTL=1 message should be forwarded");
 
   // Message with high TTL should be forwarded
@@ -469,7 +457,7 @@ BleForwardingTtlExpirationTestCase::DoRun (void)
   headerTtlHigh.SetTtl (10);
   headerTtlHigh.AddToPath (102);
 
-  bool forwardTtlHigh = logic->ShouldForward (headerTtlHigh, currentLoc, 0.0, 0.0);
+  bool forwardTtlHigh = logic->ShouldForward (headerTtlHigh, currentLoc, 0.0, 0.0, 5);
   NS_TEST_ASSERT_MSG_EQ (forwardTtlHigh, true, "High TTL message should be forwarded");
 
   Simulator::Destroy ();
@@ -555,11 +543,7 @@ BleForwardingCombinedTestCase::DoRun (void)
 {
   Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic> ();
 
-  // Use low random value to pass crowding check
-  Ptr<UniformRandomVariable> lowRandom = CreateObject<UniformRandomVariable> ();
-  lowRandom->SetAttribute ("Min", DoubleValue (0.0));
-  lowRandom->SetAttribute ("Max", DoubleValue (0.01));
-  logic->SetRandomStream (lowRandom);
+  logic->SeedRandom (0x1);
 
   // Create valid message with GPS
   BleDiscoveryHeaderWrapper header;
@@ -574,7 +558,7 @@ BleForwardingCombinedTestCase::DoRun (void)
   // - TTL > 0 (10)
   // - Low crowding (0.0)
   // - GPS far enough (50m > 10m threshold)
-  bool forward1 = logic->ShouldForward (header, currentLoc, 0.0, 10.0);
+  bool forward1 = logic->ShouldForward (header, currentLoc, 0.0, 10.0, 5);
   NS_TEST_ASSERT_MSG_EQ (forward1, true, "Should forward when all checks pass");
 
   // Case 2: TTL = 0 (should fail)
@@ -584,7 +568,7 @@ BleForwardingCombinedTestCase::DoRun (void)
   headerTtl0.AddToPath (101);
   headerTtl0.SetGpsLocation (Vector (50.0, 50.0, 0.0));
 
-  bool forward2 = logic->ShouldForward (headerTtl0, currentLoc, 0.0, 10.0);
+  bool forward2 = logic->ShouldForward (headerTtl0, currentLoc, 0.0, 10.0, 5);
   NS_TEST_ASSERT_MSG_EQ (forward2, false, "Should not forward with TTL=0");
 
   // Case 3: GPS too close (should fail proximity)
@@ -594,7 +578,7 @@ BleForwardingCombinedTestCase::DoRun (void)
   headerClose.AddToPath (102);
   headerClose.SetGpsLocation (Vector (5.0, 0.0, 0.0)); // Only 5m away
 
-  bool forward3 = logic->ShouldForward (headerClose, currentLoc, 0.0, 10.0);
+  bool forward3 = logic->ShouldForward (headerClose, currentLoc, 0.0, 10.0, 5);
   NS_TEST_ASSERT_MSG_EQ (forward3, false, "Should not forward when GPS too close");
 
   Simulator::Destroy ();

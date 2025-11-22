@@ -13,6 +13,8 @@
 #include <assert.h>
 #include <string.h>
 #include <math.h>
+#include <stdint.h>
+#include <limits.h>
 
 /* Test counter */
 static int tests_passed = 0;
@@ -346,22 +348,21 @@ void test_invalid_path_length(void)
  */
 void test_pdsf_calculation(void)
 {
-    // t(x) = Σᵢ Πᵢ(xᵢ)
-    // Example: direct_counts = [3, 4, 5] over 3 hops
-    // t(x) = 3 + (3*4) + (3*4*5) = 3 + 12 + 60 = 75
+    // First hop: starting from implicit baseline of 1, with 5 neighbors
+    uint32_t pdsf = ble_election_calculate_pdsf(0, 5);
+    TEST_ASSERT_EQ(pdsf, 6, "Baseline of 1 with 5 neighbors should yield 6 predicted devices");
 
-    uint32_t direct_counts[] = {3, 4, 5};
-    uint32_t pdsf = ble_election_calculate_pdsf(direct_counts, 3);
-    TEST_ASSERT_EQ(pdsf, 75, "PDSF calculation should match expected value");
+    // Second hop: receiving node saw PDSF=6 and has 3 direct neighbors
+    pdsf = ble_election_calculate_pdsf(pdsf, 3);
+    TEST_ASSERT_EQ(pdsf, 24, "Subsequent hop should multiply previous PDSF by neighbor count and add to baseline");
 
-    // Single hop
-    uint32_t single[] = {10};
-    pdsf = ble_election_calculate_pdsf(single, 1);
-    TEST_ASSERT_EQ(pdsf, 10, "Single hop PDSF should equal direct count");
+    // No new neighbors -> value should remain unchanged
+    pdsf = ble_election_calculate_pdsf(pdsf, 0);
+    TEST_ASSERT_EQ(pdsf, 24, "Zero neighbors should leave PDSF unchanged");
 
-    // Zero hops
-    pdsf = ble_election_calculate_pdsf(NULL, 0);
-    TEST_ASSERT_EQ(pdsf, 0, "Zero hops should return 0");
+    // Large values saturate at UINT32_MAX
+    uint32_t saturated = ble_election_calculate_pdsf(UINT32_MAX, 10);
+    TEST_ASSERT_EQ(saturated, UINT32_MAX, "PDSF should saturate at UINT32_MAX on overflow");
 }
 
 /**
@@ -369,22 +370,18 @@ void test_pdsf_calculation(void)
  */
 void test_score_calculation(void)
 {
-    // Score = (0.6 * connections/noise) + (0.4 * geo_dist)
-    double score = ble_election_calculate_score(10, 5.0, 0.8);
-    double expected = (0.6 * (10.0 / 5.0)) + (0.4 * 0.8);
-    /* The implementation clamps score to [0.0, 1.0], so apply same clamp to expected */
-    if (expected > 1.0) expected = 1.0;
-    if (expected < 0.0) expected = 0.0;
-    TEST_ASSERT_DOUBLE_EQ(score, expected, "Score calculation should match formula (with clamping)");
+    // Score = direct connections + (connections / noise)
+    double score = ble_election_calculate_score(10, 5.0);
+    double expected = 10.0 + (10.0 / 5.0);
+    TEST_ASSERT_DOUBLE_EQ(score, expected, "Score should equal direct connections plus connection ratio");
 
-    // Test clamping to [0.0, 1.0]
-    score = ble_election_calculate_score(1000, 1.0, 1.0);
-    TEST_ASSERT(score <= 1.0, "Score should be clamped to max 1.0");
-    TEST_ASSERT(score >= 0.0, "Score should be clamped to min 0.0");
+    // Zero noise should reduce to direct connections only
+    score = ble_election_calculate_score(8, 0.0);
+    TEST_ASSERT_DOUBLE_EQ(score, 8.0, "Zero noise should produce score equal to direct connections");
 
-    // Test zero noise protection
-    score = ble_election_calculate_score(10, 0.0, 0.5);
-    TEST_ASSERT_DOUBLE_EQ(score, 0.0, "Zero noise should return 0.0");
+    // More neighbors and lower noise should yield higher score
+    double score_high = ble_election_calculate_score(20, 2.0);
+    TEST_ASSERT(score_high > score, "Better connectivity should result in higher score");
 }
 
 /**

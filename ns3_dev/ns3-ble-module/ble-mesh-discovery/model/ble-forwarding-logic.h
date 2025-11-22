@@ -13,7 +13,6 @@
 #include "ns3/object.h"
 #include "ns3/vector.h"
 #include "ble-discovery-header-wrapper.h"
-#include "ns3/random-variable-stream.h"
 
 extern "C" {
 #include "ns3/ble_forwarding_logic.h"
@@ -59,9 +58,10 @@ public:
   /**
    * \brief Determine if message should be forwarded based on crowding
    * \param crowdingFactor The crowding factor
+   * \param directNeighbors Number of direct neighbors observed
    * \return true if message should be forwarded
    */
-  bool ShouldForwardCrowding (double crowdingFactor);
+  bool ShouldForwardCrowding (double crowdingFactor, uint32_t directNeighbors);
 
   /**
    * \brief Calculate distance between two GPS locations
@@ -76,6 +76,7 @@ public:
    * \param currentLocation This node's location
    * \param lastHopLocation Last hop's location (from message)
    * \param proximityThreshold Minimum distance for forwarding (meters)
+   * \param directNeighbors Number of direct neighbors observed
    * \return true if message should be forwarded
    */
   bool ShouldForwardProximity (Vector currentLocation,
@@ -93,7 +94,8 @@ public:
   bool ShouldForward (const BleDiscoveryHeaderWrapper& header,
                       Vector currentLocation,
                       double crowdingFactor,
-                      double proximityThreshold);
+                      double proximityThreshold,
+                      uint32_t directNeighbors);
 
   /**
    * \brief Calculate forwarding priority for a message
@@ -101,12 +103,6 @@ public:
    * \return Priority value (lower = higher priority)
    */
   uint8_t CalculatePriority (const BleDiscoveryHeaderWrapper& header) const;
-
-  /**
-   * \brief Set the random variable stream for probabilistic forwarding
-   * \param stream Pointer to random variable stream
-   */
-  void SetRandomStream (Ptr<UniformRandomVariable> stream);
 
   /**
    * \brief Set proximity threshold
@@ -120,8 +116,13 @@ public:
    */
   double GetProximityThreshold () const;
 
+  /**
+   * \brief Seed the forwarding random generator (for deterministic testing)
+   * \param seed Seed value
+   */
+  void SeedRandom (uint32_t seed);
+
 private:
-  Ptr<UniformRandomVariable> m_random;     //!< Random number generator
   double m_proximityThreshold;             //!< GPS proximity threshold (meters)
 };
 

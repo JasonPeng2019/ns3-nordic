@@ -7,6 +7,7 @@
 
 #include "ble_discovery_packet.h"
 #include <stdlib.h>
+#include <limits.h>
 
 /* ===== Helper Functions for Serialization ===== */
 
@@ -336,47 +337,39 @@ uint32_t ble_election_deserialize(ble_election_packet_t *packet,
 
 /* ===== Election Calculations ===== */
 
-uint32_t ble_election_calculate_pdsf(const uint32_t *direct_counts, uint16_t hop_count)
+uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf, uint32_t direct_neighbors)
 {
-    if (!direct_counts || hop_count == 0) return 0;
+    /* Caller is expected to pass previous_pdsf = 1 for the originator, but guard against 0 */
+    uint32_t baseline = (previous_pdsf == 0) ? 1 : previous_pdsf;
 
-    // t(x) = Σᵢ Πᵢ(xᵢ)
-    // Sum of products of direct connections at each hop
-    uint32_t pdsf = 0;
+    /* Predict how many NEW nodes will hear this hop */
+    uint64_t increment = (uint64_t)baseline * (uint64_t)direct_neighbors;
+    uint64_t updated = (uint64_t)baseline + increment;
 
-    for (uint16_t i = 0; i < hop_count; i++) {
-        uint32_t product = 1;
-        for (uint16_t j = 0; j <= i; j++) {
-            product *= direct_counts[j];
-        }
-        pdsf += product;
+    if (updated > UINT32_MAX) {
+        return UINT32_MAX;
     }
 
-    return pdsf;
+    return (uint32_t)updated;
 }
 
 double ble_election_calculate_score(uint32_t direct_connections,
-                                      double noise_level,
-                                      double geographic_distribution)
+                                      double noise_level)
 {
-    if (noise_level <= 0.0) return 0.0;
+    /* Favor nodes with many direct links and good signal quality */
+    double connection_ratio = 0.0;
+    if (noise_level > 0.0) {
+        connection_ratio = (double)direct_connections / noise_level;
+    }
 
-    // Score based on connection:noise ratio
-    double connection_ratio = (double)direct_connections / noise_level;
-
-    // Normalize and combine with geographic distribution
-    // Weight: 60% connection ratio, 40% geographic distribution
-    double score = (0.6 * connection_ratio) + (0.4 * geographic_distribution);
-
-    // Clamp to [0.0, 1.0]
-    if (score > 1.0) score = 1.0;
-    if (score < 0.0) score = 0.0;
-
-    return score;
+    return (double)direct_connections + connection_ratio;
 }
 
 uint32_t ble_election_generate_hash(uint32_t node_id)
 {
+    //JASON TODO: Update hash function for when you talk back to edges to factor in 
+    //node distribution
+
     // Simple hash function for FDMA/TDMA slot assignment
     // FNV-1a hash variant
     uint32_t hash = 2166136261u;

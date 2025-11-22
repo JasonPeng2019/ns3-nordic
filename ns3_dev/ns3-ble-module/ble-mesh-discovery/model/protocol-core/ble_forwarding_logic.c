@@ -5,6 +5,31 @@
 
 #include "ble_forwarding_logic.h"
 #include <math.h>
+#include <limits.h>
+
+/* Internal RNG state for probabilistic decisions */
+static uint32_t g_forwarding_rng_state = 0x6d2b79f5u;
+
+static double
+ble_forwarding_random_value(void)
+{
+    /* xorshift32 */
+    g_forwarding_rng_state ^= g_forwarding_rng_state << 13;
+    g_forwarding_rng_state ^= g_forwarding_rng_state >> 17;
+    g_forwarding_rng_state ^= g_forwarding_rng_state << 5;
+
+    return (double)g_forwarding_rng_state / (double)UINT32_MAX;
+}
+
+void
+ble_forwarding_set_random_seed(uint32_t seed)
+{
+    if (seed == 0) {
+        g_forwarding_rng_state = 0x6d2b79f5u;
+    } else {
+        g_forwarding_rng_state = seed;
+    }
+}
 
 /* Helper function: Calculate mean of RSSI samples */
 static double
@@ -60,16 +85,35 @@ ble_forwarding_calculate_crowding_factor(const int8_t *rssi_samples,
 
 bool
 ble_forwarding_should_forward_crowding(double crowding_factor,
-                                         double random_value)
+                                         uint32_t direct_neighbors)
 {
-    /* Picky forwarding algorithm:
-     * - High crowding (e.g., 0.9) → forward only 10% of messages
-     * - Low crowding (e.g., 0.1) → forward 90% of messages
-     * - Forwarding probability = 1.0 - crowding_factor
-     */
+    const double CROWDING_LOW = 0.1;
+    const double CROWDING_HIGH = 0.9;
 
-    double forward_probability = 1.0 - crowding_factor;
+    double clamped_crowding = crowding_factor;
+    if (clamped_crowding < 0.0) {
+        clamped_crowding = 0.0;
+    } else if (clamped_crowding > 1.0) {
+        clamped_crowding = 1.0;
+    }
 
+    uint32_t neighbors = (direct_neighbors == 0) ? 1 : direct_neighbors;
+    double base_probability = 2.0 / (double)neighbors;
+    if (base_probability > 1.0) {
+        base_probability = 1.0;
+    }
+
+    double forward_probability;
+    if (clamped_crowding <= CROWDING_LOW) {
+        forward_probability = 1.0;
+    } else if (clamped_crowding >= CROWDING_HIGH) {
+        forward_probability = base_probability;
+    } else {
+        double t = (clamped_crowding - CROWDING_LOW) / (CROWDING_HIGH - CROWDING_LOW);
+        forward_probability = 1.0 + t * (base_probability - 1.0);
+    }
+
+    double random_value = ble_forwarding_random_value();
     return random_value < forward_probability;
 }
 
@@ -112,7 +156,7 @@ ble_forwarding_should_forward(const ble_discovery_packet_t *packet,
                                 const ble_gps_location_t *current_location,
                                 double crowding_factor,
                                 double proximity_threshold,
-                                double random_value)
+                                uint32_t direct_neighbors)
 {
     if (!packet) {
         return false;
@@ -124,7 +168,7 @@ ble_forwarding_should_forward(const ble_discovery_packet_t *packet,
     }
 
     /* Check crowding factor (picky forwarding) */
-    if (!ble_forwarding_should_forward_crowding(crowding_factor, random_value)) {
+    if (!ble_forwarding_should_forward_crowding(crowding_factor, direct_neighbors)) {
         return false;
     }
 
