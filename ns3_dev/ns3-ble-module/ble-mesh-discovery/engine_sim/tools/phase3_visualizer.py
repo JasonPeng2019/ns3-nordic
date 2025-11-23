@@ -335,23 +335,29 @@ def build_animation(df: pd.DataFrame, G: nx.Graph):
     ax_anim.add_collection(highlight_coll)
     time_text = ax_anim.text(0.02, 0.95, "", transform=ax_anim.transAxes, fontsize=10)
 
-    # Legend for node phase colors + activity overlays
+    # Legend for node phase colors + activity overlays + edge colors
     phase_handles = [
-        mpatches.Patch(color=PHASE_COLORS["noise"], label="Noise phase"),
-        mpatches.Patch(color=PHASE_COLORS["neighbor"], label="Neighbor phase"),
-        mpatches.Patch(color=PHASE_COLORS["candidate"], label="Candidate phase"),
-        mpatches.Patch(color=PHASE_COLORS["election"], label="Election phase"),
+        mpatches.Patch(color=PHASE_COLORS["noise"], label="Node: Noise phase"),
+        mpatches.Patch(color=PHASE_COLORS["neighbor"], label="Node: Neighbor phase"),
+        mpatches.Patch(color=PHASE_COLORS["candidate"], label="Node: Candidate phase"),
+        mpatches.Patch(color=PHASE_COLORS["election"], label="Node: Election phase"),
     ]
     activity_handles = [
-        mpatches.Patch(color=ACTIVITY_COLORS["send"], label="Send activity"),
-        mpatches.Patch(color=ACTIVITY_COLORS["recv"], label="Receive activity"),
+        mpatches.Patch(color=ACTIVITY_COLORS["send"], label="Node: Send activity"),
+        mpatches.Patch(color=ACTIVITY_COLORS["recv"], label="Node: Receive activity"),
     ]
-    ax_anim.legend(handles=phase_handles + activity_handles,
+    edge_handles = [
+        mpatches.Patch(color=MESSAGE_COLORS["DISCOVERY"], label="Edge: Discovery msg"),
+        mpatches.Patch(color=MESSAGE_COLORS["ELECTION"], label="Edge: Election msg"),
+        mpatches.Patch(color=MESSAGE_COLORS["RENOUNCE"], label="Edge: Renounce msg"),
+        mpatches.Patch(color=MESSAGE_COLORS["recv"], label="Edge: Receive msg"),
+    ]
+    ax_anim.legend(handles=phase_handles + activity_handles + edge_handles,
                    loc="upper right",
-                   fontsize=8,
-                   framealpha=0.85,
-                   title="Node color guide",
-                   title_fontsize=9)
+                   fontsize=7,
+                   framealpha=0.9,
+                   title="Color Guide",
+                   title_fontsize=8)
 
     ax_anim.set_axis_off()
     ax_anim.set_title("Phase 3 Message Flow (looping)")
@@ -627,23 +633,14 @@ def build_animation(df: pd.DataFrame, G: nx.Graph):
                 src.start()
             else:
                 src.stop()
+        # Force canvas redraw to update button text
+        fig.canvas.draw_idle()
 
     btn_cid = btn.on_clicked(toggle)
     fig._cleanup_handlers.append(btn_cid)
 
     # Start with scrubbing disabled while running
     time_slider.set_active(False)
-
-    # Legend text
-    legend_ax = fig.add_axes([0.08, 0.02, 0.84, 0.05])
-    legend_ax.axis("off")
-    legend_ax.text(
-        0.0,
-        0.65,
-        "Messages: origin SEND=orange, forward SEND=dark orange, RECV=green; "
-        "Nodes: send=yellow, recv=green; otherwise phase-color (noise/neighbor/candidate/election).",
-        fontsize=9,
-    )
 
     # Initial frame
     update_frame(min_time, min_time)
