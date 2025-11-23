@@ -1,0 +1,7 @@
+#!/Users/oliravaneswaramoorthy/Projects/Compass/ns3-jason/ns3-nordic/ns3_dev/ns3-ble-module/ble-mesh-discovery/engine_sim/visualizations/.venv/bin/python3.11
+import sys
+from fontTools.__main__ import main
+if __name__ == '__main__':
+    if sys.argv[0].endswith('.exe'):
+        sys.argv[0] = sys.argv[0][:-4]
+    sys.exit(main())
