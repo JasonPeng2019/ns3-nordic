@@ -12,6 +12,7 @@
 #include "ns3/core-module.h"
 #include "ns3/ble-discovery-engine-wrapper.h"
 #include "ns3/ble-discovery-header-wrapper.h"
+#include "ns3/random-variable-stream.h"
 
 #include <map>
 #include <vector>
@@ -72,7 +73,8 @@ public:
                   Time slotDuration,
                   uint8_t initialTtl,
                   double proximityThreshold,
-                  Ptr<SimpleVirtualChannel> channel);
+                  Ptr<SimpleVirtualChannel> channel,
+                  Time maxSendOffset);
 
   void Start ();
   void ReceivePacket (Ptr<Packet> packet, int8_t rssi);
@@ -84,8 +86,10 @@ private:
 
   Ptr<BleDiscoveryEngineWrapper> m_engine;
   Ptr<SimpleVirtualChannel> m_channel;
+  Ptr<UniformRandomVariable> m_rng;  // Per-node RNG for random send offsets
   uint32_t m_nodeId;
   bool m_started;
+  Time m_maxSendOffset;  // Maximum offset window for randomizing sends
 };
 
 TypeId
@@ -223,8 +227,10 @@ EngineSimNode::GetTypeId (void)
 EngineSimNode::EngineSimNode ()
   : m_engine (CreateObject<BleDiscoveryEngineWrapper> ()),
     m_channel (nullptr),
+    m_rng (CreateObject<UniformRandomVariable> ()),
     m_nodeId (0),
-    m_started (false)
+    m_started (false),
+    m_maxSendOffset (Seconds (0))
 {
 }
 
@@ -233,13 +239,19 @@ EngineSimNode::Configure (uint32_t nodeId,
                           Time slotDuration,
                           uint8_t initialTtl,
                           double proximityThreshold,
-                          Ptr<SimpleVirtualChannel> channel)
+                          Ptr<SimpleVirtualChannel> channel,
+                          Time maxSendOffset)
 {
   NS_ABORT_MSG_IF (m_started, "Configure must be called before Start");
   NS_ABORT_MSG_IF (nodeId == 0, "NodeId must be non-zero");
+  NS_ABORT_MSG_IF (maxSendOffset.IsNegative (), "Max send offset cannot be negative");
 
   m_nodeId = nodeId;
   m_channel = channel;
+  m_maxSendOffset = maxSendOffset;
+
+  // Assign a unique stream to this node's RNG to ensure independent random sequences
+  m_rng->SetStream (nodeId);
 
   m_engine->SetAttribute ("NodeId", UintegerValue (nodeId));
   m_engine->SetAttribute ("SlotDuration", TimeValue (slotDuration));
@@ -286,9 +298,19 @@ EngineSimNode::HandleEngineSend (Ptr<Packet> packet)
   BleDiscoveryHeaderWrapper header;
   headerCopy->RemoveHeader (header);
 
-  NS_LOG_INFO ("Node " << m_nodeId << " broadcast TTL=" << (uint32_t)header.GetTtl ()
-                       << " pathLen=" << header.GetPath ().size ());
-  m_channel->Transmit (m_nodeId, packet);
+  // Generate a NEW random offset for each send event
+  Time sendOffset = NanoSeconds (m_rng->GetInteger (0, m_maxSendOffset.GetNanoSeconds ()));
+
+  NS_LOG_INFO ("Node " << m_nodeId << " queued broadcast TTL=" << (uint32_t)header.GetTtl ()
+                       << " pathLen=" << header.GetPath ().size ()
+                       << " offset=" << sendOffset.GetMilliSeconds () << "ms");
+
+  Ptr<Packet> delayedPacket = packet->Copy ();
+  Simulator::Schedule (sendOffset,
+                       &SimpleVirtualChannel::Transmit,
+                       m_channel,
+                       m_nodeId,
+                       delayedPacket);
 }
 
 int
@@ -297,17 +319,23 @@ main (int argc, char *argv[])
   uint32_t nodeCount = 4;
   double simDuration = 3.0;
   uint32_t slotDurationMs = 50;  // Parse as integer milliseconds to avoid Time unit confusion
-  std::string traceFile = "simulation_trace.csv";
+  uint32_t timeFrames = 4;
+  std::string traceFile = "simulation_trace_random.csv";
 
   CommandLine cmd;
   cmd.AddValue ("nodes", "Number of simulated nodes", nodeCount);
   cmd.AddValue ("duration", "Simulation duration in seconds", simDuration);
   cmd.AddValue ("slot", "Discovery slot duration in milliseconds", slotDurationMs);
+  cmd.AddValue ("frames",
+                "Number of mini time frames per slot used to stagger node transmissions",
+                timeFrames);
   cmd.AddValue ("trace", "Output trace file path", traceFile);
   cmd.Parse (argc, argv);
 
   // Convert to NS-3 Time after parsing
   Time slotDuration = MilliSeconds (slotDurationMs);
+  NS_ABORT_MSG_IF (timeFrames == 0, "frames must be at least 1");
+  Time frameDuration = NanoSeconds (slotDuration.GetNanoSeconds () / timeFrames);
 
   LogComponentEnable ("Phase2DiscoveryEngineSim", LOG_LEVEL_INFO);
 
@@ -322,10 +350,14 @@ main (int argc, char *argv[])
   std::vector<Ptr<EngineSimNode>> nodes;
   nodes.reserve (nodeCount);
 
+  // Maximum random offset window = frameDuration * (timeFrames - 1)
+  // Each node will pick a random offset within [0, maxSendOffset] for each send
+  Time maxSendOffset = frameDuration * (timeFrames - 1);
+
   for (uint32_t i = 0; i < nodeCount; ++i)
     {
       Ptr<EngineSimNode> node = CreateObject<EngineSimNode> ();
-      node->Configure (i + 1, slotDuration, 6 /* TTL */, 5.0 /* proximity */, channel);
+      node->Configure (i + 1, slotDuration, 6 /* TTL */, 5.0 /* proximity */, channel, maxSendOffset);
       channel->AddNode (node);
       nodes.push_back (node);
     }
