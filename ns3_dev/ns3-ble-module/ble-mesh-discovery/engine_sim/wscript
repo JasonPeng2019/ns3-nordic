@@ -4,7 +4,3 @@ def build(bld):
     obj = bld.create_ns3_program('phase2-discovery-engine-sim',
                                   ['ble-mesh-discovery'])
     obj.source = 'phase2-discovery-sim.cc'
-
-    obj3 = bld.create_ns3_program('phase3-discovery-engine-sim',
-                                   ['ble-mesh-discovery'])
-    obj3.source = 'phase3-discovery-sim.cc'
