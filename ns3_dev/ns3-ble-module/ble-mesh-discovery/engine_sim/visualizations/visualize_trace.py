@@ -569,13 +569,16 @@ def main():
         plt.savefig(str(heatmap_path), dpi=150, bbox_inches='tight')
         print(f"Saved heatmap to: {heatmap_path}")
 
-    # Create animation if requested
+    # Create animation if requested; keep reference to avoid GC
+    anim = None
     if args.animate:
         anim_path = output_dir / 'simulation_animation.gif'
-        create_animation(df, G, str(anim_path))
+        anim = create_animation(df, G, str(anim_path))
 
     # Show plots
     if not args.no_show:
+        if anim is not None:
+            plt.draw()
         plt.show()
 
     print("\nVisualization complete!")

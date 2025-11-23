@@ -12,7 +12,7 @@ static uint32_t
 ble_mesh_node_get_candidate_requirement(const ble_mesh_node_t *node)
 {
     if (node == NULL) {
-        return 6;
+        return 3;
     }
 
     uint32_t cycles_since_heard = 0;
@@ -21,10 +21,10 @@ ble_mesh_node_get_candidate_requirement(const ble_mesh_node_t *node)
     }
 
     if (cycles_since_heard == 0) {
-        return 6;
+        return 3;
     }
     if (cycles_since_heard == 1) {
-        return 3;
+        return 2;
     }
     return 1;
 }
@@ -380,6 +380,12 @@ bool ble_mesh_node_should_become_candidate(const ble_mesh_node_t *node)
     }
 
     uint16_t direct_neighbors = ble_mesh_node_count_direct_neighbors(node);
+    /* Require a reasonable degree before running for clusterhead to avoid
+     * every node becoming a candidate.
+     */
+    if (direct_neighbors < 8) {
+        return false;
+    }
 
     double neighbor_ratio = 0.0;
     if (BLE_DISCOVERY_MAX_CLUSTER_SIZE > 0) {
@@ -387,11 +393,12 @@ bool ble_mesh_node_should_become_candidate(const ble_mesh_node_t *node)
     }
 
     double noise = node->noise_level;
-    if (noise < 0.1) {
-        noise = 0.1;
+    if (noise < 0.0) {
+        noise = 0.0;
     }
 
-    double ratio = neighbor_ratio / noise;
+    /* Damp the ratio using a baseline to avoid extreme spikes when noise is tiny. */
+    double ratio = neighbor_ratio / (noise + 0.5);
 
     uint32_t requirement = ble_mesh_node_get_candidate_requirement(node);
     double threshold = 0.0;

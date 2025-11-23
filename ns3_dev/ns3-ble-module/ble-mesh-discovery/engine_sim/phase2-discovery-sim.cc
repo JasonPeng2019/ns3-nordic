@@ -257,6 +257,11 @@ EngineSimNode::Configure (uint32_t nodeId,
   m_engine->SetAttribute ("SlotDuration", TimeValue (slotDuration));
   m_engine->SetAttribute ("InitialTtl", UintegerValue (initialTtl));
   m_engine->SetAttribute ("ProximityThreshold", DoubleValue (proximityThreshold));
+  // Keep pre-discovery phases short so nodes advertise within the simulation window.
+  m_engine->SetAttribute ("NoiseSlotCount", UintegerValue (1));
+  m_engine->SetAttribute ("NoiseSlotDuration", TimeValue (MilliSeconds (10)));
+  m_engine->SetAttribute ("NeighborSlotCount", UintegerValue (4));
+  m_engine->SetAttribute ("NeighborSlotDuration", TimeValue (MilliSeconds (5)));
   m_engine->SetSendCallback (MakeCallback (&EngineSimNode::HandleEngineSend, this));
 
   NS_ABORT_MSG_IF (!m_engine->Initialize (), "Failed to initialize engine for node " << nodeId);
