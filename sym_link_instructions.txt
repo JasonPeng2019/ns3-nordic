@@ -1,0 +1,4 @@
+#To symlink NS-3 Dev's internal NS-3 engine with the external code:
+
+cd into workspace/ns3_dev/ns-3-dev/src
+run: ln -s <PATH TO WORKSPACE>/workspace/ns3_dev/ns3-ble-module/ble-mesh-discovery .
