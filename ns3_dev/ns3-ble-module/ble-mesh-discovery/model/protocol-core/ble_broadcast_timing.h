@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-/* Constants */
+
 #define BLE_BROADCAST_MAX_SLOTS 10          /**< Maximum number of time slots */
 #define BLE_BROADCAST_DEFAULT_LISTEN_RATIO 0.8  /**< 80% listen, 20% broadcast */
 #define BLE_BROADCAST_MAX_RETRIES 3         /**< Maximum broadcast retry attempts */
@@ -38,25 +38,25 @@ typedef enum {
 typedef struct {
     ble_broadcast_schedule_type_t schedule_type; /**< Schedule type */
 
-    /* Slot configuration */
+    
     uint32_t num_slots;                /**< Number of time slots */
     uint32_t slot_duration_ms;         /**< Duration of each slot (ms) */
 
-    /* Current state */
+    
     uint32_t current_slot;             /**< Current slot index */
     bool is_broadcast_slot;            /**< True if current slot is for broadcasting */
     uint32_t broadcast_attempts;       /**< Number of broadcast attempts so far */
 
-    /* Stochastic parameters */
+    
     double listen_ratio;               /**< Probability of listening (0.0-1.0) */
     uint32_t seed;                     /**< Random seed for reproducibility */
 
-    /* Retry logic */
+    
     uint32_t max_retries;              /**< Maximum retry attempts */
     uint32_t retry_count;              /**< Current retry count */
     bool message_sent;                 /**< True if message successfully sent */
 
-    /* Statistics */
+    
     uint32_t total_broadcast_slots;    /**< Total broadcast slots assigned */
     uint32_t total_listen_slots;       /**< Total listen slots assigned */
     uint32_t successful_broadcasts;    /**< Successful broadcast count */
@@ -184,4 +184,4 @@ double ble_broadcast_timing_rand_double(uint32_t *seed);
 }
 #endif
 
-#endif /* BLE_BROADCAST_TIMING_H */
+#endif 

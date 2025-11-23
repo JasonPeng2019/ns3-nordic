@@ -1,81 +1,4 @@
-#!/usr/bin/env python3
-"""
-BLE Mesh Discovery Simulation Trace Visualizer
 
-This script visualizes the trace output from the phase2-discovery-sim NS-3 simulation.
-It creates multiple visualizations to help understand how nodes discover each other
-and how discovery packets propagate through the mesh network.
-
-=============================================================================
-WHAT IS BEING TRACED?
-=============================================================================
-
-The simulation traces four types of events:
-
-1. TOPOLOGY - Network structure (logged at t=0)
-   - Shows which nodes are connected to which
-   - Connections are bidirectional (if A connects to B, B can also send to A)
-   - Example: "1 -- 2 -- 3" with "2 -- 4" means node 2 is a hub
-
-2. SEND - Packet transmission events
-   - Logged when a node broadcasts a discovery packet
-   - Can be either:
-     a) Self-advertisement (slot 0): Node announces itself to neighbors
-        - path_length = 0, originator = sender
-     b) Forwarding: Node re-broadcasts a packet it received from another node
-        - path_length > 0, originator != sender
-   - Packets are broadcast to ALL connected neighbors simultaneously
-
-3. RECV - Packet reception events
-   - Logged when a node receives a packet (1ms after SEND due to propagation delay)
-   - Shows which node received, the originator, and TTL remaining
-   - The receiving node's engine will decide whether to forward or drop
-
-4. STATS - Final statistics per node
-   - messages_sent: Total packets transmitted (own + forwarded)
-   - messages_received: Total packets received from neighbors
-   - messages_forwarded: Packets received and re-transmitted
-   - messages_dropped: Packets not forwarded (duplicate, TTL=0, etc.)
-
-=============================================================================
-HOW NODES INTERACT
-=============================================================================
-
-Discovery Cycle (simplified):
-1. Each node has a "slot duration" (default 50ms)
-2. In slot 0, a node broadcasts its OWN discovery packet (self-advertisement)
-3. In subsequent slots, nodes forward packets they received from others
-4. TTL (Time-To-Live) limits how far a packet can propagate (decremented each hop)
-
-Example flow for 4-node mesh (1--2--3, 2--4):
-- t=0ms:   Node 1 sends its discovery (TTL=6, path=[1])
-- t=1ms:   Node 2 receives from Node 1
-- t=50ms:  Node 2 forwards Node 1's discovery to nodes 3 and 4 (TTL=5, path=[1,2])
-- t=51ms:  Nodes 3 and 4 receive the forwarded packet
-- ...and so on
-
-The visualization shows this temporal flow and helps identify:
-- Which nodes are most active (hubs)
-- How quickly information propagates
-- Whether any nodes are isolated or have connectivity issues
-
-=============================================================================
-USAGE
-=============================================================================
-
-1. Run the NS-3 simulation:
-   ./ns3 run "phase2-discovery-engine-sim --trace=simulation_trace.csv"
-
-2. Run this visualization:
-   python3 visualize_trace.py simulation_trace.csv
-
-   Or with options:
-   python3 visualize_trace.py simulation_trace.csv --output figures/ --animate
-
-Dependencies: pip install pandas matplotlib networkx
-
-Author: Auto-generated for phase2-discovery-sim.cc
-"""
 
 import argparse
 import sys
@@ -102,7 +25,6 @@ def load_trace(filepath: str) -> pd.DataFrame:
     """
     df = pd.read_csv(filepath)
 
-    # Convert numeric columns, coercing errors to NaN for empty values
     numeric_cols = ['time_ms', 'sender_id', 'receiver_id', 'originator_id', 'ttl', 'path_length', 'rssi']
     for col in numeric_cols:
         if col in df.columns:
@@ -127,7 +49,6 @@ def extract_topology(df: pd.DataFrame) -> nx.Graph:
         node_b = int(row['receiver_id'])
         G.add_edge(node_a, node_b)
 
-    # Also add any nodes we see in SEND/RECV events (in case topology wasn't logged)
     for _, row in df[df['event'] == 'SEND'].iterrows():
         if pd.notna(row['sender_id']):
             G.add_node(int(row['sender_id']))
@@ -173,18 +94,13 @@ def plot_topology(G: nx.Graph, ax: plt.Axes, title: str = "Mesh Topology") -> di
     - Connected nodes are closer together
     - Nodes repel each other to avoid overlap
     """
-    # Use spring layout for nice visualization
-    # seed ensures reproducible layout
     pos = nx.spring_layout(G, seed=42, k=2)
 
-    # Draw edges (connections between nodes)
     nx.draw_networkx_edges(G, pos, ax=ax, edge_color='gray', width=2, alpha=0.6)
 
-    # Draw nodes
     nx.draw_networkx_nodes(G, pos, ax=ax, node_color='lightblue',
                            node_size=700, edgecolors='black', linewidths=2)
 
-    # Draw labels
     nx.draw_networkx_labels(G, pos, ax=ax, font_size=12, font_weight='bold')
 
     ax.set_title(title)
@@ -212,35 +128,29 @@ def plot_packet_timeline(df: pd.DataFrame, ax: plt.Axes):
     send_df = df[df['event'] == 'SEND'].copy()
     recv_df = df[df['event'] == 'RECV'].copy()
 
-    # Get unique originators for color mapping
     all_originators = set()
     all_originators.update(send_df['originator_id'].dropna().astype(int).unique())
     all_originators.update(recv_df['originator_id'].dropna().astype(int).unique())
 
-    # Create color map for originators
     cmap = plt.cm.tab10
     originator_colors = {orig: cmap(i % 10) for i, orig in enumerate(sorted(all_originators))}
 
-    # Plot SEND events (triangles pointing right)
     for _, row in send_df.iterrows():
         originator = int(row['originator_id']) if pd.notna(row['originator_id']) else int(row['sender_id'])
         color = originator_colors.get(originator, 'gray')
 
-        # Distinguish self-advertisement (path_length=0) from forwarding (path_length>0)
         marker = '>' if row['path_length'] == 0 or pd.isna(row['path_length']) else 's'
         size = 100 if marker == '>' else 60
 
         ax.scatter(row['time_ms'], row['sender_id'],
                    c=[color], marker=marker, s=size, edgecolors='black', linewidths=0.5)
 
-    # Plot RECV events (circles)
     for _, row in recv_df.iterrows():
         originator = int(row['originator_id']) if pd.notna(row['originator_id']) else 0
         color = originator_colors.get(originator, 'gray')
         ax.scatter(row['time_ms'], row['receiver_id'],
                    c=[color], marker='o', s=40, alpha=0.6, edgecolors='black', linewidths=0.5)
 
-    # Create legend
     legend_elements = []
     for orig, color in sorted(originator_colors.items()):
         legend_elements.append(mpatches.Patch(color=color, label=f'Originator {int(orig)}'))
@@ -309,21 +219,17 @@ def plot_propagation_heatmap(df: pd.DataFrame, G: nx.Graph, ax: plt.Axes):
         ax.text(0.5, 0.5, 'No nodes found', ha='center', va='center')
         return
 
-    # Count packets between each pair
-    # We infer sender->receiver from SEND events followed by RECV events
     flow_matrix = pd.DataFrame(0, index=nodes, columns=nodes)
 
     send_df = df[df['event'] == 'SEND']
     recv_df = df[df['event'] == 'RECV']
 
-    # For each SEND, find corresponding RECVs (1ms later with same originator and TTL)
     for _, send_row in send_df.iterrows():
         sender = int(send_row['sender_id'])
         send_time = send_row['time_ms']
         originator = send_row['originator_id']
         ttl = send_row['ttl']
 
-        # Find RECVs at send_time + 1ms with matching packet characteristics
         matching_recvs = recv_df[
             (recv_df['time_ms'] == send_time + 1) &
             (recv_df['originator_id'] == originator) &
@@ -335,7 +241,6 @@ def plot_propagation_heatmap(df: pd.DataFrame, G: nx.Graph, ax: plt.Axes):
             if sender in flow_matrix.index and receiver in flow_matrix.columns:
                 flow_matrix.loc[sender, receiver] += 1
 
-    # Plot heatmap
     im = ax.imshow(flow_matrix.values, cmap='YlOrRd', aspect='equal')
 
     ax.set_xticks(range(n))
@@ -346,10 +251,8 @@ def plot_propagation_heatmap(df: pd.DataFrame, G: nx.Graph, ax: plt.Axes):
     ax.set_ylabel('Sender Node')
     ax.set_title('Packet Flow Matrix (Sender → Receiver)')
 
-    # Add colorbar
     plt.colorbar(im, ax=ax, label='Packet Count')
 
-    # Add text annotations
     for i in range(n):
         for j in range(n):
             val = flow_matrix.iloc[i, j]
@@ -374,7 +277,6 @@ def plot_ttl_decay(df: pd.DataFrame, ax: plt.Axes):
         ax.text(0.5, 0.5, 'No send events', ha='center', va='center')
         return
 
-    # Group by originator
     originators = send_df['originator_id'].dropna().unique()
 
     cmap = plt.cm.tab10
@@ -383,7 +285,6 @@ def plot_ttl_decay(df: pd.DataFrame, ax: plt.Axes):
         orig_packets = send_df[send_df['originator_id'] == orig].copy()
         orig_packets = orig_packets.sort_values('time_ms')
 
-        # Plot path_length vs TTL
         path_lengths = orig_packets['path_length'].fillna(0)
         ttls = orig_packets['ttl']
 
@@ -404,20 +305,15 @@ def create_summary_figure(df: pd.DataFrame, output_path: str = None):
     fig, axes = plt.subplots(2, 2, figsize=(14, 12))
     fig.suptitle('BLE Mesh Discovery Simulation Analysis', fontsize=14, fontweight='bold')
 
-    # Extract data
     G = extract_topology(df)
     stats_df = extract_stats(df)
 
-    # Plot 1: Topology
     plot_topology(G, axes[0, 0], "Mesh Topology")
 
-    # Plot 2: Timeline
     plot_packet_timeline(df, axes[0, 1])
 
-    # Plot 3: Statistics
     plot_statistics(stats_df, axes[1, 0])
 
-    # Plot 4: TTL Decay
     plot_ttl_decay(df, axes[1, 1])
 
     plt.tight_layout()
@@ -442,7 +338,6 @@ def create_animation(df: pd.DataFrame, G: nx.Graph, output_path: str = None):
 
     pos = nx.spring_layout(G, seed=42, k=2)
 
-    # Get all unique timestamps
     event_df = df[df['event'].isin(['SEND', 'RECV'])]
     timestamps = sorted(event_df['time_ms'].unique())
 
@@ -454,21 +349,18 @@ def create_animation(df: pd.DataFrame, G: nx.Graph, output_path: str = None):
         ax.clear()
         current_time = timestamps[frame]
 
-        # Draw base topology
         nx.draw_networkx_edges(G, pos, ax=ax, edge_color='lightgray', width=2, alpha=0.5)
 
-        # Get events at current time
         current_events = event_df[event_df['time_ms'] == current_time]
 
-        # Color nodes based on activity
         node_colors = []
         for node in G.nodes():
             if node in current_events[current_events['event'] == 'SEND']['sender_id'].values:
-                node_colors.append('red')  # Sending
+                node_colors.append('red')
             elif node in current_events[current_events['event'] == 'RECV']['receiver_id'].values:
-                node_colors.append('green')  # Receiving
+                node_colors.append('green')
             else:
-                node_colors.append('lightblue')  # Idle
+                node_colors.append('lightblue')
 
         nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors,
                                node_size=700, edgecolors='black', linewidths=2)
@@ -477,7 +369,6 @@ def create_animation(df: pd.DataFrame, G: nx.Graph, output_path: str = None):
         ax.set_title(f'Time: {current_time} ms')
         ax.axis('off')
 
-        # Legend
         legend_elements = [
             mpatches.Patch(color='red', label='Sending'),
             mpatches.Patch(color='green', label='Receiving'),
@@ -485,7 +376,6 @@ def create_animation(df: pd.DataFrame, G: nx.Graph, output_path: str = None):
         ]
         ax.legend(handles=legend_elements, loc='upper left')
 
-    # Create animation (limit to first 100 frames for performance)
     n_frames = min(len(timestamps), 100)
     anim = FuncAnimation(fig, update, frames=n_frames, interval=100, repeat=True)
 
@@ -502,24 +392,20 @@ def print_summary(df: pd.DataFrame):
     print("SIMULATION TRACE SUMMARY")
     print("="*60)
 
-    # Event counts
     event_counts = df['event'].value_counts()
     print("\nEvent counts:")
     for event, count in event_counts.items():
         print(f"  {event}: {count}")
 
-    # Time range
     event_df = df[df['event'].isin(['SEND', 'RECV'])]
     if not event_df.empty:
         print(f"\nTime range: {event_df['time_ms'].min()} ms - {event_df['time_ms'].max()} ms")
 
-    # Node statistics
     stats_df = extract_stats(df)
     if not stats_df.empty:
         print("\nPer-node statistics:")
         print(stats_df.to_string(index=False))
 
-    # Topology
     G = extract_topology(df)
     print(f"\nTopology: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
     print(f"Edges: {list(G.edges())}")
@@ -540,27 +426,21 @@ def main():
 
     args = parser.parse_args()
 
-    # Check file exists
     if not Path(args.trace_file).exists():
         print(f"Error: Trace file not found: {args.trace_file}")
         sys.exit(1)
 
-    # Create output directory
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load trace
     print(f"Loading trace from: {args.trace_file}")
     df = load_trace(args.trace_file)
 
-    # Print summary
     print_summary(df)
 
-    # Create main figure
     summary_path = output_dir / 'simulation_summary.png'
     fig = create_summary_figure(df, str(summary_path))
 
-    # Create flow heatmap separately (needs its own colorbar)
     G = extract_topology(df)
     if G.number_of_nodes() > 0:
         fig2, ax2 = plt.subplots(figsize=(8, 6))
@@ -569,12 +449,10 @@ def main():
         plt.savefig(str(heatmap_path), dpi=150, bbox_inches='tight')
         print(f"Saved heatmap to: {heatmap_path}")
 
-    # Create animation if requested
     if args.animate:
         anim_path = output_dir / 'simulation_animation.gif'
         create_animation(df, G, str(anim_path))
 
-    # Show plots
     if not args.no_show:
         plt.show()
 

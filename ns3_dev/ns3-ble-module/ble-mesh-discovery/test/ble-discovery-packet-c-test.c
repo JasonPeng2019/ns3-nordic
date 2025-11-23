@@ -1,7 +1,7 @@
 /**
  * @file ble-discovery-packet-c-test.c
  * @brief Comprehensive C-level unit tests for BLE Discovery Protocol core
- * @author Benjamin Huh
+ * @author jason peng
  * @date 2025-11-21
  *
  * These tests validate the pure C implementation independently of NS-3.
@@ -16,11 +16,11 @@
 #include <stdint.h>
 #include <limits.h>
 
-/* Test counter */
+
 static int tests_passed = 0;
 static int tests_failed = 0;
 
-/* Test helper macros */
+
 #define TEST_ASSERT(condition, message) \
     do { \
         if (condition) { \
@@ -76,25 +76,25 @@ void test_ttl_operations(void)
     ble_discovery_packet_t packet;
     ble_discovery_packet_init(&packet);
 
-    // Set TTL to 3
+    
     packet.ttl = 3;
 
-    // Decrement 1: should return true, TTL = 2
+    
     bool result = ble_discovery_decrement_ttl(&packet);
     TEST_ASSERT_EQ(result, true, "First decrement should return true");
     TEST_ASSERT_EQ(packet.ttl, 2, "TTL should be 2 after first decrement");
 
-    // Decrement 2: should return true, TTL = 1
+    
     result = ble_discovery_decrement_ttl(&packet);
     TEST_ASSERT_EQ(result, true, "Second decrement should return true");
     TEST_ASSERT_EQ(packet.ttl, 1, "TTL should be 1 after second decrement");
 
-    // Decrement 3: should return true, TTL = 0
+    
     result = ble_discovery_decrement_ttl(&packet);
     TEST_ASSERT_EQ(result, true, "Third decrement should return true");
     TEST_ASSERT_EQ(packet.ttl, 0, "TTL should be 0 after third decrement");
 
-    // Decrement 4: should return false, TTL = 0
+    
     result = ble_discovery_decrement_ttl(&packet);
     TEST_ASSERT_EQ(result, false, "Fourth decrement should return false");
     TEST_ASSERT_EQ(packet.ttl, 0, "TTL should still be 0");
@@ -108,7 +108,7 @@ void test_path_operations(void)
     ble_discovery_packet_t packet;
     ble_discovery_packet_init(&packet);
 
-    // Add nodes to path
+    
     bool result = ble_discovery_add_to_path(&packet, 101);
     TEST_ASSERT_EQ(result, true, "Should add first node");
     TEST_ASSERT_EQ(packet.path_length, 1, "Path length should be 1");
@@ -122,7 +122,7 @@ void test_path_operations(void)
     TEST_ASSERT_EQ(result, true, "Should add third node");
     TEST_ASSERT_EQ(packet.path_length, 3, "Path length should be 3");
 
-    // Check loop detection
+    
     TEST_ASSERT_EQ(ble_discovery_is_in_path(&packet, 101), true, "Node 101 should be in path");
     TEST_ASSERT_EQ(ble_discovery_is_in_path(&packet, 102), true, "Node 102 should be in path");
     TEST_ASSERT_EQ(ble_discovery_is_in_path(&packet, 103), true, "Node 103 should be in path");
@@ -137,7 +137,7 @@ void test_path_overflow(void)
     ble_discovery_packet_t packet;
     ble_discovery_packet_init(&packet);
 
-    // Fill path to maximum
+    
     for (uint16_t i = 0; i < BLE_DISCOVERY_MAX_PATH_LENGTH; i++)
     {
         bool result = ble_discovery_add_to_path(&packet, i);
@@ -147,7 +147,7 @@ void test_path_overflow(void)
     TEST_ASSERT_EQ(packet.path_length, BLE_DISCOVERY_MAX_PATH_LENGTH,
                    "Path should be at maximum length");
 
-    // Try to add one more (should fail)
+    
     bool result = ble_discovery_add_to_path(&packet, 999);
     TEST_ASSERT_EQ(result, false, "Should not add node when path is full");
     TEST_ASSERT_EQ(packet.path_length, BLE_DISCOVERY_MAX_PATH_LENGTH,
@@ -162,7 +162,7 @@ void test_gps_operations(void)
     ble_discovery_packet_t packet;
     ble_discovery_packet_init(&packet);
 
-    // Set GPS location
+    
     ble_discovery_set_gps(&packet, 37.7749, -122.4194, 50.0);
 
     TEST_ASSERT_EQ(packet.gps_available, true, "GPS should be available after setting");
@@ -179,7 +179,7 @@ void test_discovery_serialization(void)
     ble_discovery_packet_t original, deserialized;
     ble_discovery_packet_init(&original);
 
-    // Configure packet
+    
     original.sender_id = 12345;
     original.ttl = 7;
     ble_discovery_add_to_path(&original, 1);
@@ -187,21 +187,21 @@ void test_discovery_serialization(void)
     ble_discovery_add_to_path(&original, 3);
     ble_discovery_set_gps(&original, 10.5, 20.5, 30.5);
 
-    // Calculate size
+    
     uint32_t size = ble_discovery_get_size(&original);
     TEST_ASSERT(size > 0, "Serialized size should be > 0");
 
-    // Serialize
+    
     uint8_t buffer[256];
     uint32_t bytes_written = ble_discovery_serialize(&original, buffer, sizeof(buffer));
     TEST_ASSERT_EQ(bytes_written, size, "Bytes written should match calculated size");
 
-    // Deserialize
+    
     ble_discovery_packet_init(&deserialized);
     uint32_t bytes_read = ble_discovery_deserialize(&deserialized, buffer, bytes_written);
     TEST_ASSERT_EQ(bytes_read, bytes_written, "Bytes read should match bytes written");
 
-    // Verify fields
+    
     TEST_ASSERT_EQ(deserialized.message_type, original.message_type, "Message type should match");
     TEST_ASSERT_EQ(deserialized.sender_id, original.sender_id, "Sender ID should match");
     TEST_ASSERT_EQ(deserialized.ttl, original.ttl, "TTL should match");
@@ -226,27 +226,27 @@ void test_discovery_serialization_no_gps(void)
     ble_discovery_packet_t original, deserialized;
     ble_discovery_packet_init(&original);
 
-    // Configure packet (no GPS)
+    
     original.sender_id = 54321;
     original.ttl = 5;
     ble_discovery_add_to_path(&original, 10);
     ble_discovery_add_to_path(&original, 20);
 
-    // Calculate size (should be smaller without GPS)
+    
     uint32_t size = ble_discovery_get_size(&original);
-    uint32_t expected_size = 1 + 4 + 1 + 2 + (2 * 4) + 1; // no GPS coords
+    uint32_t expected_size = 1 + 4 + 1 + 2 + (2 * 4) + 1; 
     TEST_ASSERT_EQ(size, expected_size, "Size should not include GPS coordinates");
 
-    // Serialize
+    
     uint8_t buffer[256];
     uint32_t bytes_written = ble_discovery_serialize(&original, buffer, sizeof(buffer));
     TEST_ASSERT_EQ(bytes_written, size, "Bytes written should match calculated size");
 
-    // Deserialize
+    
     uint32_t bytes_read = ble_discovery_deserialize(&deserialized, buffer, bytes_written);
     TEST_ASSERT_EQ(bytes_read, bytes_written, "Bytes read should match bytes written");
 
-    // Verify GPS is not available
+    
     TEST_ASSERT_EQ(deserialized.gps_available, false, "GPS should not be available");
 }
 
@@ -258,7 +258,7 @@ void test_election_serialization(void)
     ble_election_packet_t original, deserialized;
     ble_election_packet_init(&original);
 
-    // Configure packet
+    
     original.base.sender_id = 67890;
     original.base.ttl = 8;
     ble_discovery_add_to_path(&original.base, 5);
@@ -270,29 +270,29 @@ void test_election_serialization(void)
     original.election.score = 0.87;
     original.election.hash = 0xDEADBEEF;
 
-    // Calculate size
+    
     uint32_t size = ble_election_get_size(&original);
     TEST_ASSERT(size > ble_discovery_get_size(&original.base),
                 "Election size should be larger than base discovery size");
 
-    // Serialize
+    
     uint8_t buffer[512];
     uint32_t bytes_written = ble_election_serialize(&original, buffer, sizeof(buffer));
     TEST_ASSERT_EQ(bytes_written, size, "Bytes written should match calculated size");
 
-    // Deserialize
+    
     ble_election_packet_init(&deserialized);
     uint32_t bytes_read = ble_election_deserialize(&deserialized, buffer, bytes_written);
     TEST_ASSERT_EQ(bytes_read, bytes_written, "Bytes read should match bytes written");
 
-    // Verify base fields
+    
     TEST_ASSERT_EQ(deserialized.base.message_type, BLE_MSG_ELECTION_ANNOUNCEMENT,
                    "Message type should be ELECTION_ANNOUNCEMENT");
     TEST_ASSERT_EQ(deserialized.base.sender_id, original.base.sender_id, "Sender ID should match");
     TEST_ASSERT_EQ(deserialized.base.ttl, original.base.ttl, "TTL should match");
     TEST_ASSERT_EQ(deserialized.base.path_length, original.base.path_length, "Path length should match");
 
-    // Verify election fields
+    
     TEST_ASSERT_EQ(deserialized.election.class_id, original.election.class_id, "Class ID should match");
     TEST_ASSERT_EQ(deserialized.election.pdsf, original.election.pdsf, "PDSF should match");
     TEST_ASSERT_DOUBLE_EQ(deserialized.election.score, original.election.score, "Score should match");
@@ -308,7 +308,7 @@ void test_buffer_overflow_protection(void)
     ble_discovery_packet_init(&packet);
     packet.sender_id = 123;
 
-    // Try to serialize with insufficient buffer
+    
     uint8_t small_buffer[5];
     uint32_t bytes_written = ble_discovery_serialize(&packet, small_buffer, sizeof(small_buffer));
     TEST_ASSERT_EQ(bytes_written, 0, "Should return 0 when buffer too small");
@@ -319,25 +319,25 @@ void test_buffer_overflow_protection(void)
  */
 void test_invalid_path_length(void)
 {
-    // Manually create buffer with invalid path length
+    
     uint8_t buffer[256];
     uint8_t *ptr = buffer;
 
-    // Message type
+    
     *ptr++ = BLE_MSG_DISCOVERY;
 
-    // Sender ID
+    
     *ptr++ = 0; *ptr++ = 0; *ptr++ = 0; *ptr++ = 1;
 
-    // TTL
+    
     *ptr++ = 10;
 
-    // Invalid path length (> MAX)
+    
     uint16_t invalid_length = BLE_DISCOVERY_MAX_PATH_LENGTH + 10;
     *ptr++ = (invalid_length >> 8) & 0xFF;
     *ptr++ = invalid_length & 0xFF;
 
-    // Try to deserialize
+    
     ble_discovery_packet_t packet;
     uint32_t bytes_read = ble_discovery_deserialize(&packet, buffer, sizeof(buffer));
     TEST_ASSERT_EQ(bytes_read, 0, "Should return 0 for invalid path length");
@@ -348,19 +348,19 @@ void test_invalid_path_length(void)
  */
 void test_pdsf_calculation(void)
 {
-    // First hop: starting from implicit baseline of 1, with 5 neighbors
+    
     uint32_t pdsf = ble_election_calculate_pdsf(0, 5);
     TEST_ASSERT_EQ(pdsf, 6, "Baseline of 1 with 5 neighbors should yield 6 predicted devices");
 
-    // Second hop: receiving node saw PDSF=6 and has 3 direct neighbors
+    
     pdsf = ble_election_calculate_pdsf(pdsf, 3);
     TEST_ASSERT_EQ(pdsf, 24, "Subsequent hop should multiply previous PDSF by neighbor count and add to baseline");
 
-    // No new neighbors -> value should remain unchanged
+    
     pdsf = ble_election_calculate_pdsf(pdsf, 0);
     TEST_ASSERT_EQ(pdsf, 24, "Zero neighbors should leave PDSF unchanged");
 
-    // Large values saturate at UINT32_MAX
+    
     uint32_t saturated = ble_election_calculate_pdsf(UINT32_MAX, 10);
     TEST_ASSERT_EQ(saturated, UINT32_MAX, "PDSF should saturate at UINT32_MAX on overflow");
 }
@@ -370,16 +370,16 @@ void test_pdsf_calculation(void)
  */
 void test_score_calculation(void)
 {
-    // Score = direct connections + (connections / noise)
+    
     double score = ble_election_calculate_score(10, 5.0);
     double expected = 10.0 + (10.0 / 5.0);
     TEST_ASSERT_DOUBLE_EQ(score, expected, "Score should equal direct connections plus connection ratio");
 
-    // Zero noise should reduce to direct connections only
+    
     score = ble_election_calculate_score(8, 0.0);
     TEST_ASSERT_DOUBLE_EQ(score, 8.0, "Zero noise should produce score equal to direct connections");
 
-    // More neighbors and lower noise should yield higher score
+    
     double score_high = ble_election_calculate_score(20, 2.0);
     TEST_ASSERT(score_high > score, "Better connectivity should result in higher score");
 }
@@ -389,16 +389,16 @@ void test_score_calculation(void)
  */
 void test_hash_generation(void)
 {
-    // Hash should be deterministic
+    
     uint32_t hash1 = ble_election_generate_hash(12345);
     uint32_t hash2 = ble_election_generate_hash(12345);
     TEST_ASSERT_EQ(hash1, hash2, "Same input should produce same hash");
 
-    // Different inputs should produce different hashes
+    
     uint32_t hash3 = ble_election_generate_hash(54321);
     TEST_ASSERT(hash1 != hash3, "Different inputs should produce different hashes");
 
-    // Hash should be non-zero for non-zero input
+    
     uint32_t hash4 = ble_election_generate_hash(1);
     TEST_ASSERT(hash4 != 0, "Hash should be non-zero");
 }
@@ -411,23 +411,23 @@ void test_large_path_serialization(void)
     ble_discovery_packet_t original, deserialized;
     ble_discovery_packet_init(&original);
 
-    // Add many nodes to path (but not max, to keep test fast)
+    
     for (uint32_t i = 0; i < 20; i++)
     {
         ble_discovery_add_to_path(&original, i * 100);
     }
 
-    // Serialize
+    
     uint8_t buffer[1024];
     uint32_t bytes_written = ble_discovery_serialize(&original, buffer, sizeof(buffer));
     TEST_ASSERT(bytes_written > 0, "Should serialize large path");
 
-    // Deserialize
+    
     uint32_t bytes_read = ble_discovery_deserialize(&deserialized, buffer, bytes_written);
     TEST_ASSERT_EQ(bytes_read, bytes_written, "Should deserialize large path");
     TEST_ASSERT_EQ(deserialized.path_length, 20, "Path length should be preserved");
 
-    // Verify all path nodes
+    
     for (uint16_t i = 0; i < deserialized.path_length; i++)
     {
         TEST_ASSERT_EQ(deserialized.path[i], i * 100, "Path node should match");

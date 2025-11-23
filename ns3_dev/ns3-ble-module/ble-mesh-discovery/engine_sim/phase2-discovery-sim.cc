@@ -1,14 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Phase 2 C-engine simulation.
- * Builds a tiny virtual BLE mesh using BleDiscoveryEngineWrapper instances
- * to validate that every node emits its own discovery advert (slot 0)
- * and that forwarding slots propagate packets between neighbors.
- *
- * TRACING: This simulation outputs CSV trace data for visualization.
- * Run the companion Python script (visualize_trace.py) to see the results.
- */
-
 #include "ns3/core-module.h"
 #include "ns3/ble-discovery-engine-wrapper.h"
 #include "ns3/ble-discovery-header-wrapper.h"
@@ -18,16 +7,6 @@
 #include <vector>
 #include <fstream>
 
-/*
- * Global trace file for CSV output.
- * Format: time_ms,event,sender_id,receiver_id,originator_id,ttl,path_length,rssi
- *
- * Events traced:
- *   SEND     - Node broadcasts a packet (either own discovery or forwarded)
- *   RECV     - Node receives a packet from a neighbor
- *   TOPOLOGY - Records the mesh topology connections (logged once at start)
- *   STATS    - Final statistics per node (logged at end)
- */
 std::ofstream g_traceFile;
 
 using namespace ns3;
@@ -86,10 +65,10 @@ private:
 
   Ptr<BleDiscoveryEngineWrapper> m_engine;
   Ptr<SimpleVirtualChannel> m_channel;
-  Ptr<UniformRandomVariable> m_rng;  // Per-node RNG for random send offsets
+  Ptr<UniformRandomVariable> m_rng;
   uint32_t m_nodeId;
   bool m_started;
-  Time m_maxSendOffset;  // Maximum offset window for randomizing sends
+  Time m_maxSendOffset;
 };
 
 TypeId
@@ -108,7 +87,7 @@ SimpleVirtualChannel::AddNode (Ptr<EngineSimNode> node)
   uint32_t id = node->GetNodeId ();
   NS_ABORT_MSG_IF (id == 0, "Nodes must be configured before linking");
   m_nodes[id] = node;
-  m_adjacency[id]; // ensure entry exists
+  m_adjacency[id];
 }
 
 void
@@ -134,28 +113,17 @@ SimpleVirtualChannel::Transmit (uint32_t senderId, Ptr<Packet> packet) const
   BleDiscoveryHeaderWrapper header;
   loggerCopy->RemoveHeader (header);
 
-  /*
-   * TRACE: SEND event
-   * Logged when a node broadcasts a discovery packet to all neighbors.
-   * - sender_id: The node transmitting the packet
-   * - originator_id: The node that originally created this discovery packet
-   *                  (extracted from the path - first element is the originator)
-   * - ttl: Time-to-live remaining for this packet
-   * - path_length: Number of hops this packet has traveled so far
-   *
-   * Note: If path is empty, the sender is the originator (slot 0 self-advertisement).
-   */
   std::vector<uint32_t> path = header.GetPath ();
   uint32_t originatorId = path.empty () ? senderId : path.front ();
 
   g_traceFile << Simulator::Now ().GetMilliSeconds () << ","
               << "SEND" << ","
               << senderId << ","
-              << "" << ","  // receiver_id is empty for broadcast
+              << "" << ","
               << originatorId << ","
               << (uint32_t)header.GetTtl () << ","
               << path.size () << ","
-              << "" << "\n";  // rssi is empty for sends
+              << "" << "\n";
 
   std::ostringstream oss;
   oss << "Sender " << senderId << " -> neighbours ";
@@ -182,18 +150,6 @@ SimpleVirtualChannel::Deliver (uint32_t receiverId, Ptr<Packet> packet) const
       return;
     }
 
-  /*
-   * TRACE: RECV event
-   * Logged when a node receives a discovery packet from a neighbor.
-   * - receiver_id: The node receiving the packet
-   * - originator_id: The original source of this discovery packet
-   * - ttl: Time-to-live remaining (decremented by receiver's engine)
-   * - path_length: Number of hops traveled so far
-   * - rssi: Received Signal Strength Indicator (-45 dBm fixed in this sim)
-   *
-   * This event fires BEFORE the engine processes the packet, so the TTL
-   * shown is the value as received (before any decrement for forwarding).
-   */
   Ptr<Packet> traceCopy = packet->Copy ();
   BleDiscoveryHeaderWrapper header;
   traceCopy->RemoveHeader (header);
@@ -201,11 +157,11 @@ SimpleVirtualChannel::Deliver (uint32_t receiverId, Ptr<Packet> packet) const
   std::vector<uint32_t> path = header.GetPath ();
   uint32_t originatorId = path.empty () ? 0 : path.front ();
 
-  int8_t rssi = -45;  // Fixed RSSI for this simulation
+  int8_t rssi = -45;
 
   g_traceFile << Simulator::Now ().GetMilliSeconds () << ","
               << "RECV" << ","
-              << "" << ","  // sender_id reconstructed from context in visualization
+              << "" << ","
               << receiverId << ","
               << originatorId << ","
               << (uint32_t)header.GetTtl () << ","
@@ -250,7 +206,6 @@ EngineSimNode::Configure (uint32_t nodeId,
   m_channel = channel;
   m_maxSendOffset = maxSendOffset;
 
-  // Assign a unique stream to this node's RNG to ensure independent random sequences
   m_rng->SetStream (nodeId);
 
   m_engine->SetAttribute ("NodeId", UintegerValue (nodeId));
@@ -298,7 +253,6 @@ EngineSimNode::HandleEngineSend (Ptr<Packet> packet)
   BleDiscoveryHeaderWrapper header;
   headerCopy->RemoveHeader (header);
 
-  // Generate a NEW random offset for each send event
   Time sendOffset = NanoSeconds (m_rng->GetInteger (0, m_maxSendOffset.GetNanoSeconds ()));
 
   NS_LOG_INFO ("Node " << m_nodeId << " queued broadcast TTL=" << (uint32_t)header.GetTtl ()
@@ -318,7 +272,7 @@ main (int argc, char *argv[])
 {
   uint32_t nodeCount = 4;
   double simDuration = 3.0;
-  uint32_t slotDurationMs = 50;  // Parse as integer milliseconds to avoid Time unit confusion
+  uint32_t slotDurationMs = 50;
   uint32_t timeFrames = 4;
   std::string traceFile = "simulation_trace_random.csv";
 
@@ -332,17 +286,12 @@ main (int argc, char *argv[])
   cmd.AddValue ("trace", "Output trace file path", traceFile);
   cmd.Parse (argc, argv);
 
-  // Convert to NS-3 Time after parsing
   Time slotDuration = MilliSeconds (slotDurationMs);
   NS_ABORT_MSG_IF (timeFrames == 0, "frames must be at least 1");
   Time frameDuration = NanoSeconds (slotDuration.GetNanoSeconds () / timeFrames);
 
   LogComponentEnable ("Phase2DiscoveryEngineSim", LOG_LEVEL_INFO);
 
-  /*
-   * TRACE: Open the CSV trace file and write the header.
-   * The CSV format allows easy parsing by Python/pandas for visualization.
-   */
   g_traceFile.open (traceFile);
   g_traceFile << "time_ms,event,sender_id,receiver_id,originator_id,ttl,path_length,rssi\n";
 
@@ -350,44 +299,29 @@ main (int argc, char *argv[])
   std::vector<Ptr<EngineSimNode>> nodes;
   nodes.reserve (nodeCount);
 
-  // Maximum random offset window = frameDuration * (timeFrames - 1)
-  // Each node will pick a random offset within [0, maxSendOffset] for each send
   Time maxSendOffset = frameDuration * (timeFrames - 1);
 
   for (uint32_t i = 0; i < nodeCount; ++i)
     {
       Ptr<EngineSimNode> node = CreateObject<EngineSimNode> ();
-      node->Configure (i + 1, slotDuration, 6 /* TTL */, 5.0 /* proximity */, channel, maxSendOffset);
+      node->Configure (i + 1, slotDuration, 6, 5.0, channel, maxSendOffset);
       channel->AddNode (node);
       nodes.push_back (node);
     }
 
-  // Simple connected topology with redundant paths to trigger forwarding.
-  // Topology: 1 -- 2 -- 3
-  //                |
-  //                4
-  // This creates a tree with node 2 as a hub that connects to 3 nodes.
   for (uint32_t i = 1; i < nodeCount; ++i)
     {
       channel->Connect (i, i + 1);
     }
   if (nodeCount >= 4)
     {
-      channel->Connect (2, 4); // add a shortcut so node 2 forwards to multiple neighbours
+      channel->Connect (2, 4);
     }
 
-  /*
-   * TRACE: TOPOLOGY events
-   * Log the mesh topology so the visualization can draw the network graph.
-   * Each TOPOLOGY line represents a bidirectional link between two nodes.
-   * Format: time_ms=0, event=TOPOLOGY, sender_id=nodeA, receiver_id=nodeB
-   */
-  // Log the linear chain: 1-2, 2-3, 3-4, ...
   for (uint32_t i = 1; i < nodeCount; ++i)
     {
       g_traceFile << "0,TOPOLOGY," << i << "," << (i + 1) << ",,,,\n";
     }
-  // Log the shortcut: 2-4
   if (nodeCount >= 4)
     {
       g_traceFile << "0,TOPOLOGY,2,4,,,,\n";
@@ -412,17 +346,6 @@ main (int argc, char *argv[])
           forwarders++;
         }
 
-      /*
-       * TRACE: STATS events
-       * Log final statistics for each node at the end of simulation.
-       * This allows the visualization to show summary data.
-       * Format reuses columns:
-       *   - sender_id: node_id
-       *   - receiver_id: messages_sent
-       *   - originator_id: messages_received
-       *   - ttl: messages_forwarded
-       *   - path_length: messages_dropped
-       */
       g_traceFile << Simulator::Now ().GetMilliSeconds () << ","
                   << "STATS" << ","
                   << node->GetNodeId () << ","
@@ -443,9 +366,6 @@ main (int argc, char *argv[])
 
   NS_LOG_INFO ("Phase 2 discovery simulation completed. Forwarders observed: " << forwarders);
 
-  /*
-   * TRACE: Close the trace file.
-   */
   g_traceFile.close ();
   NS_LOG_INFO ("Trace data written to: " << traceFile);
 

@@ -1,17 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * Author: Benjamin Huh <buh07@github>
- *
- * C++ Wrapper for Pure C Discovery Cycle Implementation
- * This wraps the C protocol core to work with NS-3's C++ framework
- */
-
 #ifndef BLE_DISCOVERY_CYCLE_WRAPPER_H
 #define BLE_DISCOVERY_CYCLE_WRAPPER_H
 
@@ -167,6 +153,6 @@ private:
   Callback<void> m_cycleCompleteCallback;  //!< Callback for cycle completion
 };
 
-} // namespace ns3
+}
 
-#endif /* BLE_DISCOVERY_CYCLE_WRAPPER_H */
+#endif

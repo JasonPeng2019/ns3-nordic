@@ -1,12 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * Author: Benjamin Huh <buh07@github>
- *
- * C++ Wrapper Implementation - Thin layer over C protocol core
- */
-
 #include "ble-election.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
@@ -60,13 +51,13 @@ BleElection::UpdateNeighbor (uint32_t nodeId, Vector location, int8_t rssi)
 {
   NS_LOG_FUNCTION (this << nodeId << location << static_cast<int32_t> (rssi));
 
-  // Convert NS-3 Vector to C GPS location
+  
   ble_gps_location_t c_location = {location.x, location.y, location.z};
 
-  // Get current time in milliseconds
+  
   uint32_t current_time_ms = static_cast<uint32_t> (Simulator::Now ().GetMilliSeconds ());
 
-  // Call C core function
+  
   ble_election_update_neighbor (&m_state, nodeId, &c_location, rssi, current_time_ms);
 
   NS_LOG_DEBUG ("Updated neighbor " << nodeId << " (RSSI=" << static_cast<int32_t> (rssi)
@@ -285,4 +276,4 @@ BleElection::GetCandidacyScore () const
   return m_state.candidacy_score;
 }
 
-} // namespace ns3
+} 

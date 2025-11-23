@@ -1,7 +1,7 @@
 /**
  * @file ble_mesh_node.h
  * @brief Pure C implementation of BLE Mesh Node state machine
- * @author Benjamin Huh
+ * @author jason peng
  * @date 2025-11-21
  *
  * This is the core node state machine implementation in C for portability.
@@ -21,14 +21,14 @@ extern "C" {
 #include <stdbool.h>
 #include "ble_discovery_packet.h"
 
-/* ===== Constants ===== */
+
 
 #define BLE_MESH_MAX_NEIGHBORS 150      /**< Maximum neighbors per node */
 #define BLE_MESH_INVALID_NODE_ID 0      /**< Invalid/unassigned node ID */
 #define BLE_MESH_DISCOVERY_TIMEOUT 90   /**< Discovery phase timeout in cycles */
 #define BLE_MESH_EDGE_RSSI_THRESHOLD -70 /**< RSSI threshold for edge detection (dBm) */
 
-/* ===== Node State Enumeration ===== */
+
 
 /**
  * @brief Node state in the BLE mesh network
@@ -45,7 +45,7 @@ typedef enum {
     BLE_NODE_STATE_CLUSTER_MEMBER = 5     /**< Member of a cluster */
 } ble_node_state_t;
 
-/* ===== Neighbor Information Structure ===== */
+
 
 /**
  * @brief Information about a discovered neighbor
@@ -61,7 +61,7 @@ typedef struct {
     bool gps_valid;             /**< Whether GPS location is valid */
 } ble_neighbor_info_t;
 
-/* ===== Neighbor Table Structure ===== */
+
 
 /**
  * @brief Neighbor tracking table
@@ -71,7 +71,7 @@ typedef struct {
     uint16_t count;             /**< Current number of neighbors */
 } ble_neighbor_table_t;
 
-/* ===== Node Statistics Structure ===== */
+
 
 /**
  * @brief Node statistics for election and monitoring
@@ -86,47 +86,47 @@ typedef struct {
     uint16_t direct_connections;    /**< Number of direct (1-hop) connections */
 } ble_node_statistics_t;
 
-/* ===== Main Node Structure ===== */
+
 
 /**
  * @brief BLE Mesh Node state and data
  */
 typedef struct {
-    /* Identity */
+    
     uint32_t node_id;               /**< Unique node identifier */
 
-    /* State */
+    
     ble_node_state_t state;         /**< Current node state */
     ble_node_state_t prev_state;    /**< Previous state (for transitions) */
     uint32_t state_entry_cycle;     /**< Cycle number when entered current state */
 
-    /* Location */
+    
     ble_gps_location_t gps_location; /**< Node's GPS coordinates */
     bool gps_available;             /**< Whether GPS is available */
     uint32_t gps_last_update_cycle; /**< Cycle when GPS was last updated */
     uint32_t gps_cache_ttl;         /**< GPS cache time-to-live in cycles (0=disabled) */
 
-    /* Discovery & Clustering */
+    
     ble_neighbor_table_t neighbors; /**< Known neighbors */
     uint32_t clusterhead_id;        /**< ID of clusterhead (if member) */
     uint16_t cluster_class;         /**< Cluster class ID (if clusterhead) */
 
-    /* Election metrics */
+    
     uint32_t pdsf;                  /**< Predicted Devices So Far */
     double candidacy_score;         /**< Clusterhead candidacy score (0.0-1.0) */
     uint32_t election_hash;         /**< FDMA/TDMA hash value */
     double noise_level;             /**< Last measured noise/crowding level */
     uint32_t last_candidate_heard_cycle; /**< Discovery cycle when another candidate was last heard */
 
-    /* Timing */
+    
     uint32_t current_cycle;         /**< Current discovery cycle number */
 
-    /* Statistics */
+    
     ble_node_statistics_t stats;    /**< Node statistics */
 
 } ble_mesh_node_t;
 
-/* ===== Function Prototypes ===== */
+
 
 /**
  * @brief Initialize a mesh node with default values
@@ -338,4 +338,4 @@ void ble_mesh_node_inc_dropped(ble_mesh_node_t *node);
 }
 #endif
 
-#endif /* BLE_MESH_NODE_H */
+#endif 

@@ -1,8 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * BLE Discovery Engine NS-3 Wrapper
- */
-
 #ifndef BLE_DISCOVERY_ENGINE_WRAPPER_H
 #define BLE_DISCOVERY_ENGINE_WRAPPER_H
 
@@ -112,6 +107,6 @@ private:
   TxCallback m_txCallback;
 };
 
-} // namespace ns3
+}
 
-#endif /* BLE_DISCOVERY_ENGINE_WRAPPER_H */
+#endif

@@ -1,21 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * Task 9 Comprehensive Test: Picky Forwarding Algorithm
- *
- * This simulation tests all subtasks for Task 9:
- * - Subtask 1: Define crowding factor calculation function
- * - Subtask 2: Implement percentage-based message filtering using crowding factor
- * - Subtask 3: Add configurable crowding threshold parameters
- * - Subtask 4: Test forwarding probability vs crowding factor relationship
- * - Subtask 5: Validate congestion prevention effectiveness
- * - Subtask 6: Add logging for forwarding decisions
- *
- * Usage:
- *   ./waf --run "task-9-test --verbose=true"
- */
-
 #include "ns3/core-module.h"
 #include "ns3/simulator.h"
 #include "ns3/nstime.h"
@@ -36,9 +18,9 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("Task9Test");
 
-// ============================================================================
-// GLOBAL TEST STATE
-// ============================================================================
+
+
+
 
 struct SubtaskResult {
     std::string name;
@@ -49,7 +31,7 @@ struct SubtaskResult {
 std::vector<SubtaskResult> g_testResults;
 bool g_verbose = true;
 
-// ANSI color codes
+
 const std::string COLOR_RESET = "\033[0m";
 const std::string COLOR_GREEN = "\033[32m";
 const std::string COLOR_RED = "\033[31m";
@@ -58,9 +40,9 @@ const std::string COLOR_CYAN = "\033[36m";
 const std::string COLOR_BOLD = "\033[1m";
 const std::string COLOR_MAGENTA = "\033[35m";
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
+
+
+
 
 void PrintHeader (const std::string& title)
 {
@@ -142,9 +124,9 @@ void PrintForwardingLogicState (Ptr<BleForwardingLogic> logic, const std::string
     std::cout << "  Proximity Threshold: " << logic->GetProximityThreshold() << " meters\n";
 }
 
-// ============================================================================
-// SUBTASK 1: Define Crowding Factor Calculation Function
-// ============================================================================
+
+
+
 
 class Subtask1Test
 {
@@ -155,7 +137,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 1.1: Object Initialization
+        
         PrintSubHeader("Test 1.1: BleForwardingLogic Object Initialization");
         {
             PrintInit("Creating BleForwardingLogic object...");
@@ -178,7 +160,7 @@ public:
             allPassed &= created && thresholdOk;
         }
 
-        // Test 1.2: Empty RSSI Samples
+        
         PrintSubHeader("Test 1.2: Crowding Factor with Empty RSSI Samples");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -197,13 +179,13 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.3: Weak RSSI Samples (Far Neighbors = Low Crowding)
+        
         PrintSubHeader("Test 1.3: Weak RSSI Samples (Far Neighbors)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             std::vector<int8_t> weakRssi = {-90, -85, -88, -92, -87};
-            double meanRssi = (-90 + -85 + -88 + -92 + -87) / 5.0; // = -88.4
+            double meanRssi = (-90 + -85 + -88 + -92 + -87) / 5.0; 
 
             PrintInit("RSSI samples: " + RssiVectorToString(weakRssi));
             PrintState("Mean RSSI: " + std::to_string(meanRssi) + " dBm (weak signals = far neighbors)");
@@ -225,13 +207,13 @@ public:
             allPassed &= lowCrowding && inRange;
         }
 
-        // Test 1.4: Strong RSSI Samples (Close Neighbors = High Crowding)
+        
         PrintSubHeader("Test 1.4: Strong RSSI Samples (Close Neighbors)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             std::vector<int8_t> strongRssi = {-40, -35, -42, -38, -45};
-            double meanRssi = (-40 + -35 + -42 + -38 + -45) / 5.0; // = -40
+            double meanRssi = (-40 + -35 + -42 + -38 + -45) / 5.0; 
 
             PrintInit("RSSI samples: " + RssiVectorToString(strongRssi));
             PrintState("Mean RSSI: " + std::to_string(meanRssi) + " dBm (strong signals = close neighbors)");
@@ -250,13 +232,13 @@ public:
             allPassed &= highCrowding && inRange;
         }
 
-        // Test 1.5: Mixed RSSI Samples (Medium Crowding)
+        
         PrintSubHeader("Test 1.5: Mixed RSSI Samples (Medium Crowding)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             std::vector<int8_t> mixedRssi = {-65, -70, -55, -60, -75};
-            double meanRssi = (-65 + -70 + -55 + -60 + -75) / 5.0; // = -65
+            double meanRssi = (-65 + -70 + -55 + -60 + -75) / 5.0; 
 
             PrintInit("RSSI samples: " + RssiVectorToString(mixedRssi));
             PrintState("Mean RSSI: " + std::to_string(meanRssi) + " dBm");
@@ -276,7 +258,7 @@ public:
             allPassed &= mediumCrowding && inRange;
         }
 
-        // Test 1.6: Boundary Test - Minimum RSSI (-90 dBm)
+        
         PrintSubHeader("Test 1.6: Boundary Test - Minimum RSSI (-90 dBm)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -297,7 +279,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.7: Boundary Test - Maximum RSSI (-40 dBm)
+        
         PrintSubHeader("Test 1.7: Boundary Test - Maximum RSSI (-40 dBm)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -318,7 +300,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.8: Beyond Minimum RSSI (< -90 dBm)
+        
         PrintSubHeader("Test 1.8: Beyond Minimum RSSI (< -90 dBm)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -339,7 +321,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.9: Beyond Maximum RSSI (> -40 dBm)
+        
         PrintSubHeader("Test 1.9: Beyond Maximum RSSI (> -40 dBm)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -360,13 +342,13 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.10: Single RSSI Sample
+        
         PrintSubHeader("Test 1.10: Single RSSI Sample");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             std::vector<int8_t> singleRssi = {-65};
-            double expectedCrowding = (-65.0 + 90.0) / 50.0; // = 0.5
+            double expectedCrowding = (-65.0 + 90.0) / 50.0; 
 
             PrintInit("RSSI samples: " + RssiVectorToString(singleRssi));
             PrintState("Single sample mean: -65 dBm");
@@ -388,9 +370,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 2: Percentage-Based Message Filtering Using Crowding Factor
-// ============================================================================
+
+
+
 
 class Subtask2Test
 {
@@ -401,12 +383,12 @@ public:
 
         bool allPassed = true;
 
-        // Test 2.1: Zero Crowding (100% Forward)
+        
         PrintSubHeader("Test 2.1: Zero Crowding Factor (Should Forward 100%)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
-            // Use deterministic random for reproducible tests
+            
             Ptr<UniformRandomVariable> random = CreateObject<UniformRandomVariable>();
             random->SetAttribute("Min", DoubleValue(0.0));
             random->SetAttribute("Max", DoubleValue(1.0));
@@ -434,7 +416,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.2: Maximum Crowding (0% Forward)
+        
         PrintSubHeader("Test 2.2: Maximum Crowding Factor (Should Forward 0%)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -466,7 +448,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.3: High Crowding (Low Forward Rate)
+        
         PrintSubHeader("Test 2.3: High Crowding Factor 0.9 (~10% Forward)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -495,14 +477,14 @@ public:
                        std::to_string(forwardRate * 100) + "%)");
             PrintExpected("messages forwarded", "~100/1000 (~10%, allow 5-15%)");
 
-            // Allow 5-15% range for statistical variance
+            
             bool passed = (forwardCount >= 50 && forwardCount <= 150);
             PrintCheck("Forward rate approximately 10% (in 5-15% range)", passed);
 
             allPassed &= passed;
         }
 
-        // Test 2.4: Medium Crowding (50% Forward Rate)
+        
         PrintSubHeader("Test 2.4: Medium Crowding Factor 0.5 (~50% Forward)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -531,14 +513,14 @@ public:
                        std::to_string(forwardRate * 100) + "%)");
             PrintExpected("messages forwarded", "~500/1000 (~50%, allow 40-60%)");
 
-            // Allow 40-60% range
+            
             bool passed = (forwardCount >= 400 && forwardCount <= 600);
             PrintCheck("Forward rate approximately 50% (in 40-60% range)", passed);
 
             allPassed &= passed;
         }
 
-        // Test 2.5: Low Crowding (80% Forward Rate)
+        
         PrintSubHeader("Test 2.5: Low Crowding Factor 0.2 (~80% Forward)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -567,14 +549,14 @@ public:
                        std::to_string(forwardRate * 100) + "%)");
             PrintExpected("messages forwarded", "~800/1000 (~80%, allow 70-90%)");
 
-            // Allow 70-90% range
+            
             bool passed = (forwardCount >= 700 && forwardCount <= 900);
             PrintCheck("Forward rate approximately 80% (in 70-90% range)", passed);
 
             allPassed &= passed;
         }
 
-        // Test 2.6: Probability Ordering Verification
+        
         PrintSubHeader("Test 2.6: Probability Ordering (Low < Med < High Crowding)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -616,9 +598,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 3: Configurable Crowding Threshold Parameters
-// ============================================================================
+
+
+
 
 class Subtask3Test
 {
@@ -629,7 +611,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 3.1: Default Proximity Threshold
+        
         PrintSubHeader("Test 3.1: Default Proximity Threshold");
         {
             PrintInit("Creating new BleForwardingLogic with default parameters...");
@@ -646,7 +628,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.2: Set Proximity Threshold via Setter
+        
         PrintSubHeader("Test 3.2: Set Proximity Threshold via Setter Method");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -665,7 +647,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.3: Set Proximity Threshold via NS-3 Attribute System
+        
         PrintSubHeader("Test 3.3: Set Proximity Threshold via NS-3 Attribute System");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -685,7 +667,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.4: Zero Threshold
+        
         PrintSubHeader("Test 3.4: Zero Proximity Threshold (Edge Case)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -704,7 +686,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.5: Large Threshold
+        
         PrintSubHeader("Test 3.5: Large Proximity Threshold");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -723,7 +705,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.6: Multiple Updates
+        
         PrintSubHeader("Test 3.6: Multiple Threshold Updates");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -749,7 +731,7 @@ public:
             allPassed &= allUpdatesCorrect;
         }
 
-        // Test 3.7: TypeId Registration
+        
         PrintSubHeader("Test 3.7: TypeId Registration");
         {
             TypeId tid = BleForwardingLogic::GetTypeId();
@@ -765,22 +747,22 @@ public:
             allPassed &= nameOk;
         }
 
-        // Test 3.8: RSSI Threshold Constants Verification
+        
         PrintSubHeader("Test 3.8: RSSI Threshold Constants Verification");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             PrintInit("Verifying RSSI range constants (-90 to -40 dBm)...");
 
-            // Test that -90 gives crowding 0.0
+            
             std::vector<int8_t> minRssi = {-90};
             double crowdingMin = logic->CalculateCrowdingFactor(minRssi);
 
-            // Test that -40 gives crowding 1.0
+            
             std::vector<int8_t> maxRssi = {-40};
             double crowdingMax = logic->CalculateCrowdingFactor(maxRssi);
 
-            // Test midpoint -65 gives crowding 0.5
+            
             std::vector<int8_t> midRssi = {-65};
             double crowdingMid = logic->CalculateCrowdingFactor(midRssi);
 
@@ -807,9 +789,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 4: Forwarding Probability vs Crowding Factor Relationship
-// ============================================================================
+
+
+
 
 class Subtask4Test
 {
@@ -820,7 +802,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 4.1: Linear Relationship Verification
+        
         PrintSubHeader("Test 4.1: Linear Inverse Relationship P(forward) = 1 - crowding");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -849,7 +831,7 @@ public:
 
                 double expectedRate = 1.0 - cf;
                 double actualRate = forwards / 10000.0;
-                double tolerance = 0.05; // 5% tolerance
+                double tolerance = 0.05; 
 
                 bool inRange = (std::abs(actualRate - expectedRate) <= tolerance);
                 if (!inRange) allInRange = false;
@@ -867,7 +849,7 @@ public:
             allPassed &= allInRange;
         }
 
-        // Test 4.2: Monotonic Decrease
+        
         PrintSubHeader("Test 4.2: Monotonic Decrease in Forward Rate");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -879,7 +861,7 @@ public:
 
             PrintInit("Verifying forward rate decreases as crowding increases...");
 
-            uint32_t prevForwards = 10001; // Higher than max possible
+            uint32_t prevForwards = 10001; 
             bool monotonic = true;
 
             for (double cf = 0.0; cf <= 1.0; cf += 0.1)
@@ -907,25 +889,25 @@ public:
             allPassed &= monotonic;
         }
 
-        // Test 4.3: Deterministic Test with Known Random Values
+        
         PrintSubHeader("Test 4.3: Deterministic Behavior with Known Random Values");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
-            // Create a random stream that always returns low values
+            
             Ptr<UniformRandomVariable> lowRandom = CreateObject<UniformRandomVariable>();
             lowRandom->SetAttribute("Min", DoubleValue(0.0));
-            lowRandom->SetAttribute("Max", DoubleValue(0.05)); // Always 0.0-0.05
+            lowRandom->SetAttribute("Max", DoubleValue(0.05)); 
             logic->SetRandomStream(lowRandom);
 
             PrintInit("Using low random values (0.0-0.05)...");
             PrintState("With random < 0.05, should forward if probability > 0.05");
 
-            // Should forward for crowding <= 0.95 (probability >= 0.05)
-            bool forward90 = logic->ShouldForwardCrowding(0.9);  // prob = 0.1 > 0.05
-            bool forward95 = logic->ShouldForwardCrowding(0.95); // prob = 0.05, edge case
+            
+            bool forward90 = logic->ShouldForwardCrowding(0.9);  
+            bool forward95 = logic->ShouldForwardCrowding(0.95); 
 
-            // Multiple tests for 0.95 case
+            
             uint32_t forwardCount95 = 0;
             for (int i = 0; i < 100; i++) {
                 if (logic->ShouldForwardCrowding(0.95)) forwardCount95++;
@@ -941,12 +923,12 @@ public:
             allPassed &= forward90;
         }
 
-        // Test 4.4: Boundary Behavior
+        
         PrintSubHeader("Test 4.4: Boundary Behavior at Extreme Values");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
-            // High random stream
+            
             Ptr<UniformRandomVariable> highRandom = CreateObject<UniformRandomVariable>();
             highRandom->SetAttribute("Min", DoubleValue(0.99));
             highRandom->SetAttribute("Max", DoubleValue(1.0));
@@ -955,9 +937,9 @@ public:
             PrintInit("Using high random values (0.99-1.0)...");
             PrintState("With random ~1.0, should only forward if probability = 1.0");
 
-            // Only crowding = 0.0 (probability = 1.0) should forward
-            bool forward00 = logic->ShouldForwardCrowding(0.0);  // prob = 1.0
-            bool forward01 = logic->ShouldForwardCrowding(0.01); // prob = 0.99
+            
+            bool forward00 = logic->ShouldForwardCrowding(0.0);  
+            bool forward01 = logic->ShouldForwardCrowding(0.01); 
 
             PrintActual("forward at crowding=0.0 (prob=1.0)", forward00 ? "true" : "false");
             PrintExpected("forward at crowding=0.0", "true");
@@ -975,9 +957,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 5: Validate Congestion Prevention Effectiveness
-// ============================================================================
+
+
+
 
 class Subtask5Test
 {
@@ -988,12 +970,12 @@ public:
 
         bool allPassed = true;
 
-        // Test 5.1: Combined Decision - TTL, Crowding, and GPS
+        
         PrintSubHeader("Test 5.1: Combined Forwarding Decision (All Checks)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
-            // Low random to pass crowding check
+            
             Ptr<UniformRandomVariable> lowRandom = CreateObject<UniformRandomVariable>();
             lowRandom->SetAttribute("Min", DoubleValue(0.0));
             lowRandom->SetAttribute("Max", DoubleValue(0.01));
@@ -1001,12 +983,12 @@ public:
 
             PrintInit("Testing ShouldForward with all checks enabled...");
 
-            // Valid message: TTL > 0, far GPS, low crowding
+            
             BleDiscoveryHeaderWrapper validHeader;
             validHeader.SetSenderId(100);
             validHeader.SetTtl(10);
             validHeader.AddToPath(100);
-            validHeader.SetGpsLocation(Vector(100.0, 100.0, 0.0)); // Far from origin
+            validHeader.SetGpsLocation(Vector(100.0, 100.0, 0.0)); 
 
             Vector currentLoc(0.0, 0.0, 0.0);
 
@@ -1024,7 +1006,7 @@ public:
             allPassed &= shouldForward;
         }
 
-        // Test 5.2: TTL = 0 Rejection
+        
         PrintSubHeader("Test 5.2: TTL = 0 Rejection (Expired Message)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1036,7 +1018,7 @@ public:
 
             BleDiscoveryHeaderWrapper expiredHeader;
             expiredHeader.SetSenderId(200);
-            expiredHeader.SetTtl(0); // EXPIRED
+            expiredHeader.SetTtl(0); 
             expiredHeader.AddToPath(200);
             expiredHeader.SetGpsLocation(Vector(100.0, 100.0, 0.0));
 
@@ -1056,7 +1038,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 5.3: GPS Proximity Rejection
+        
         PrintSubHeader("Test 5.3: GPS Proximity Rejection (Sender Too Close)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1070,7 +1052,7 @@ public:
             closeHeader.SetSenderId(300);
             closeHeader.SetTtl(10);
             closeHeader.AddToPath(300);
-            closeHeader.SetGpsLocation(Vector(5.0, 0.0, 0.0)); // Only 5m away
+            closeHeader.SetGpsLocation(Vector(5.0, 0.0, 0.0)); 
 
             Vector currentLoc(0.0, 0.0, 0.0);
 
@@ -1088,7 +1070,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 5.4: High Crowding Message Load Reduction
+        
         PrintSubHeader("Test 5.4: High Crowding Reduces Message Load");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1106,14 +1088,14 @@ public:
 
             Vector currentLoc(0.0, 0.0, 0.0);
 
-            // Process messages with low crowding (0.2)
+            
             for (uint32_t i = 0; i < 1000; ++i)
             {
                 BleDiscoveryHeaderWrapper header;
                 header.SetSenderId(i);
                 header.SetTtl(10);
                 header.AddToPath(i);
-                header.SetGpsLocation(Vector(100.0 + i, 0.0, 0.0)); // All far away
+                header.SetGpsLocation(Vector(100.0 + i, 0.0, 0.0)); 
 
                 if (logic->ShouldForward(header, currentLoc, 0.2, 10.0))
                 {
@@ -1121,7 +1103,7 @@ public:
                 }
             }
 
-            // Process messages with high crowding (0.8)
+            
             for (uint32_t i = 0; i < 1000; ++i)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -1158,7 +1140,7 @@ public:
             allPassed &= loadReduced && significantReduction;
         }
 
-        // Test 5.5: Congestion Scenario Simulation
+        
         PrintSubHeader("Test 5.5: Congestion Scenario Simulation");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1170,7 +1152,7 @@ public:
 
             PrintInit("Simulating network congestion scenario...");
 
-            // Simulate RSSI measurements indicating different density scenarios
+            
             std::vector<int8_t> lowDensityRssi = {-85, -88, -90, -82, -87};
             std::vector<int8_t> medDensityRssi = {-60, -65, -70, -55, -62};
             std::vector<int8_t> highDensityRssi = {-42, -45, -40, -38, -44};
@@ -1186,7 +1168,7 @@ public:
             PrintState("High density RSSI " + RssiVectorToString(highDensityRssi) +
                       " -> crowding=" + std::to_string(crowdingHigh));
 
-            // Simulate message forwarding for each scenario
+            
             uint32_t forwardsLow = 0, forwardsMed = 0, forwardsHigh = 0;
             Vector currentLoc(0.0, 0.0, 0.0);
 
@@ -1221,7 +1203,7 @@ public:
             allPassed &= orderCorrect;
         }
 
-        // Test 5.6: Message Priority Combined with Crowding
+        
         PrintSubHeader("Test 5.6: Priority Calculation Verification");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1257,9 +1239,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 6: Logging for Forwarding Decisions
-// ============================================================================
+
+
+
 
 class Subtask6Test
 {
@@ -1270,15 +1252,15 @@ public:
 
         bool allPassed = true;
 
-        // Test 6.1: NS_LOG Component Definition
+        
         PrintSubHeader("Test 6.1: NS_LOG Component Verification");
         {
             PrintInit("Verifying NS_LOG_COMPONENT_DEFINE for BleForwardingLogic...");
             PrintState("The log component 'BleForwardingLogic' should be defined");
             PrintState("Enable with: NS_LOG=\"BleForwardingLogic=level_debug\"");
 
-            // We can't directly verify logging output in this test, but we can verify
-            // the logic module creates objects and functions work
+            
+            
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
             bool created = (logic != nullptr);
 
@@ -1296,7 +1278,7 @@ public:
             allPassed &= created;
         }
 
-        // Test 6.2: Decision Logging Verification
+        
         PrintSubHeader("Test 6.2: Decision Points Have Logging");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1308,7 +1290,7 @@ public:
 
             PrintInit("Executing all decision points (logging occurs internally)...");
 
-            // Call each logged function
+            
             std::vector<int8_t> rssi = {-65, -70, -60};
             double crowding = logic->CalculateCrowdingFactor(rssi);
             PrintState("1. CalculateCrowdingFactor called -> crowding=" + std::to_string(crowding));
@@ -1342,7 +1324,7 @@ public:
             allPassed &= true;
         }
 
-        // Test 6.3: Log Information Completeness
+        
         PrintSubHeader("Test 6.3: Log Information Completeness");
         {
             PrintInit("Verifying logged information fields...");
@@ -1361,7 +1343,7 @@ public:
             allPassed &= true;
         }
 
-        // Test 6.4: Simulated Log Output Format
+        
         PrintSubHeader("Test 6.4: Simulated Log Output Format");
         {
             PrintInit("Demonstrating expected log output format...");
@@ -1384,7 +1366,7 @@ public:
             allPassed &= true;
         }
 
-        // Test 6.5: Statistics Tracking
+        
         PrintSubHeader("Test 6.5: Decision Statistics Tracking");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1410,7 +1392,7 @@ public:
                 header.AddToPath(i);
                 header.SetGpsLocation(Vector(50.0 + i, 0.0, 0.0));
 
-                // Use variable crowding
+                
                 double crowding = (i % 10) / 10.0;
 
                 if (logic->ShouldForward(header, currentLoc, crowding, 10.0))
@@ -1439,9 +1421,9 @@ public:
     }
 };
 
-// ============================================================================
-// MAIN TEST RUNNER
-// ============================================================================
+
+
+
 
 void PrintFinalResults ()
 {
@@ -1507,7 +1489,7 @@ int main (int argc, char *argv[])
     std::cout << "  5. Validate congestion prevention effectiveness\n";
     std::cout << "  6. Add logging for forwarding decisions\n";
 
-    // Run all subtask tests
+    
     Subtask1Test::Run();
     Subtask2Test::Run();
     Subtask3Test::Run();
@@ -1515,7 +1497,7 @@ int main (int argc, char *argv[])
     Subtask5Test::Run();
     Subtask6Test::Run();
 
-    // Print final summary
+    
     PrintFinalResults();
 
     Simulator::Destroy();

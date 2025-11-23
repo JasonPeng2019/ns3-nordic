@@ -1,7 +1,7 @@
 /**
  * @file ble-gps-cache-c-test.c
  * @brief Standalone C tests for GPS caching functionality
- * @author Benjamin Huh
+ * @author jason peng
  * @date 2025-11-21
  *
  * Pure C test suite for GPS location caching mechanism
@@ -13,7 +13,7 @@
 #include <string.h>
 #include <assert.h>
 
-/* Test counter */
+
 static int tests_passed = 0;
 static int tests_failed = 0;
 
@@ -27,7 +27,7 @@ static int tests_failed = 0;
         } \
     } while(0)
 
-/* ===== Test: GPS Cache TTL ===== */
+
 
 void test_gps_cache_ttl_disabled(void)
 {
@@ -36,19 +36,19 @@ void test_gps_cache_ttl_disabled(void)
     ble_mesh_node_t node;
     ble_mesh_node_init(&node, 1);
 
-    // Default: TTL is 0 (disabled, cache never expires)
+    
     TEST_ASSERT(node.gps_cache_ttl == 0, "Initial TTL should be 0");
 
-    // Set GPS at cycle 0
+    
     ble_mesh_node_set_gps(&node, 10.0, 20.0, 5.0);
     TEST_ASSERT(node.gps_last_update_cycle == 0, "GPS set at cycle 0");
 
-    // Advance many cycles
+    
     for (int i = 0; i < 100; i++) {
         ble_mesh_node_advance_cycle(&node);
     }
 
-    // Cache should still be valid (TTL=0 means no expiration)
+    
     bool valid = ble_mesh_node_is_gps_cache_valid(&node);
     TEST_ASSERT(valid == true, "Cache should be valid with TTL=0");
 
@@ -63,14 +63,14 @@ void test_gps_cache_ttl_enabled(void)
     ble_mesh_node_t node;
     ble_mesh_node_init(&node, 2);
 
-    // Set TTL to 10 cycles
+    
     ble_mesh_node_set_gps_cache_ttl(&node, 10);
     TEST_ASSERT(node.gps_cache_ttl == 10, "TTL should be 10");
 
-    // Set GPS at cycle 0
+    
     ble_mesh_node_set_gps(&node, 15.0, 25.0, 3.0);
 
-    // Advance 5 cycles - cache should be valid
+    
     for (int i = 0; i < 5; i++) {
         ble_mesh_node_advance_cycle(&node);
     }
@@ -78,7 +78,7 @@ void test_gps_cache_ttl_enabled(void)
     bool valid = ble_mesh_node_is_gps_cache_valid(&node);
     TEST_ASSERT(valid == true, "Cache should be valid after 5 cycles");
 
-    // Advance 5 more cycles (total 10) - cache should expire
+    
     for (int i = 0; i < 5; i++) {
         ble_mesh_node_advance_cycle(&node);
     }
@@ -97,29 +97,29 @@ void test_gps_cache_refresh(void)
     ble_mesh_node_t node;
     ble_mesh_node_init(&node, 3);
 
-    // Set TTL to 5 cycles
+    
     ble_mesh_node_set_gps_cache_ttl(&node, 5);
 
-    // Set GPS at cycle 0
+    
     ble_mesh_node_set_gps(&node, 10.0, 20.0, 5.0);
 
-    // Advance 3 cycles
+    
     for (int i = 0; i < 3; i++) {
         ble_mesh_node_advance_cycle(&node);
     }
 
     TEST_ASSERT(ble_mesh_node_is_gps_cache_valid(&node) == true, "Cache valid at cycle 3");
 
-    // Refresh GPS at cycle 3
+    
     ble_mesh_node_set_gps(&node, 11.0, 21.0, 6.0);
     TEST_ASSERT(node.gps_last_update_cycle == 3, "Update cycle should be 3");
 
-    // Advance 4 more cycles (total 7)
+    
     for (int i = 0; i < 4; i++) {
         ble_mesh_node_advance_cycle(&node);
     }
 
-    // Cache should still be valid (refreshed at cycle 3, now at cycle 7, age=4 < 5)
+    
     bool valid = ble_mesh_node_is_gps_cache_valid(&node);
     TEST_ASSERT(valid == true, "Cache should be valid after refresh");
 
@@ -134,27 +134,27 @@ void test_gps_cache_invalidation(void)
     ble_mesh_node_t node;
     ble_mesh_node_init(&node, 4);
 
-    // Set TTL to 20 cycles
+    
     ble_mesh_node_set_gps_cache_ttl(&node, 20);
 
-    // Set GPS at cycle 0
+    
     ble_mesh_node_set_gps(&node, 5.0, 10.0, 2.0);
 
-    // Advance 5 cycles
+    
     for (int i = 0; i < 5; i++) {
         ble_mesh_node_advance_cycle(&node);
     }
 
     TEST_ASSERT(ble_mesh_node_is_gps_cache_valid(&node) == true, "Cache should be valid");
 
-    // Manually invalidate cache
+    
     ble_mesh_node_invalidate_gps_cache(&node);
 
-    // Cache should now be invalid
+    
     bool valid = ble_mesh_node_is_gps_cache_valid(&node);
     TEST_ASSERT(valid == false, "Cache should be invalid after invalidation");
 
-    // GPS should be marked unavailable after invalidation
+    
     TEST_ASSERT(node.gps_available == false, "GPS should be unavailable after invalidation");
 }
 
@@ -165,14 +165,14 @@ void test_gps_unavailable_makes_cache_invalid(void)
     ble_mesh_node_t node;
     ble_mesh_node_init(&node, 5);
 
-    // Set GPS
+    
     ble_mesh_node_set_gps(&node, 10.0, 20.0, 5.0);
     TEST_ASSERT(ble_mesh_node_is_gps_cache_valid(&node) == true, "Cache should be valid");
 
-    // Clear GPS (mark as unavailable)
+    
     ble_mesh_node_clear_gps(&node);
 
-    // Cache should be invalid when GPS is unavailable
+    
     bool valid = ble_mesh_node_is_gps_cache_valid(&node);
     TEST_ASSERT(valid == false, "Cache should be invalid when GPS unavailable");
 }
@@ -184,13 +184,13 @@ void test_gps_cache_boundary_conditions(void)
     ble_mesh_node_t node;
     ble_mesh_node_init(&node, 6);
 
-    // Set TTL to 1 cycle (edge case)
+    
     ble_mesh_node_set_gps_cache_ttl(&node, 1);
     ble_mesh_node_set_gps(&node, 1.0, 2.0, 3.0);
 
     TEST_ASSERT(ble_mesh_node_is_gps_cache_valid(&node) == true, "Cache valid at cycle 0");
 
-    // Advance 1 cycle - should expire
+    
     ble_mesh_node_advance_cycle(&node);
 
     bool valid = ble_mesh_node_is_gps_cache_valid(&node);
@@ -204,11 +204,11 @@ void test_gps_age_calculation(void)
     ble_mesh_node_t node;
     ble_mesh_node_init(&node, 7);
 
-    // Set GPS at cycle 0
+    
     ble_mesh_node_set_gps(&node, 10.0, 20.0, 5.0);
     TEST_ASSERT(ble_mesh_node_get_gps_age(&node) == 0, "Age should be 0 initially");
 
-    // Advance cycles and check age
+    
     for (int i = 1; i <= 50; i++) {
         ble_mesh_node_advance_cycle(&node);
         uint32_t age = ble_mesh_node_get_gps_age(&node);
@@ -225,7 +225,7 @@ void test_multiple_gps_updates(void)
 
     ble_mesh_node_set_gps_cache_ttl(&node, 10);
 
-    // Update GPS multiple times
+    
     ble_mesh_node_set_gps(&node, 1.0, 2.0, 3.0);
     TEST_ASSERT(node.gps_last_update_cycle == 0, "First update at cycle 0");
 
@@ -237,12 +237,12 @@ void test_multiple_gps_updates(void)
     ble_mesh_node_set_gps(&node, 3.0, 4.0, 5.0);
     TEST_ASSERT(node.gps_last_update_cycle == 2, "Third update at cycle 2");
 
-    // Age should be relative to most recent update
+    
     uint32_t age = ble_mesh_node_get_gps_age(&node);
     TEST_ASSERT(age == 0, "Age should be 0 after immediate update");
 }
 
-/* ===== Main Test Runner ===== */
+
 
 int main(void)
 {
@@ -250,7 +250,7 @@ int main(void)
     printf("BLE GPS Cache C Test Suite\n");
     printf("========================================\n\n");
 
-    /* Run all tests */
+    
     test_gps_cache_ttl_disabled();
     test_gps_cache_ttl_enabled();
     test_gps_cache_refresh();
@@ -260,7 +260,7 @@ int main(void)
     test_gps_age_calculation();
     test_multiple_gps_updates();
 
-    /* Print results */
+    
     printf("\n========================================\n");
     printf("Test Results:\n");
     printf("  PASSED: %d\n", tests_passed);

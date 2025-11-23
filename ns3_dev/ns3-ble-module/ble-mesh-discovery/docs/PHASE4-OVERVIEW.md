@@ -429,10 +429,10 @@ Some Phase 4 functionality already has **partial implementation** from earlier t
 
 | Component | Location | Status |
 |-----------|----------|--------|
-| Election packet structure | `ble_discovery_packet.h` (Task 3) | ✅ Exists |
-| PDSF calculation | `ble_election_calculate_pdsf()` (Task 3) | ✅ Exists |
-| Score calculation | `ble_election_calculate_candidacy_score()` (Task 17) | ✅ Exists |
-| Hash generation | `ble_election_generate_hash()` (Task 3) | ✅ Exists |
+| Election packet structure | `ble_discovery_packet.h` (Task 3) |  Exists |
+| PDSF calculation | `ble_election_calculate_pdsf()` (Task 3) |  Exists |
+| Score calculation | `ble_election_calculate_candidacy_score()` (Task 17) |  Exists |
+| Hash generation | `ble_election_generate_hash()` (Task 3) |  Exists |
 
 ### What's Missing
 

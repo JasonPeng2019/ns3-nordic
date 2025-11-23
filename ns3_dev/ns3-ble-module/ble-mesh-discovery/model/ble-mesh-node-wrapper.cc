@@ -1,12 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * Author: Benjamin Huh <buh07@github>
- *
- * C++ Wrapper Implementation - Thin layer over C node core
- */
-
 #include "ble-mesh-node-wrapper.h"
 #include "ns3/log.h"
 #include "ns3/boolean.h"
@@ -41,7 +32,7 @@ BleMeshNodeWrapper::BleMeshNodeWrapper ()
   : m_gpsEnabled (true)
 {
   NS_LOG_FUNCTION (this);
-  // Initialize with invalid ID (will be set by Initialize())
+  
   ble_mesh_node_init (&m_node, BLE_MESH_INVALID_NODE_ID);
 }
 
@@ -57,7 +48,7 @@ BleMeshNodeWrapper::Initialize (uint32_t nodeId)
   ble_mesh_node_init (&m_node, nodeId);
 }
 
-// ===== GPS Management =====
+
 
 void
 BleMeshNodeWrapper::SetGpsLocation (Vector position)
@@ -122,7 +113,7 @@ BleMeshNodeWrapper::UpdateGpsFromMobilityModel (Ptr<MobilityModel> mobilityModel
   return true;
 }
 
-// ===== State Management =====
+
 
 ble_node_state_t
 BleMeshNodeWrapper::GetState (void) const
@@ -148,7 +139,7 @@ BleMeshNodeWrapper::SetState (ble_node_state_t newState)
                    << ble_mesh_node_state_name (oldState) << " -> "
                    << ble_mesh_node_state_name (newState));
 
-      // Fire traced callback
+      
       m_stateChangeTrace (m_node.node_id, oldState, newState);
     }
 
@@ -167,7 +158,7 @@ BleMeshNodeWrapper::GetCurrentStateName (void) const
   return GetStateName (m_node.state);
 }
 
-// ===== Cycle Management =====
+
 
 void
 BleMeshNodeWrapper::AdvanceCycle (void)
@@ -181,7 +172,7 @@ BleMeshNodeWrapper::GetCurrentCycle (void) const
   return m_node.current_cycle;
 }
 
-// ===== Neighbor Management =====
+
 
 bool
 BleMeshNodeWrapper::AddNeighbor (uint32_t neighborId, int8_t rssi, uint8_t hopCount)
@@ -224,7 +215,7 @@ BleMeshNodeWrapper::PruneStaleNeighbors (uint32_t maxAge)
   return ble_mesh_node_prune_stale_neighbors (&m_node, maxAge);
 }
 
-// ===== Election & Clustering =====
+
 
 double
 BleMeshNodeWrapper::CalculateCandidacyScore (double noiseLevel)
@@ -313,7 +304,7 @@ BleMeshNodeWrapper::GetClusterClass (void) const
   return m_node.cluster_class;
 }
 
-// ===== Statistics =====
+
 
 void
 BleMeshNodeWrapper::UpdateStatistics (void)
@@ -375,7 +366,7 @@ BleMeshNodeWrapper::IncrementDropped (void)
   ble_mesh_node_inc_dropped (&m_node);
 }
 
-// ===== Identity =====
+
 
 uint32_t
 BleMeshNodeWrapper::GetNodeId (void) const
@@ -383,4 +374,4 @@ BleMeshNodeWrapper::GetNodeId (void) const
   return m_node.node_id;
 }
 
-} // namespace ns3
+} 

@@ -11,7 +11,7 @@
  * - Slots 1-3: Forwarding received messages
  *
  * Copyright (c) 2025
- * Author: Benjamin Huh <buh07@github>
+ * Author: jason peng <jason.p>
  */
 
 #ifndef BLE_DISCOVERY_CYCLE_H
@@ -89,7 +89,7 @@ typedef struct {
     uint32_t slot_duration_ms;       /**< Duration of each slot in milliseconds */
     uint32_t cycle_count;            /**< Number of completed cycles */
 
-    /* Callbacks */
+    
     ble_slot_callback_t slot_callbacks[BLE_DISCOVERY_NUM_SLOTS];  /**< Callbacks for each slot */
     ble_cycle_complete_callback_t cycle_complete_callback;        /**< Callback when cycle completes */
     void *user_data;                 /**< User-provided context for callbacks */
@@ -255,4 +255,4 @@ const char* ble_discovery_cycle_slot_name(uint8_t slot_number);
 }
 #endif
 
-#endif /* BLE_DISCOVERY_CYCLE_H */
+#endif 

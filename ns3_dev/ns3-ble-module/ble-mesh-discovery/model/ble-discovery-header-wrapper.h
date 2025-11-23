@@ -1,22 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * Author: Benjamin Huh <buh07@github>
- *
- * C++ Wrapper for Pure C Protocol Implementation
- * This wraps the C protocol core to work with NS-3's C++ framework
- */
-
 #ifndef BLE_DISCOVERY_HEADER_WRAPPER_H
 #define BLE_DISCOVERY_HEADER_WRAPPER_H
 
@@ -84,7 +65,7 @@ public:
    */
   virtual uint32_t Deserialize (Buffer::Iterator start);
 
-  // ===== C++ Convenience Methods (delegates to C core) =====
+  
 
   /**
    * \brief Check if this is an election announcement
@@ -178,7 +159,7 @@ public:
    */
   bool IsGpsAvailable (void) const;
 
-  // ===== Election-specific methods =====
+  
 
   /**
    * \brief Convert to election message
@@ -252,7 +233,7 @@ public:
    */
   uint32_t GetHash (void) const;
 
-  // ===== Direct access to C structures (for advanced use) =====
+  
 
   /**
    * \brief Get reference to underlying C packet structure
@@ -272,6 +253,6 @@ private:
   ble_election_packet_t m_election;   //!< C election packet structure
 };
 
-} // namespace ns3
+} 
 
-#endif /* BLE_DISCOVERY_HEADER_WRAPPER_H */
+#endif 

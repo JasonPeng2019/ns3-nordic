@@ -134,6 +134,6 @@ private:
     Ptr<RandomVariableStream> m_rng;  /**< NS-3 random number generator */
 };
 
-} // namespace ns3
+} 
 
-#endif /* BLE_BROADCAST_TIMING_WRAPPER_H */
+#endif 

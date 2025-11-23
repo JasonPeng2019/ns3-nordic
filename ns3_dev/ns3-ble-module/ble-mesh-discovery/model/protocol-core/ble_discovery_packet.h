@@ -1,7 +1,7 @@
 /**
  * @file ble_discovery_packet.h
  * @brief Pure C implementation of BLE Discovery Protocol packet format
- * @author Benjamin Huh
+ * @author jason peng
  * @date 2025-11-20
  *
  * This is the core protocol implementation in C for portability to embedded systems.
@@ -21,15 +21,15 @@ extern "C" {
 #include <stdbool.h>
 #include <string.h>
 
-/* ===== Constants ===== */
 
-//JASON - change TTL and path length as needed
+
+
 #define BLE_DISCOVERY_MAX_PATH_LENGTH 50    /**< Maximum nodes in path */
 #define BLE_DISCOVERY_DEFAULT_TTL 10        /**< Default Time To Live */
 #define BLE_DISCOVERY_MAX_CLUSTER_SIZE 150  /**< Maximum devices per cluster */
 #define BLE_PDSF_MAX_HOPS BLE_DISCOVERY_MAX_PATH_LENGTH /**< Maximum hops tracked for PDSF */
 
-/* ===== Score Calculation Constants ===== */
+
 
 /**
  * @brief Weights for clusterhead score calculation
@@ -43,7 +43,7 @@ typedef struct {
 
 extern const ble_score_weights_t BLE_DEFAULT_SCORE_WEIGHTS;
 
-/* ===== Message Types ===== */
+
 
 /**
  * @brief Message type enumeration
@@ -53,7 +53,7 @@ typedef enum {
     BLE_MSG_ELECTION_ANNOUNCEMENT = 1 /**< Clusterhead election announcement */
 } ble_message_type_t;
 
-/* ===== GPS Location Structure ===== */
+
 
 /**
  * @brief GPS coordinates structure
@@ -64,7 +64,7 @@ typedef struct {
     double z;  /**< Z coordinate (altitude) */
 } ble_gps_location_t;
 
-/* ===== Discovery Packet Structure ===== */
+
 
 /**
  * @brief BLE Discovery packet (common fields)
@@ -75,16 +75,16 @@ typedef struct {
     uint32_t sender_id;               /**< Unique identifier of sender */
     uint8_t ttl;                      /**< Time To Live (hops remaining) */
 
-    /* Path So Far (PSF) */
+    
     uint16_t path_length;             /**< Number of nodes in path */
     uint32_t path[BLE_DISCOVERY_MAX_PATH_LENGTH]; /**< Array of node IDs */
 
-    /* GPS location */
+    
     bool gps_available;               /**< GPS availability flag */
     ble_gps_location_t gps_location;  /**< GPS coordinates (if available) */
 } ble_discovery_packet_t;
 
-/* ===== Election Announcement Extension ===== */
+
 
 /**
  * @brief Tracks direct connection counts per hop for PDSF calculation
@@ -121,7 +121,7 @@ typedef struct {
     ble_election_data_t election; /**< Election-specific fields */
 } ble_election_packet_t;
 
-/* ===== Function Prototypes ===== */
+
 
 /**
  * @brief Initialize a discovery packet with default values
@@ -279,4 +279,4 @@ uint32_t ble_election_generate_hash(uint32_t node_id);
 }
 #endif
 
-#endif /* BLE_DISCOVERY_PACKET_H */
+#endif 

@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-/* Test counter */
+
 static int test_count = 0;
 static int test_passed = 0;
 
@@ -27,7 +27,7 @@ static int test_passed = 0;
         printf("PASS\n"); \
     } while (0)
 
-/* Test: Initialization */
+
 void test_init(void)
 {
     TEST_START("Initialization");
@@ -46,7 +46,7 @@ void test_init(void)
     TEST_PASS();
 }
 
-/* Test: Slot advancement */
+
 void test_advance_slot(void)
 {
     TEST_START("Slot advancement");
@@ -59,7 +59,7 @@ void test_advance_slot(void)
 
     assert(state.current_slot == (prev_slot + 1) % 5);
 
-    /* Advance through all slots */
+    
     for (int i = 0; i < 10; i++) {
         ble_broadcast_timing_advance_slot(&state);
     }
@@ -69,7 +69,7 @@ void test_advance_slot(void)
     TEST_PASS();
 }
 
-/* Test: Listen ratio distribution */
+
 void test_listen_ratio(void)
 {
     TEST_START("Listen ratio distribution");
@@ -78,7 +78,7 @@ void test_listen_ratio(void)
     ble_broadcast_timing_init(&state, BLE_BROADCAST_SCHEDULE_STOCHASTIC, 10, 100, 0.8);
     ble_broadcast_timing_set_seed(&state, 12345);
 
-    /* Run many slots and check distribution */
+    
     int num_trials = 1000;
     int listen_count = 0;
     int broadcast_count = 0;
@@ -94,13 +94,13 @@ void test_listen_ratio(void)
 
     double actual_listen_ratio = (double)listen_count / (double)num_trials;
 
-    /* Should be approximately 0.8 (within 10% tolerance) */
+    
     assert(actual_listen_ratio > 0.7 && actual_listen_ratio < 0.9);
 
     TEST_PASS();
 }
 
-/* Test: Broadcast success tracking */
+
 void test_success_tracking(void)
 {
     TEST_START("Success tracking");
@@ -124,7 +124,7 @@ void test_success_tracking(void)
     TEST_PASS();
 }
 
-/* Test: Broadcast failure and retry logic */
+
 void test_retry_logic(void)
 {
     TEST_START("Retry logic");
@@ -134,26 +134,26 @@ void test_retry_logic(void)
 
     assert(state.retry_count == 0);
 
-    /* First failure - should retry */
+    
     bool should_retry = ble_broadcast_timing_record_failure(&state);
     assert(should_retry == true);
     assert(state.retry_count == 1);
     assert(state.failed_broadcasts == 1);
 
-    /* Second failure - should retry */
+    
     should_retry = ble_broadcast_timing_record_failure(&state);
     assert(should_retry == true);
     assert(state.retry_count == 2);
 
-    /* Third failure - should retry */
+    
     should_retry = ble_broadcast_timing_record_failure(&state);
-    assert(should_retry == false);  /* Max retries reached */
-    assert(state.retry_count == 0);  /* Reset after max */
+    assert(should_retry == false);  
+    assert(state.retry_count == 0);  
 
     TEST_PASS();
 }
 
-/* Test: Success rate calculation */
+
 void test_success_rate(void)
 {
     TEST_START("Success rate calculation");
@@ -161,7 +161,7 @@ void test_success_rate(void)
     ble_broadcast_timing_t state;
     ble_broadcast_timing_init(&state, BLE_BROADCAST_SCHEDULE_NOISY, 10, 100, 0.5);
 
-    /* 7 successes, 3 failures = 70% success rate */
+    
     for (int i = 0; i < 7; i++) {
         ble_broadcast_timing_record_success(&state);
     }
@@ -175,7 +175,7 @@ void test_success_rate(void)
     TEST_PASS();
 }
 
-/* Test: Actual listen ratio calculation */
+
 void test_actual_listen_ratio(void)
 {
     TEST_START("Actual listen ratio");
@@ -184,7 +184,7 @@ void test_actual_listen_ratio(void)
     ble_broadcast_timing_init(&state, BLE_BROADCAST_SCHEDULE_STOCHASTIC, 10, 100, 0.8);
     ble_broadcast_timing_set_seed(&state, 42);
 
-    /* Manually set some counts */
+    
     state.total_listen_slots = 80;
     state.total_broadcast_slots = 20;
 
@@ -194,24 +194,24 @@ void test_actual_listen_ratio(void)
     TEST_PASS();
 }
 
-/* Test: Random number generator */
+
 void test_rng(void)
 {
     TEST_START("Random number generator");
 
     uint32_t seed = 12345;
 
-    /* Generate some random numbers */
+    
     uint32_t r1 = ble_broadcast_timing_rand(&seed);
     uint32_t r2 = ble_broadcast_timing_rand(&seed);
     uint32_t r3 = ble_broadcast_timing_rand(&seed);
 
-    /* Should be different */
+    
     assert(r1 != r2);
     assert(r2 != r3);
     assert(r1 != r3);
 
-    /* Test double generation */
+    
     seed = 12345;
     double d1 = ble_broadcast_timing_rand_double(&seed);
     double d2 = ble_broadcast_timing_rand_double(&seed);
@@ -223,7 +223,7 @@ void test_rng(void)
     TEST_PASS();
 }
 
-/* Test: Noisy broadcast schedule */
+
 void test_noisy_broadcast(void)
 {
     TEST_START("Noisy broadcast schedule");
@@ -232,20 +232,20 @@ void test_noisy_broadcast(void)
     ble_broadcast_timing_init(&state, BLE_BROADCAST_SCHEDULE_NOISY, 10, 50, 0.8);
     ble_broadcast_timing_set_seed(&state, 999);
 
-    /* Advance through several slots */
+    
     int trials = 100;
     for (int i = 0; i < trials; i++) {
         ble_broadcast_timing_advance_slot(&state);
     }
 
-    /* Check that listen ratio is maintained */
+    
     double actual_ratio = ble_broadcast_timing_get_actual_listen_ratio(&state);
     assert(actual_ratio > 0.7 && actual_ratio < 0.9);
 
     TEST_PASS();
 }
 
-/* Test: Stochastic broadcast timing */
+
 void test_stochastic_timing(void)
 {
     TEST_START("Stochastic broadcast timing");
@@ -254,24 +254,24 @@ void test_stochastic_timing(void)
     ble_broadcast_timing_init(&state, BLE_BROADCAST_SCHEDULE_STOCHASTIC, 10, 100, 0.75);
     ble_broadcast_timing_set_seed(&state, 777);
 
-    /* Test minority broadcasting (25% broadcast, 75% listen) */
+    
     int trials = 200;
     for (int i = 0; i < trials; i++) {
         ble_broadcast_timing_advance_slot(&state);
     }
 
     double actual_ratio = ble_broadcast_timing_get_actual_listen_ratio(&state);
-    assert(actual_ratio > 0.65 && actual_ratio < 0.85);  /* Majority listening */
+    assert(actual_ratio > 0.65 && actual_ratio < 0.85);  
 
     TEST_PASS();
 }
 
-/* Test: Collision avoidance through randomization */
+
 void test_collision_avoidance(void)
 {
     TEST_START("Collision avoidance");
 
-    /* Create two nodes with different seeds */
+    
     ble_broadcast_timing_t node1, node2;
     ble_broadcast_timing_init(&node1, BLE_BROADCAST_SCHEDULE_STOCHASTIC, 10, 100, 0.8);
     ble_broadcast_timing_init(&node2, BLE_BROADCAST_SCHEDULE_STOCHASTIC, 10, 100, 0.8);
@@ -279,7 +279,7 @@ void test_collision_avoidance(void)
     ble_broadcast_timing_set_seed(&node1, 111);
     ble_broadcast_timing_set_seed(&node2, 222);
 
-    /* Count simultaneous broadcasts (collisions) */
+    
     int collisions = 0;
     int trials = 100;
 
@@ -292,14 +292,14 @@ void test_collision_avoidance(void)
         }
     }
 
-    /* With 20% broadcast probability each, collision rate should be ~4% (0.2 * 0.2) */
+    
     double collision_rate = (double)collisions / (double)trials;
-    assert(collision_rate < 0.1);  /* Should be low due to randomization */
+    assert(collision_rate < 0.1);  
 
     TEST_PASS();
 }
 
-/* Test: Reset retry counter */
+
 void test_reset_retry(void)
 {
     TEST_START("Reset retry counter");

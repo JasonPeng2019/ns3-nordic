@@ -17,7 +17,7 @@ Target performance: End-to-end latency in seconds, supporting thousands of nodes
 
 ## Phase 1: Foundation & Setup
 
-### Task 1: Research NS-3 BLE/Bluetooth Capabilities ✅ COMPLETED
+### Task 1: Research NS-3 BLE/Bluetooth Capabilities  COMPLETED
 - [x] Review NS-3 documentation for existing BLE/Bluetooth modules
 - [x] Evaluate if existing modules support required features
 - [x] Determine if custom PHY/MAC layer implementation is needed
@@ -33,7 +33,7 @@ Target performance: End-to-end latency in seconds, supporting thousands of nodes
 - **NO BLE mesh implementations** exist for NS-3
 
 #### Available Third-Party BLE Modules:
-1. **ns3-ble-module by Stijn** (GitLab: https://gitlab.com/Stijng/ns3-ble-module) ⭐ **SELECTED**
+1. **ns3-ble-module by Stijn** (GitLab: https://gitlab.com/Stijng/ns3-ble-module)  **SELECTED**
    - KU Leuven master's thesis (2018)
    - More recent than alternatives (2018 vs 2015)
    - Includes: BlePhy, BleMac, Spectrum Channel integration
@@ -53,19 +53,19 @@ Target performance: End-to-end latency in seconds, supporting thousands of nodes
 
 #### What Must Be Built From Scratch:
 
-**Layer 1 - Physical (PHY):** ⚠️ Partially Available
+**Layer 1 - Physical (PHY):**  Partially Available
 - Use existing BlePhy from Stijn's module as foundation
 - Enhance with BLE 5.0+ features
 - Already integrated with NS-3 Spectrum framework
 - Reference BLEATS for additional PHY features if needed
 
-**Layer 2 - MAC:** ⚠️ Partially Available
+**Layer 2 - MAC:**  Partially Available
 - Use existing BleMac from Stijn's module
 - Extend for mesh advertising mechanisms
 - Add channel hopping and collision avoidance
 - Reference BLEATS BleNetDevice for device integration patterns
 
-**Layer 3 - BLE Mesh Network Layer:** ❌ MUST BUILD COMPLETELY
+**Layer 3 - BLE Mesh Network Layer:**  MUST BUILD COMPLETELY
 - Advertising Bearer (PB-ADV)
 - Network layer with managed flooding
 - TTL control and message relay
@@ -73,7 +73,7 @@ Target performance: End-to-end latency in seconds, supporting thousands of nodes
 - Segmentation/reassembly
 - Foundation models
 
-**Layer 4 - Custom Discovery Protocol:** ❌ YOUR INNOVATION
+**Layer 4 - Custom Discovery Protocol:**  YOUR INNOVATION
 - Discovery protocol from PDF specification
 - Clusterhead election algorithm
 - Routing beyond standard flooding
@@ -154,13 +154,13 @@ Target performance: End-to-end latency in seconds, supporting thousands of nodes
 
 **Estimated Timeline:** 4-6 months for complete implementation
 
-**Feasibility:** ✅ FEASIBLE but CHALLENGING
+**Feasibility:**  FEASIBLE but CHALLENGING
 - Foundation exists (BLE PHY/MAC)
 - Excellent reference implementations available
 - Significant development effort required
 - Complete network stack must be custom-built
 
-### Task 2: Set Up NS-3 Development Environment ✅ COMPLETED
+### Task 2: Set Up NS-3 Development Environment  COMPLETED
 - [x] Install NS-3 (latest stable version or development branch)
 - [x] Create new module: `ns3/src/ble-mesh-discovery/`
 - [x] Set up module directory structure (model/, helper/, examples/, test/)
@@ -210,7 +210,7 @@ Target performance: End-to-end latency in seconds, supporting thousands of nodes
 
 **Ready for Task 3**: Design core BLE discovery message packet structure
 
-### Task 3: Design Core BLE Discovery Message Packet Structure ✅ COMPLETED
+### Task 3: Design Core BLE Discovery Message Packet Structure  COMPLETED
 - [x] Define discovery message fields (ID, TTL, PSF, LHGPS)
 - [x] Design packet format and field sizes
 - [x] Plan for extensibility (election announcement fields)
@@ -254,17 +254,17 @@ Target performance: End-to-end latency in seconds, supporting thousands of nodes
 #### Features Implemented:
 
 **Discovery Fields:**
-- ✅ Message Type (DISCOVERY / ELECTION)
-- ✅ Sender ID (32-bit)
-- ✅ TTL with decrement
-- ✅ Path So Far (variable length, max 50 nodes)
-- ✅ GPS Location (optional, saves 24 bytes when unavailable)
+-  Message Type (DISCOVERY / ELECTION)
+-  Sender ID (32-bit)
+-  TTL with decrement
+-  Path So Far (variable length, max 50 nodes)
+-  GPS Location (optional, saves 24 bytes when unavailable)
 
 **Election Fields:**
-- ✅ Class ID (clusterhead identifier)
-- ✅ PDSF (Predicted Devices So Far) with calculation
-- ✅ Score calculation (connection:noise ratio + distribution)
-- ✅ Hash generation (FNV-1a for FDMA/TDMA)
+-  Class ID (clusterhead identifier)
+-  PDSF (Predicted Devices So Far) with calculation
+-  Score calculation (connection:noise ratio + distribution)
+-  Hash generation (FNV-1a for FDMA/TDMA)
 
 **Key Functions (C Core):**
 ```c
@@ -331,27 +331,27 @@ ble_discovery_serialize(&packet, buffer, sizeof(buffer));
 
 #### Cleanup Performed:
 
-- ❌ Removed `model/ble-discovery-header.{h,cc}` (pure C++ version)
-- ✅ Single source of truth: C core only
-- ✅ No code duplication
-- ✅ Clean architecture maintained
+-  Removed `model/ble-discovery-header.{h,cc}` (pure C++ version)
+-  Single source of truth: C core only
+-  No code duplication
+-  Clean architecture maintained
 
 #### Build & Test Status:
 
-**Compilation:** ✅ **SUCCESSFUL**
+**Compilation:**  **SUCCESSFUL**
 ```bash
 ./waf build
 # Output: 'build' finished successfully (1m51s)
 # Module: ble-mesh-discovery (no Python)
 ```
 
-**Unit Tests:** ✅ **ALL PASSING**
+**Unit Tests:**  **ALL PASSING**
 ```bash
 ./test.py -s ble-discovery-header
 # Result: 1 of 1 tests passed
 ```
 
-**Example Execution:** ✅ **WORKING**
+**Example Execution:**  **WORKING**
 ```bash
 ./build/src/ble-mesh-discovery/examples/ns3-dev-ble-discovery-header-example-debug
 # Successfully demonstrates:
@@ -366,7 +366,7 @@ ble_discovery_serialize(&packet, buffer, sizeof(buffer));
 3. Example file: Updated to use `BleDiscoveryHeaderWrapper` and `SetAsElectionMessage()`
 4. `SetAsElectionMessage()`: Fixed to preserve packet state while setting message type correctly
 
-**Task 3 Status: ✅ COMPLETE AND VERIFIED**
+**Task 3 Status:  COMPLETE AND VERIFIED**
 
 #### Build Status:
 - wscript updated with C and C++ files
@@ -375,7 +375,7 @@ ble_discovery_serialize(&packet, buffer, sizeof(buffer));
 
 **Ready for Task 4**: Implement BleDiscoveryHeader serialization unit tests
 
-### Task 4: Implement Discovery Message Header Class ✅ COMPLETED
+### Task 4: Implement Discovery Message Header Class  COMPLETED
 - [x] Create `BleDiscoveryHeader` class inheriting from `ns3::Header`
 - [x] Implement field getters/setters (ID, TTL, PSF, LHGPS)
 - [x] Implement `Serialize()` and `Deserialize()` methods
@@ -437,7 +437,7 @@ Following the established architecture from Task 3, Task 4 implemented comprehen
 
 #### Build & Test Results:
 
-**Build Status:** ✅ **SUCCESSFUL**
+**Build Status:**  **SUCCESSFUL**
 ```bash
 ./waf build
 # Output: 'build' finished successfully (8m22.713s)
@@ -448,14 +448,14 @@ Following the established architecture from Task 3, Task 4 implemented comprehen
 - `libns3-dev-ble-mesh-discovery-debug.dylib` (main module)
 - `libns3-dev-ble-mesh-discovery-test-debug.dylib` (test library)
 
-**Unit Tests:** ✅ **ALL PASSING**
+**Unit Tests:**  **ALL PASSING**
 ```bash
 ./test.py -s ble-discovery-header
 # Result: PASS: TestSuite ble-discovery-header
 # 1 of 1 tests passed (1 passed, 0 skipped, 0 failed, 0 crashed, 0 valgrind errors)
 ```
 
-**Example Execution:** ✅ **WORKING**
+**Example Execution:**  **WORKING**
 ```bash
 ./waf --run ble-discovery-header-example
 # Successfully demonstrates all 5 usage examples:
@@ -469,34 +469,34 @@ Following the established architecture from Task 3, Task 4 implemented comprehen
 #### Test Coverage Summary:
 
 **Serialization/Deserialization:**
-- ✅ Discovery messages (with/without GPS)
-- ✅ Election messages (full field set)
-- ✅ Round-trip fidelity (all fields preserved)
-- ✅ Size calculations (GPS adds 24 bytes)
-- ✅ Network byte order (big-endian)
-- ✅ Buffer overflow protection
-- ✅ Invalid input handling
+-  Discovery messages (with/without GPS)
+-  Election messages (full field set)
+-  Round-trip fidelity (all fields preserved)
+-  Size calculations (GPS adds 24 bytes)
+-  Network byte order (big-endian)
+-  Buffer overflow protection
+-  Invalid input handling
 
 **Protocol Operations:**
-- ✅ TTL decrement (including edge case: 0→0)
-- ✅ Path tracking (up to 50 nodes)
-- ✅ Loop detection (IsInPath checks)
-- ✅ Path overflow protection
-- ✅ GPS availability flags
-- ✅ Message type conversion (Discovery↔Election)
+-  TTL decrement (including edge case: 0→0)
+-  Path tracking (up to 50 nodes)
+-  Loop detection (IsInPath checks)
+-  Path overflow protection
+-  GPS availability flags
+-  Message type conversion (Discovery↔Election)
 
 **NS-3 Integration:**
-- ✅ Packet serialization (AddHeader/RemoveHeader)
-- ✅ Packet copy constructor preservation
-- ✅ Multiple serialize/deserialize cycles
-- ✅ Large packet handling (2000+ bytes)
-- ✅ TypeId registration
-- ✅ Print method output
+-  Packet serialization (AddHeader/RemoveHeader)
+-  Packet copy constructor preservation
+-  Multiple serialize/deserialize cycles
+-  Large packet handling (2000+ bytes)
+-  TypeId registration
+-  Print method output
 
 **Election Algorithms:**
-- ✅ PDSF calculation (validated with known inputs)
-- ✅ Score calculation (formula verification)
-- ✅ Hash generation (determinism check)
+-  PDSF calculation (validated with known inputs)
+-  Score calculation (formula verification)
+-  Hash generation (determinism check)
 
 #### Key Features Validated:
 
@@ -515,9 +515,9 @@ The implementation strictly follows the C core + C++ wrapper pattern:
 - **C Tests** (`ble-discovery-packet-c-test.c`) - Embedded validation
 - **C++ Tests** (`ble-discovery-header-test.cc`) - NS-3 validation
 
-**Task 4 Status: ✅ COMPLETE AND VERIFIED**
+**Task 4 Status:  COMPLETE AND VERIFIED**
 
-### Task 5: Create BLE Node Model with State Machine ✅ **COMPLETED**
+### Task 5: Create BLE Node Model with State Machine  **COMPLETED**
 
 **Status**: All subtasks completed, tested, and verified
 
@@ -603,7 +603,7 @@ CLUSTER_MEMBER → CLUSTERHEAD_CANDIDATE | EDGE (if clusterhead fails)
 **Test Coverage**:
 
 1. **Standalone C Tests** (`test/ble-mesh-node-c-test.c` - 550+ lines)
-   - 18 test functions, 238 assertions, **ALL PASSING** ✅
+   - 18 test functions, 238 assertions, **ALL PASSING** 
    - Compiles without NS-3 dependencies (pure C)
    - Test functions:
      - `test_node_init()` - Initialization defaults (13 assertions)
@@ -626,7 +626,7 @@ CLUSTER_MEMBER → CLUSTERHEAD_CANDIDATE | EDGE (if clusterhead fails)
      - `test_max_neighbors_limit()` - Capacity enforcement (3 assertions)
 
 2. **NS-3 Integration Tests** (`test/ble-mesh-node-test.cc` - 520+ lines)
-   - 7 test case classes, **ALL PASSING** ✅
+   - 7 test case classes, **ALL PASSING** 
    - Test cases:
      - `BleMeshNodeBasicTestCase` - Initialization, GPS, node ID
      - `BleMeshNodeStateMachineTestCase` - State transitions, names, validation
@@ -644,18 +644,18 @@ CLUSTER_MEMBER → CLUSTERHEAD_CANDIDATE | EDGE (if clusterhead fails)
 
 **Test Results Summary**:
 ```
-Standalone C Tests:   238/238 PASSED ✅
-NS-3 Integration:     All test cases PASSED ✅
-Previous Tests:       ble-discovery-header still PASSING ✅
+Standalone C Tests:   238/238 PASSED 
+NS-3 Integration:     All test cases PASSED 
+Previous Tests:       ble-discovery-header still PASSING 
 Build Time:          <1 second incremental
 ```
 
-**Architecture Compliance**: ✅
-- ✅ C core is pure C (no NS-3 dependencies)
-- ✅ C core compiles standalone with gcc
-- ✅ C++ wrapper is thin delegation layer
-- ✅ All NS-3 integration in wrapper only
-- ✅ Portable to embedded systems
+**Architecture Compliance**: 
+-  C core is pure C (no NS-3 dependencies)
+-  C core compiles standalone with gcc
+-  C++ wrapper is thin delegation layer
+-  All NS-3 integration in wrapper only
+-  Portable to embedded systems
 
 **Subtasks Completed**:
 - [x] Design node states: 6 states with validated transitions
@@ -688,7 +688,7 @@ Build Time:          <1 second incremental
 
 ## Phase 2: Core Discovery Protocol
 
-### Task 7: Design and Implement 4-Slot Discovery Cycle ✅ COMPLETED
+### Task 7: Design and Implement 4-Slot Discovery Cycle  COMPLETED
 - [x] Define discovery cycle timing structure (4 message slots)
 - [x] Implement slot timing mechanism (1 slot for own message, 3 for forwarding)
 - [x] Create discovery cycle scheduler
@@ -722,7 +722,7 @@ Build Time:          <1 second incremental
 **Test Coverage:**
 - `test/ble-discovery-cycle-c-test.c` (595 lines, 12 test functions)
 - `test/ble-discovery-cycle-test.cc` (33,998 lines, 11 NS-3 test cases)
-- ALL TESTS PASSING ✅
+- ALL TESTS PASSING 
 
 **Test Results:**
 ```
@@ -731,7 +731,7 @@ PASS: TestSuite ble-discovery-cycle
 1 of 1 tests passed
 ```
 
-### Task 8: Implement Message Forwarding Queue ✅ COMPLETED
+### Task 8: Implement Message Forwarding Queue  COMPLETED
 - [x] Create message queue data structure for received discovery messages
 - [x] Implement queue management (add, remove, prioritize)
 - [x] Add message deduplication logic (track seen messages)
@@ -765,7 +765,7 @@ PASS: TestSuite ble-discovery-cycle
 **Test Coverage:**
 - `test/ble-message-queue-test.cc` (17,119 lines)
 - Tests queue operations, deduplication, loop detection, overflow
-- ALL TESTS PASSING ✅
+- ALL TESTS PASSING 
 
 **Test Results:**
 ```
@@ -774,7 +774,7 @@ PASS: TestSuite ble-message-queue
 1 of 1 tests passed
 ```
 
-### Task 9: Implement Picky Forwarding Algorithm ✅ COMPLETED
+### Task 9: Implement Picky Forwarding Algorithm  COMPLETED
 - [x] Define crowding factor calculation function
 - [x] Implement percentage-based message filtering using crowding factor
 - [x] Add configurable crowding threshold parameters
@@ -805,7 +805,7 @@ PASS: TestSuite ble-forwarding-logic (includes picky forwarding tests)
 1 of 1 tests passed
 ```
 
-### Task 10: Implement GPS Proximity Filtering ✅ COMPLETED
+### Task 10: Implement GPS Proximity Filtering  COMPLETED
 - [x] Implement distance calculation between GPS coordinates
 - [x] Define proximity threshold (configure based on network density)
 - [x] Add LHGPS comparison logic in forwarding decision
@@ -833,7 +833,7 @@ PASS: TestSuite ble-forwarding-logic (includes GPS proximity tests)
 1 of 1 tests passed
 ```
 
-### Task 11: Implement TTL-Based Message Prioritization ✅ COMPLETED
+### Task 11: Implement TTL-Based Message Prioritization  COMPLETED
 - [x] Implement TTL decrement on message forwarding
 - [x] Create priority queue sorted by TTL
 - [x] Implement top-3 selection algorithm after other filters applied
@@ -865,7 +865,7 @@ PASS: TestSuite ble-message-queue (includes TTL priority tests)
 
 ## Phase 3: Clusterhead Election - Discovery Phase
 
-### Task 12: Implement Noisy Broadcast Phase ✅ COMPLETED
+### Task 12: Implement Noisy Broadcast Phase  COMPLETED
 - [x] Implement "noisy broadcast" message transmission
 - [x] Create base-level noise message format
 - [x] Implement stochastic randomized listening time slot selection
@@ -897,7 +897,7 @@ PASS: TestSuite ble-message-queue (includes TTL priority tests)
 **Test Coverage:**
 - `test/ble-broadcast-timing-c-test.c` (12 test functions, standalone C)
 - `test/ble-broadcast-timing-test.cc` (6 NS-3 test cases)
-- ALL TESTS PASSING ✅
+- ALL TESTS PASSING 
 
 **Test Results:**
 ```
@@ -906,7 +906,7 @@ PASS: TestSuite ble-broadcast-timing
 1 of 1 tests passed
 ```
 
-### Task 13: Implement RSSI-Based Crowding Factor Calculation ✅ COMPLETED
+### Task 13: Implement RSSI-Based Crowding Factor Calculation  COMPLETED
 - [x] Define crowding factor function f(RSSI)
 - [x] Implement RSSI aggregation from multiple samples
 - [x] Add noise level calculation from RSSI measurements
@@ -934,7 +934,7 @@ PASS: TestSuite ble-broadcast-timing
 
 **Tests:** Validated in ble-mesh-node-test.cc (ElectionTestCase)
 
-### Task 14: Implement Stochastic Broadcast Timing ✅ COMPLETED
+### Task 14: Implement Stochastic Broadcast Timing  COMPLETED
 - [x] Implement random time slot selection for clusterhead broadcasts
 - [x] Create majority-listening, minority-broadcasting schedule
 - [x] Add collision avoidance through randomization
@@ -988,7 +988,7 @@ PASS: TestSuite ble-broadcast-timing
   - Collision avoidance verification
   - Retry logic testing
   - Success rate calculation
-- ALL TESTS PASSING ✅
+- ALL TESTS PASSING 
 
 **Test Results:**
 ```
@@ -1002,7 +1002,7 @@ PASS: TestSuite ble-broadcast-timing
 - Collision rate < 10% (significantly lower than 25% expected for independent 20% broadcast probability)
 - Randomization successfully reduces simultaneous broadcasts
 
-### Task 15: Implement Direct Connection Counting ✅ COMPLETED
+### Task 15: Implement Direct Connection Counting  COMPLETED
 - [x] Add direct connection counter to node state
 - [x] Implement neighbor detection during broadcast phase
 - [x] Track successfully parsed messages (strong signal)
@@ -1028,7 +1028,7 @@ PASS: TestSuite ble-broadcast-timing
 
 **Tests:** Validated in ble-mesh-node-test.cc (neighbor addition, direct connection counting)
 
-### Task 16: Implement Connectivity Metric Tracking ✅ COMPLETED
+### Task 16: Implement Connectivity Metric Tracking  COMPLETED
 - [x] Track number of direct neighbors (1-hop)
 - [x] Track unique paths from forwarded messages (PSF analysis)
 - [x] Implement geographic distribution calculation using LHGPS
@@ -1069,7 +1069,7 @@ PASS: TestSuite ble-broadcast-timing
 - [ ] Create candidacy decision logic combining all criteria and reset when a better candidate is heard
 - [ ] Test candidacy election in various network topologies
 
-### Task 18: Implement Geographic Distribution Analysis ✅ COMPLETED
+### Task 18: Implement Geographic Distribution Analysis  COMPLETED
 - [x] Calculate spatial distribution of neighbors using LHGPS
 - [x] Implement clustering detection algorithm (e.g., variance-based)
 - [x] Define "well-distributed" threshold
@@ -1108,7 +1108,7 @@ PASS: TestSuite ble-broadcast-timing
 
 ## Phase 4: Clusterhead Election - Announcement & Conflict Resolution
 
-### Task 19: Design Election Announcement Message Structure ✅ COMPLETED
+### Task 19: Design Election Announcement Message Structure  COMPLETED
 - [x] Extend discovery message format with election fields:
   - Class ID: Clusterhead class identifier
   - ID: Message sender ID
@@ -1133,7 +1133,7 @@ PASS: TestSuite ble-broadcast-timing
 **Tests:** `test/ble-discovery-header-test.cc`
 - Added coverage for the clusterhead flag round-trip and the dedicated `BleElectionHeader` class
 
-### Task 20: Implement PDSF Calculation Function ✅ COMPLETED
+### Task 20: Implement PDSF Calculation Function  COMPLETED
 - [x] Implement t(x) = Σᵢ Πᵢ(xᵢ) formula
 - [x] Track direct connection count at each hop (xᵢ)
 - [x] Exclude previously reached devices from calculation
@@ -1153,7 +1153,7 @@ PASS: TestSuite ble-broadcast-timing
 **Tests:** `test/ble-discovery-packet-c-test.c`, `test/ble-discovery-header-test.cc`
 - Added unit tests covering multi-hop PDSF updates, history serialization/deserialization, and wrapper-level integration
 
-### Task 21: Implement Clusterhead Score Calculation ✅ COMPLETED
+### Task 21: Implement Clusterhead Score Calculation  COMPLETED
 - [x] Define score formula based on candidacy metrics:
   - Direct connection count
   - Connection:noise ratio

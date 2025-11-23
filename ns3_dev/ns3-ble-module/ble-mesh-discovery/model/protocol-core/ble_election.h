@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-/* Maximum number of neighbors to track */
+
 #define BLE_MAX_NEIGHBORS 150
 
 /**
@@ -69,7 +69,7 @@ typedef struct {
     double candidacy_score;              /**< Candidacy score */
     ble_score_weights_t score_weights;   /**< Configurable score weights */
 
-    /* Thresholds (configurable) */
+    
     uint32_t min_neighbors_for_candidacy; /**< Minimum direct neighbors */
     double min_connection_noise_ratio;   /**< Minimum ratio for candidacy */
     double min_geographic_distribution;  /**< Minimum distribution score */
@@ -206,4 +206,4 @@ uint32_t ble_election_clean_old_neighbors(ble_election_state_t *state,
 }
 #endif
 
-#endif /* BLE_ELECTION_H */
+#endif 

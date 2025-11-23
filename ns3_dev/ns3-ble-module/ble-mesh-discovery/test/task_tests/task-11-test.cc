@@ -1,21 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * Task 11 Comprehensive Test: TTL-Based Message Prioritization
- *
- * This simulation tests all subtasks for Task 11:
- * - Subtask 1: Implement TTL decrement on message forwarding
- * - Subtask 2: Create priority queue sorted by TTL
- * - Subtask 3: Implement top-3 selection algorithm after other filters applied
- * - Subtask 4: Add TTL expiration handling (TTL=0 messages not forwarded)
- * - Subtask 5: Test message propagation distance vs initial TTL
- * - Subtask 6: Validate network coverage with different TTL values
- *
- * Usage:
- *   ./waf --run "task-11-test --verbose=true"
- */
-
 #include "ns3/core-module.h"
 #include "ns3/simulator.h"
 #include "ns3/nstime.h"
@@ -27,7 +9,7 @@
 #include "ns3/double.h"
 #include "ns3/random-variable-stream.h"
 
-/* Include C headers for direct testing */
+
 extern "C" {
 #include "ns3/ble_discovery_packet.h"
 #include "ns3/ble_message_queue.h"
@@ -44,9 +26,9 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("Task11Test");
 
-// ============================================================================
-// GLOBAL TEST STATE
-// ============================================================================
+
+
+
 
 struct SubtaskResult {
     std::string name;
@@ -57,7 +39,7 @@ struct SubtaskResult {
 std::vector<SubtaskResult> g_testResults;
 bool g_verbose = true;
 
-// ANSI color codes
+
 const std::string COLOR_RESET = "\033[0m";
 const std::string COLOR_GREEN = "\033[32m";
 const std::string COLOR_RED = "\033[31m";
@@ -66,9 +48,9 @@ const std::string COLOR_CYAN = "\033[36m";
 const std::string COLOR_BOLD = "\033[1m";
 const std::string COLOR_MAGENTA = "\033[35m";
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
+
+
+
 
 void PrintHeader (const std::string& title)
 {
@@ -144,9 +126,9 @@ std::string TtlVectorToString (const std::vector<uint8_t>& ttls)
     return ss.str();
 }
 
-// ============================================================================
-// SUBTASK 1: Implement TTL Decrement on Message Forwarding
-// ============================================================================
+
+
+
 
 class Subtask1Test
 {
@@ -157,7 +139,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 1.1: TTL Decrement from Default Value
+        
         PrintSubHeader("Test 1.1: TTL Decrement from Default Value (10 -> 9)");
         {
             ble_discovery_packet_t packet;
@@ -183,7 +165,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.2: TTL Decrement Multiple Times
+        
         PrintSubHeader("Test 1.2: TTL Decrement Multiple Times");
         {
             ble_discovery_packet_t packet;
@@ -213,7 +195,7 @@ public:
             allPassed &= correctSequence;
         }
 
-        // Test 1.3: TTL Decrement at Boundary (1 -> 0)
+        
         PrintSubHeader("Test 1.3: TTL Decrement at Boundary (1 -> 0)");
         {
             ble_discovery_packet_t packet;
@@ -235,7 +217,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.4: TTL Decrement at Zero (0 -> 0, returns false)
+        
         PrintSubHeader("Test 1.4: TTL Decrement at Zero (No Change)");
         {
             ble_discovery_packet_t packet;
@@ -257,7 +239,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.5: TTL Decrement with NULL Packet
+        
         PrintSubHeader("Test 1.5: TTL Decrement with NULL Packet");
         {
             PrintInit("Testing with NULL packet pointer...");
@@ -273,7 +255,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.6: TTL Decrement Preserves Other Fields
+        
         PrintSubHeader("Test 1.6: TTL Decrement Preserves Other Fields");
         {
             ble_discovery_packet_t packet;
@@ -320,7 +302,7 @@ public:
             allPassed &= allPreserved;
         }
 
-        // Test 1.7: TTL Decrement Return Value Semantics
+        
         PrintSubHeader("Test 1.7: TTL Decrement Return Value Semantics");
         {
             PrintInit("Testing return value semantics...");
@@ -329,7 +311,7 @@ public:
 
             ble_discovery_packet_t packet;
 
-            // Test various TTL values
+            
             std::vector<std::pair<uint8_t, bool>> testCases = {
                 {10, true}, {5, true}, {2, true}, {1, true}, {0, false}
             };
@@ -363,9 +345,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 2: Create Priority Queue Sorted by TTL
-// ============================================================================
+
+
+
 
 class Subtask2Test
 {
@@ -376,7 +358,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 2.1: Priority Calculation - Higher TTL = Higher Priority
+        
         PrintSubHeader("Test 2.1: Priority Calculation - Higher TTL = Lower Priority Value");
         {
             PrintInit("Testing priority calculation formula: priority = 255 - TTL");
@@ -412,7 +394,7 @@ public:
             allPassed &= allCorrect;
         }
 
-        // Test 2.2: Priority Calculation - TTL=0 Gets Lowest Priority
+        
         PrintSubHeader("Test 2.2: TTL=0 Gets Lowest Priority (255)");
         {
             ble_discovery_packet_t packet;
@@ -432,7 +414,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.3: Priority Formula Verification
+        
         PrintSubHeader("Test 2.3: Priority Formula Verification (255 - TTL)");
         {
             PrintInit("Verifying priority = 255 - TTL for range of values...");
@@ -464,7 +446,7 @@ public:
             allPassed &= allCorrect;
         }
 
-        // Test 2.4: Dequeue Returns Highest Priority Message First
+        
         PrintSubHeader("Test 2.4: Dequeue Returns Highest Priority Message First");
         {
             ble_message_queue_t queue;
@@ -480,7 +462,7 @@ public:
             {
                 ble_discovery_packet_t packet;
                 ble_discovery_packet_init(&packet);
-                packet.sender_id = ttl * 100; // Unique sender IDs
+                packet.sender_id = ttl * 100; 
                 packet.ttl = ttl;
                 ble_queue_enqueue(&queue, &packet, 999, time_ms++);
             }
@@ -508,7 +490,7 @@ public:
             allPassed &= correctOrder;
         }
 
-        // Test 2.5: Multiple Messages with Different TTLs
+        
         PrintSubHeader("Test 2.5: Large Queue Priority Ordering");
         {
             ble_message_queue_t queue;
@@ -529,7 +511,7 @@ public:
                 ble_queue_enqueue(&queue, &packet, 999, time_ms++);
             }
 
-            // Dequeue and verify order
+            
             std::vector<uint8_t> dequeuedTtls;
             ble_discovery_packet_t dequeuedPacket;
 
@@ -538,7 +520,7 @@ public:
                 dequeuedTtls.push_back(dequeuedPacket.ttl);
             }
 
-            // Verify descending order
+            
             bool sortedDescending = true;
             for (size_t i = 1; i < dequeuedTtls.size(); ++i)
             {
@@ -560,7 +542,7 @@ public:
             allPassed &= sortedDescending;
         }
 
-        // Test 2.6: Same TTL Messages
+        
         PrintSubHeader("Test 2.6: Same TTL Messages");
         {
             ble_message_queue_t queue;
@@ -580,7 +562,7 @@ public:
                 ble_queue_enqueue(&queue, &packet, 999, time_ms++);
             }
 
-            // Dequeue all
+            
             std::vector<uint32_t> dequeuedSenders;
             ble_discovery_packet_t dequeuedPacket;
 
@@ -592,14 +574,14 @@ public:
             PrintActual("number of messages dequeued", std::to_string(dequeuedSenders.size()));
             PrintExpected("number of messages dequeued", "5");
 
-            // All should be dequeued (order may vary for same priority)
+            
             bool allDequeued = (dequeuedSenders.size() == 5);
             PrintCheck("All same-TTL messages dequeued", allDequeued);
 
             allPassed &= allDequeued;
         }
 
-        // Test 2.7: Peek Returns Highest Priority Without Removal
+        
         PrintSubHeader("Test 2.7: Peek Returns Highest Priority Without Removal");
         {
             ble_message_queue_t queue;
@@ -640,7 +622,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.8: Priority Maintained After Enqueue/Dequeue Cycles
+        
         PrintSubHeader("Test 2.8: Priority Maintained After Enqueue/Dequeue Cycles");
         {
             ble_message_queue_t queue;
@@ -650,7 +632,7 @@ public:
 
             uint32_t time_ms = 1000;
 
-            // First cycle
+            
             for (uint8_t ttl : {5, 10, 3})
             {
                 ble_discovery_packet_t packet;
@@ -664,17 +646,17 @@ public:
             ble_queue_dequeue(&queue, &dequeuedPacket);
             uint8_t firstDequeued = dequeuedPacket.ttl;
 
-            // Add more
+            
             for (uint8_t ttl : {15, 2})
             {
                 ble_discovery_packet_t packet;
                 ble_discovery_packet_init(&packet);
-                packet.sender_id = ttl * 100 + 1; // Different sender
+                packet.sender_id = ttl * 100 + 1; 
                 packet.ttl = ttl;
                 ble_queue_enqueue(&queue, &packet, 999, time_ms++);
             }
 
-            // Dequeue remaining
+            
             std::vector<uint8_t> remainingTtls;
             while (ble_queue_dequeue(&queue, &dequeuedPacket))
             {
@@ -703,9 +685,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 3: Implement Top-3 Selection Algorithm
-// ============================================================================
+
+
+
 
 class Subtask3Test
 {
@@ -716,7 +698,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 3.1: Dequeue Top-3 from Queue with 5+ Messages
+        
         PrintSubHeader("Test 3.1: Dequeue Top-3 from Queue with 5+ Messages");
         {
             ble_message_queue_t queue;
@@ -737,7 +719,7 @@ public:
                 ble_queue_enqueue(&queue, &packet, 999, time_ms++);
             }
 
-            // Dequeue top 3
+            
             std::vector<uint8_t> top3;
             ble_discovery_packet_t dequeuedPacket;
 
@@ -757,7 +739,7 @@ public:
 
             PrintCheck("Top-3 highest TTL messages dequeued correctly", passed);
 
-            // Verify remaining
+            
             uint32_t remaining = ble_queue_get_size(&queue);
             PrintActual("remaining in queue", std::to_string(remaining));
             PrintExpected("remaining in queue", "4");
@@ -765,7 +747,7 @@ public:
             allPassed &= passed && (remaining == 4);
         }
 
-        // Test 3.2: Dequeue Top-3 When Only 2 Messages Available
+        
         PrintSubHeader("Test 3.2: Dequeue Top-3 When Only 2 Messages Available");
         {
             ble_message_queue_t queue;
@@ -804,7 +786,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.3: Dequeue Top-3 When Only 1 Message Available
+        
         PrintSubHeader("Test 3.3: Dequeue Top-3 When Only 1 Message Available");
         {
             ble_message_queue_t queue;
@@ -839,7 +821,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.4: Dequeue Top-3 from Empty Queue
+        
         PrintSubHeader("Test 3.4: Dequeue Top-3 from Empty Queue");
         {
             ble_message_queue_t queue;
@@ -867,7 +849,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.5: Top-3 Selection Respects Priority Ordering
+        
         PrintSubHeader("Test 3.5: Top-3 Selection Respects Priority Ordering");
         {
             ble_message_queue_t queue;
@@ -909,7 +891,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.6: Integration with 4-Slot Cycle Concept
+        
         PrintSubHeader("Test 3.6: Integration with 4-Slot Discovery Cycle");
         {
             ble_message_queue_t queue;
@@ -919,7 +901,7 @@ public:
             PrintState("Slot 0: Own message broadcast (not from queue)");
             PrintState("Slots 1-3: Forward top-3 messages from queue");
 
-            // Queue has 5 messages
+            
             std::vector<uint8_t> ttls = {8, 3, 12, 5, 10};
             uint32_t time_ms = 1000;
 
@@ -934,7 +916,7 @@ public:
 
             PrintState("Queue contains 5 messages with TTL: [8, 3, 12, 5, 10]");
 
-            // Simulate slots 1, 2, 3 - each dequeues one message
+            
             std::vector<uint8_t> forwardedTtls;
             ble_discovery_packet_t forwardPacket;
 
@@ -957,7 +939,7 @@ public:
 
             PrintCheck("Top-3 forwarded in slots 1, 2, 3", passed);
 
-            // Check remaining
+            
             uint32_t remaining = ble_queue_get_size(&queue);
             PrintActual("remaining for next cycle", std::to_string(remaining));
             PrintExpected("remaining for next cycle", "2");
@@ -965,7 +947,7 @@ public:
             allPassed &= passed && (remaining == 2);
         }
 
-        // Test 3.7: Top-3 with Mixed TTL Values
+        
         PrintSubHeader("Test 3.7: Top-3 with Mixed TTL Values Including Edge Cases");
         {
             ble_message_queue_t queue;
@@ -980,7 +962,7 @@ public:
             {
                 ble_discovery_packet_t packet;
                 ble_discovery_packet_init(&packet);
-                packet.sender_id = ttl * 10 + 1; // Unique sender
+                packet.sender_id = ttl * 10 + 1; 
                 packet.ttl = ttl;
                 ble_queue_enqueue(&queue, &packet, 999, time_ms++);
             }
@@ -1012,9 +994,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 4: TTL Expiration Handling (TTL=0 Messages Not Forwarded)
-// ============================================================================
+
+
+
 
 class Subtask4Test
 {
@@ -1025,14 +1007,14 @@ public:
 
         bool allPassed = true;
 
-        // Test 4.1: TTL=0 Message Rejected by Forwarding Logic
+        
         PrintSubHeader("Test 4.1: TTL=0 Message Rejected by Forwarding Logic");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Ptr<UniformRandomVariable> random = CreateObject<UniformRandomVariable>();
             random->SetAttribute("Min", DoubleValue(0.0));
-            random->SetAttribute("Max", DoubleValue(0.01)); // Almost always forward
+            random->SetAttribute("Max", DoubleValue(0.01)); 
             logic->SetRandomStream(random);
 
             PrintInit("Creating message with TTL=0 (expired)...");
@@ -1059,7 +1041,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 4.2: TTL=0 Message Gets Lowest Priority (255)
+        
         PrintSubHeader("Test 4.2: TTL=0 Message Gets Lowest Priority (255)");
         {
             ble_discovery_packet_t packet;
@@ -1077,7 +1059,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 4.3: TTL=0 Message in Queue Never Selected First
+        
         PrintSubHeader("Test 4.3: TTL=0 Message Never Selected Over TTL>0 Messages");
         {
             ble_message_queue_t queue;
@@ -1085,21 +1067,21 @@ public:
 
             PrintInit("Enqueuing mix of TTL=0 and TTL>0 messages...");
 
-            // Add TTL=0 first
+            
             ble_discovery_packet_t expiredPacket;
             ble_discovery_packet_init(&expiredPacket);
             expiredPacket.sender_id = 1;
             expiredPacket.ttl = 0;
             ble_queue_enqueue(&queue, &expiredPacket, 999, 1000);
 
-            // Add TTL=1 (lowest non-zero)
+            
             ble_discovery_packet_t lowTtlPacket;
             ble_discovery_packet_init(&lowTtlPacket);
             lowTtlPacket.sender_id = 2;
             lowTtlPacket.ttl = 1;
             ble_queue_enqueue(&queue, &lowTtlPacket, 999, 1001);
 
-            // Another TTL=0
+            
             ble_discovery_packet_t expired2;
             ble_discovery_packet_init(&expired2);
             expired2.sender_id = 3;
@@ -1121,7 +1103,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 4.4: TTL Transition from 1 -> 0
+        
         PrintSubHeader("Test 4.4: TTL Transition from 1 -> 0 (Message Expires)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1148,7 +1130,7 @@ public:
 
             bool shouldForwardBefore = logic->ShouldForward(header, currentLoc, 0.0, 10.0);
 
-            // Decrement TTL
+            
             ble_discovery_decrement_ttl(&packet);
             header.SetTtl(packet.ttl);
 
@@ -1167,7 +1149,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 4.5: Mixed Queue with TTL=0 and TTL>0
+        
         PrintSubHeader("Test 4.5: Mixed Queue Processing");
         {
             ble_message_queue_t queue;
@@ -1189,7 +1171,7 @@ public:
                 ble_queue_enqueue(&queue, &packet, 999, time_ms++);
             }
 
-            // Dequeue top 3 (should skip TTL=0)
+            
             std::vector<uint8_t> top3Ttls;
             ble_discovery_packet_t dequeuedPacket;
 
@@ -1212,7 +1194,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 4.6: All TTL=0 Messages in Queue
+        
         PrintSubHeader("Test 4.6: Queue with All TTL=0 Messages");
         {
             ble_message_queue_t queue;
@@ -1263,7 +1245,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 4.7: TTL Expiration Combined with Other Rejection Criteria
+        
         PrintSubHeader("Test 4.7: TTL Expiration Combined with Other Criteria");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1277,19 +1259,19 @@ public:
 
             Vector currentLoc(0.0, 0.0, 0.0);
 
-            // Case 1: TTL=0, GPS close (two rejection reasons)
+            
             BleDiscoveryHeaderWrapper header1;
             header1.SetSenderId(1);
             header1.SetTtl(0);
-            header1.SetGpsLocation(Vector(5.0, 0.0, 0.0)); // Too close
+            header1.SetGpsLocation(Vector(5.0, 0.0, 0.0)); 
 
             bool result1 = logic->ShouldForward(header1, currentLoc, 0.0, 10.0);
 
-            // Case 2: TTL=0, GPS far (only TTL rejection)
+            
             BleDiscoveryHeaderWrapper header2;
             header2.SetSenderId(2);
             header2.SetTtl(0);
-            header2.SetGpsLocation(Vector(100.0, 0.0, 0.0)); // Far
+            header2.SetGpsLocation(Vector(100.0, 0.0, 0.0)); 
 
             bool result2 = logic->ShouldForward(header2, currentLoc, 0.0, 10.0);
 
@@ -1309,9 +1291,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 5: Message Propagation Distance vs Initial TTL
-// ============================================================================
+
+
+
 
 class Subtask5Test
 {
@@ -1322,7 +1304,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 5.1: TTL=1 Message Propagates 1 Hop
+        
         PrintSubHeader("Test 5.1: TTL=1 Message Propagates 1 Hop");
         {
             PrintInit("Simulating message with initial TTL=1...");
@@ -1331,12 +1313,12 @@ public:
             ble_discovery_packet_init(&packet);
             packet.sender_id = 100;
             packet.ttl = 1;
-            ble_discovery_add_to_path(&packet, 100); // Originator
+            ble_discovery_add_to_path(&packet, 100); 
 
             uint32_t hops = 0;
             while (packet.ttl > 0)
             {
-                // Simulate forwarding
+                
                 ble_discovery_decrement_ttl(&packet);
                 hops++;
                 if (packet.ttl > 0)
@@ -1356,7 +1338,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 5.2: TTL=5 Message Propagates 5 Hops
+        
         PrintSubHeader("Test 5.2: TTL=5 Message Propagates 5 Hops");
         {
             PrintInit("Simulating message with initial TTL=5...");
@@ -1389,7 +1371,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 5.3: TTL=10 Message Propagates 10 Hops
+        
         PrintSubHeader("Test 5.3: TTL=10 (Default) Message Propagates 10 Hops");
         {
             PrintInit("Simulating message with default TTL=10...");
@@ -1423,7 +1405,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 5.4: Path Length Matches Initial TTL - Final TTL
+        
         PrintSubHeader("Test 5.4: Path Length Correlation");
         {
             PrintInit("Testing path length = initial TTL - remaining TTL...");
@@ -1441,7 +1423,7 @@ public:
                 packet.ttl = initialTtl;
                 ble_discovery_add_to_path(&packet, 100);
 
-                // Simulate 3 hops
+                
                 uint32_t hops = 3;
                 for (uint32_t i = 0; i < hops && packet.ttl > 0; ++i)
                 {
@@ -1469,7 +1451,7 @@ public:
             allPassed &= allCorrect;
         }
 
-        // Test 5.5: Maximum Propagation with High TTL
+        
         PrintSubHeader("Test 5.5: Maximum Propagation with TTL=50");
         {
             PrintInit("Simulating message with high TTL=50...");
@@ -1481,7 +1463,7 @@ public:
             ble_discovery_add_to_path(&packet, 100);
 
             uint32_t hops = 0;
-            while (packet.ttl > 0 && hops < 100) // Safety limit
+            while (packet.ttl > 0 && hops < 100) 
             {
                 ble_discovery_decrement_ttl(&packet);
                 hops++;
@@ -1502,7 +1484,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 5.6: Propagation Stops Exactly at TTL=0
+        
         PrintSubHeader("Test 5.6: Propagation Stops Exactly When TTL Reaches 0");
         {
             PrintInit("Verifying precise TTL boundary behavior...");
@@ -1516,7 +1498,7 @@ public:
 
             events.push_back("Initial: TTL=" + std::to_string(packet.ttl));
 
-            for (int i = 0; i < 5; ++i) // Try more decrements than TTL
+            for (int i = 0; i < 5; ++i) 
             {
                 bool result = ble_discovery_decrement_ttl(&packet);
                 events.push_back("Decrement " + std::to_string(i+1) + ": TTL=" +
@@ -1544,9 +1526,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 6: Validate Network Coverage with Different TTL Values
-// ============================================================================
+
+
+
 
 class Subtask6Test
 {
@@ -1557,27 +1539,27 @@ public:
 
         bool allPassed = true;
 
-        // Test 6.1: Low TTL (3) - Limited Coverage
+        
         PrintSubHeader("Test 6.1: Low TTL (3) - Limited Coverage");
         {
             PrintInit("Simulating network with TTL=3 messages...");
 
-            ble_message_queue_t queues[5]; // 5-node chain
+            ble_message_queue_t queues[5]; 
             for (int i = 0; i < 5; ++i)
             {
                 ble_queue_init(&queues[i]);
             }
 
-            // Originator creates message
+            
             ble_discovery_packet_t originalMsg;
             ble_discovery_packet_init(&originalMsg);
             originalMsg.sender_id = 1;
             originalMsg.ttl = 3;
             ble_discovery_add_to_path(&originalMsg, 1);
 
-            uint32_t nodesReached = 1; // Originator
+            uint32_t nodesReached = 1; 
 
-            // Simulate propagation through chain
+            
             ble_discovery_packet_t currentMsg = originalMsg;
             for (int node = 2; node <= 5; ++node)
             {
@@ -1591,7 +1573,7 @@ public:
                     }
                     else
                     {
-                        nodesReached++; // Still reached this node
+                        nodesReached++; 
                     }
                 }
             }
@@ -1607,12 +1589,12 @@ public:
             allPassed &= passed;
         }
 
-        // Test 6.2: Medium TTL (10) - Moderate Coverage
+        
         PrintSubHeader("Test 6.2: Medium TTL (10) - Full Coverage of Medium Network");
         {
             PrintInit("Simulating 8-node network with TTL=10 messages...");
 
-            uint32_t nodesReached = 1; // Originator
+            uint32_t nodesReached = 1; 
             uint32_t networkSize = 8;
 
             ble_discovery_packet_t msg;
@@ -1640,7 +1622,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 6.3: High TTL (20) - Extended Coverage
+        
         PrintSubHeader("Test 6.3: High TTL (20) - Extended Coverage");
         {
             PrintInit("Simulating 15-node network with TTL=20 messages...");
@@ -1673,7 +1655,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 6.4: Coverage Comparison Across TTL Values
+        
         PrintSubHeader("Test 6.4: Coverage Comparison Across TTL Values");
         {
             PrintInit("Comparing coverage for different TTL values in 10-node network...");
@@ -1710,7 +1692,7 @@ public:
                           << " | " << std::fixed << std::setprecision(0) << coverage << "%\n";
             }
 
-            // Verify increasing coverage with TTL
+            
             bool monotonic = true;
             for (size_t i = 1; i < coverageResults.size(); ++i)
             {
@@ -1727,7 +1709,7 @@ public:
             allPassed &= monotonic;
         }
 
-        // Test 6.5: Priority Ordering in Multi-Node Scenario
+        
         PrintSubHeader("Test 6.5: Priority Ordering in Multi-Node Scenario");
         {
             ble_message_queue_t queue;
@@ -1750,7 +1732,7 @@ public:
                 ble_queue_enqueue(&queue, &packet, 999, time_ms++);
             }
 
-            // Forward in next cycle (top message)
+            
             ble_discovery_packet_t forwardPacket;
             ble_queue_dequeue(&queue, &forwardPacket);
 
@@ -1764,7 +1746,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 6.6: TTL-Based Priority Prevents Message Starvation
+        
         PrintSubHeader("Test 6.6: TTL-Based Priority Prevents Message Starvation");
         {
             ble_message_queue_t queue;
@@ -1772,7 +1754,7 @@ public:
 
             PrintInit("Simulating continuous message arrival with varying TTLs...");
 
-            // First batch
+            
             for (uint8_t ttl : {5, 2, 8})
             {
                 ble_discovery_packet_t packet;
@@ -1782,11 +1764,11 @@ public:
                 ble_queue_enqueue(&queue, &packet, 999, 1000);
             }
 
-            // Dequeue one (highest priority)
+            
             ble_discovery_packet_t first;
             ble_queue_dequeue(&queue, &first);
 
-            // Add more messages
+            
             for (uint8_t ttl : {15, 3})
             {
                 ble_discovery_packet_t packet;
@@ -1796,7 +1778,7 @@ public:
                 ble_queue_enqueue(&queue, &packet, 999, 1001);
             }
 
-            // Dequeue remaining
+            
             std::vector<uint8_t> order;
             ble_discovery_packet_t packet;
             while (ble_queue_dequeue(&queue, &packet))
@@ -1816,7 +1798,7 @@ public:
             allPassed &= (first.ttl == 8) && newHighPriorityFirst;
         }
 
-        // Test 6.7: High TTL Messages Prioritized Over Low TTL
+        
         PrintSubHeader("Test 6.7: High TTL Messages Prioritized Over Low TTL");
         {
             ble_message_queue_t queue;
@@ -1824,7 +1806,7 @@ public:
 
             PrintInit("Testing that high TTL messages get forwarded before low TTL...");
 
-            // Add low TTL first
+            
             for (uint8_t ttl : {1, 2, 3})
             {
                 ble_discovery_packet_t packet;
@@ -1834,7 +1816,7 @@ public:
                 ble_queue_enqueue(&queue, &packet, 999, 1000);
             }
 
-            // Add high TTL later
+            
             for (uint8_t ttl : {10, 15, 20})
             {
                 ble_discovery_packet_t packet;
@@ -1844,7 +1826,7 @@ public:
                 ble_queue_enqueue(&queue, &packet, 999, 1001);
             }
 
-            // Dequeue top 3
+            
             std::vector<uint8_t> top3;
             ble_discovery_packet_t packet;
             for (int i = 0; i < 3; ++i)
@@ -1871,9 +1853,9 @@ public:
     }
 };
 
-// ============================================================================
-// MAIN TEST RUNNER
-// ============================================================================
+
+
+
 
 void PrintFinalResults ()
 {
@@ -1939,7 +1921,7 @@ int main (int argc, char *argv[])
     std::cout << "  5. Test message propagation distance vs initial TTL\n";
     std::cout << "  6. Validate network coverage with different TTL values\n";
 
-    // Run all subtask tests
+    
     Subtask1Test::Run();
     Subtask2Test::Run();
     Subtask3Test::Run();
@@ -1947,7 +1929,7 @@ int main (int argc, char *argv[])
     Subtask5Test::Run();
     Subtask6Test::Run();
 
-    // Print final summary
+    
     PrintFinalResults();
 
     Simulator::Destroy();

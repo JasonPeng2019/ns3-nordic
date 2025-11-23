@@ -1,53 +1,3 @@
-#!/usr/bin/env python3
-"""
-NetAnim-Style Animated BLE Mesh Discovery Visualizer
-
-This script provides a NetAnim-like visualization experience for the
-phase2-discovery-sim trace output. It shows:
-- Nodes positioned on a 2D canvas
-- Animated packets moving between nodes
-- Color-coded node states (idle, sending, receiving)
-- Event labels explaining what's happening
-- Playback controls (play/pause, speed, timeline scrubbing)
-
-=============================================================================
-WHAT YOU'LL SEE
-=============================================================================
-
-Node Colors:
-- Light blue: Idle
-- Red: Currently sending a packet
-- Green: Currently receiving a packet
-- Orange: Both sending and receiving
-
-Event Labels:
-- When events occur, labels appear next to nodes explaining what happened
-- "Sending discovery" - Node broadcasting its own discovery
-- "Forwarding from Node X" - Node re-broadcasting another node's packet
-- "Received from Node X" - Node received a packet
-
-Packet Animation:
-- Small colored circles move from sender to receiver
-- Color indicates the originator of the discovery packet
-- Animation pauses briefly when events occur
-
-Controls:
-- Space: Play/Pause
-- Left/Right arrows: Step backward/forward
-- Up/Down arrows: Speed up/slow down
-- Click on timeline: Jump to time
-- 'R': Reset to beginning
-- 'Q': Quit
-
-=============================================================================
-USAGE
-=============================================================================
-
-    python3 visualize_animated.py simulation_trace.csv
-
-Dependencies: pip install pandas matplotlib networkx
-
-"""
 
 import argparse
 import sys
@@ -71,8 +21,8 @@ class PacketAnimation:
     sender_id: int
     receiver_id: int
     originator_id: int
-    start_time: float  # ms
-    end_time: float    # ms
+    start_time: float
+    end_time: float
     ttl: int
     path_length: int
 
@@ -82,9 +32,9 @@ class NodeEvent:
     """Represents a node state change event."""
     time_ms: float
     node_id: int
-    event_type: str  # 'SEND' or 'RECV'
+    event_type: str
     originator_id: int
-    is_self_discovery: bool  # True if sending own discovery (path_length == 1)
+    is_self_discovery: bool
 
 
 class AnimatedVisualizer:
@@ -105,35 +55,28 @@ class AnimatedVisualizer:
         self.G = self._build_topology()
         self.pos = self._compute_layout()
 
-        # Extract events and animations
         self.node_events = self._extract_node_events()
         self.packet_animations = self._extract_packet_animations()
         self.event_times = self._get_event_times()
 
-        # Create sorted list of unique event times for stepping
         self.sorted_event_times = sorted(self.event_times)
         self.current_event_index = 0
 
-        # Time range
         event_times = self.df[self.df['event'].isin(['SEND', 'RECV'])]['time_ms']
         self.min_time = event_times.min() if len(event_times) > 0 else 0
         self.max_time = event_times.max() if len(event_times) > 0 else 1000
 
-        # Playback state - EVENT-DRIVEN stepping
         self.current_time = self.min_time
         self.playing = False
-        self.auto_advance = True  # Automatically advance through events
-        self.pause_duration = 60  # Frames to pause at each event (~3 seconds at 20 FPS)
+        self.auto_advance = True
+        self.pause_duration = 60
         self.frames_at_current_event = 0
 
-        # Event pause state
         self.pause_until_frame = 0
         self.current_frame = 0
 
-        # Color map for originators
         self.originator_colors = self._create_color_map()
 
-        # Setup figure
         self._setup_figure()
 
     def _load_trace(self, filepath: str) -> pd.DataFrame:
@@ -156,7 +99,6 @@ class AnimatedVisualizer:
             node_b = int(row['receiver_id'])
             G.add_edge(node_a, node_b)
 
-        # Also add nodes from SEND events
         for _, row in self.df[self.df['event'] == 'SEND'].iterrows():
             if pd.notna(row['sender_id']):
                 G.add_node(int(row['sender_id']))
@@ -168,13 +110,10 @@ class AnimatedVisualizer:
         if len(self.G.nodes()) == 0:
             return {}
 
-        # Use spring layout with more spacing
         pos = nx.spring_layout(self.G, seed=42, k=3, iterations=100)
 
-        # Scale positions to use central area (leave room for labels and legend)
         for node in pos:
             x, y = pos[node]
-            # Scale to [-0.6, 0.6] range to leave margins
             pos[node] = (x * 0.6, y * 0.6)
 
         return pos
@@ -222,7 +161,6 @@ class AnimatedVisualizer:
             ttl = int(send_row['ttl']) if pd.notna(send_row['ttl']) else 6
             path_len = int(send_row['path_length']) if pd.notna(send_row['path_length']) else 1
 
-            # Find matching RECV events
             matching = recv_df[
                 (recv_df['time_ms'] == send_time + 1) &
                 (recv_df['originator_id'] == originator) &
@@ -259,7 +197,6 @@ class AnimatedVisualizer:
         for event in self.node_events:
             originators.add(event.originator_id)
 
-        # Use distinct colors
         colors = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00',
                   '#ffff33', '#a65628', '#f781bf', '#999999', '#66c2a5']
         return {orig: colors[i % len(colors)] for i, orig in enumerate(sorted(originators))}
@@ -268,19 +205,16 @@ class AnimatedVisualizer:
         """Setup matplotlib figure with controls."""
         self.fig = plt.figure(figsize=(16, 11))
 
-        # Main visualization area - give more vertical space
         self.ax_main = self.fig.add_axes([0.02, 0.22, 0.70, 0.75])
         self.ax_main.set_title('BLE Mesh Discovery Animation', fontsize=14, fontweight='bold')
         self.ax_main.axis('off')
         self.ax_main.set_xlim(-1.2, 1.2)
         self.ax_main.set_ylim(-1.2, 1.2)
 
-        # Legend area on the right side
         self.ax_legend = self.fig.add_axes([0.74, 0.22, 0.24, 0.75])
         self.ax_legend.axis('off')
         self._draw_legend()
 
-        # Timeline slider
         self.ax_slider = self.fig.add_axes([0.15, 0.10, 0.7, 0.03])
         self.slider = Slider(
             self.ax_slider, 'Time (ms)',
@@ -289,12 +223,10 @@ class AnimatedVisualizer:
         )
         self.slider.on_changed(self._on_slider_change)
 
-        # Play/Pause button
         self.ax_play = self.fig.add_axes([0.15, 0.03, 0.1, 0.04])
         self.btn_play = Button(self.ax_play, 'Play')
         self.btn_play.on_clicked(self._toggle_play)
 
-        # Speed buttons
         self.ax_slower = self.fig.add_axes([0.28, 0.03, 0.08, 0.04])
         self.btn_slower = Button(self.ax_slower, 'Slower')
         self.btn_slower.on_clicked(lambda e: self._change_speed(0.5))
@@ -303,19 +235,16 @@ class AnimatedVisualizer:
         self.btn_faster = Button(self.ax_faster, 'Faster')
         self.btn_faster.on_clicked(lambda e: self._change_speed(2.0))
 
-        # Reset button
         self.ax_reset = self.fig.add_axes([0.50, 0.03, 0.08, 0.04])
         self.btn_reset = Button(self.ax_reset, 'Reset')
         self.btn_reset.on_clicked(self._reset)
 
-        # Speed/pause display
         self.ax_speed = self.fig.add_axes([0.62, 0.03, 0.12, 0.04])
         self.ax_speed.axis('off')
         pause_sec = self.pause_duration / 20.0
         self.speed_text = self.ax_speed.text(0.5, 0.5, f'Pause: {pause_sec:.1f}s',
                                               ha='center', va='center', fontsize=10)
 
-        # Status text
         self.ax_status = self.fig.add_axes([0.02, 0.16, 0.96, 0.04])
         self.ax_status.axis('off')
         self.status_text = self.ax_status.text(
@@ -323,7 +252,6 @@ class AnimatedVisualizer:
             ha='center', va='center', fontsize=9, color='gray'
         )
 
-        # Connect keyboard events
         self.fig.canvas.mpl_connect('key_press_event', self._on_key_press)
 
     def _draw_legend(self):
@@ -332,15 +260,14 @@ class AnimatedVisualizer:
         self.ax_legend.axis('off')
         self.ax_legend.set_xlim(0, 1)
         self.ax_legend.set_ylim(0, 1)
-        self.ax_legend.set_aspect('equal')  # Ensure circles render as circles, not ovals
+        self.ax_legend.set_aspect('equal')
 
         self.ax_legend.text(0.5, 0.98, 'Legend', ha='center', va='top',
                            fontsize=12, fontweight='bold')
 
         y = 0.92
-        spacing = 0.08  # Slightly more spacing for cleaner look
+        spacing = 0.08
 
-        # Node states
         self.ax_legend.text(0.08, y, 'Node States:', fontsize=10, fontweight='bold')
         y -= spacing
 
@@ -359,7 +286,6 @@ class AnimatedVisualizer:
 
         y -= spacing * 0.5
 
-        # Packet colors
         self.ax_legend.text(0.08, y, 'Packet Origins:', fontsize=10, fontweight='bold')
         y -= spacing
 
@@ -368,17 +294,15 @@ class AnimatedVisualizer:
             self.ax_legend.add_patch(circle)
             self.ax_legend.text(0.20, y, f'From Node {orig}', fontsize=9, va='center')
             y -= spacing
-            if y < 0.1:  # Don't overflow
+            if y < 0.1:
                 break
 
     def _get_node_states(self, time_ms: float) -> Dict[int, str]:
         """Get the state of each node at a given time."""
         states = {node: 'idle' for node in self.G.nodes()}
-        window = 5  # Window to show state after event occurred
+        window = 5
 
         for event in self.node_events:
-            # Only show state for events that have happened (not future events)
-            # and are within the display window
             if event.time_ms <= time_ms <= event.time_ms + window:
                 node = event.node_id
                 if event.event_type == 'SEND':
@@ -396,8 +320,7 @@ class AnimatedVisualizer:
 
     def _get_current_events(self, time_ms: float) -> List[NodeEvent]:
         """Get events happening at the current time (within display window)."""
-        window = 5  # Same window as node states for consistency
-        # Only show labels for events that have happened (not future events)
+        window = 5
         return [e for e in self.node_events
                 if e.time_ms <= time_ms <= e.time_ms + window]
 
@@ -438,7 +361,7 @@ class AnimatedVisualizer:
                 nodes = [e.node_id for e in self_disc]
                 parts.append(f"Nodes {nodes} broadcast their own discovery")
             if forwards:
-                for e in forwards[:3]:  # Limit to avoid overflow
+                for e in forwards[:3]:
                     parts.append(f"Node {e.node_id} forwards Node {e.originator_id}'s packet")
 
         if recv_events:
@@ -464,7 +387,6 @@ class AnimatedVisualizer:
         """Draw a single frame of the animation."""
         self.ax_main.clear()
 
-        # Get event summary for title
         event_summary = self._get_event_summary(time_ms)
         event_idx = self.current_event_index + 1
         total_events = len(self.sorted_event_times)
@@ -480,11 +402,9 @@ class AnimatedVisualizer:
             self.ax_main.text(0, 0, 'No topology data', ha='center', va='center', fontsize=14)
             return
 
-        # Draw edges first (so they're behind everything)
         nx.draw_networkx_edges(self.G, self.pos, ax=self.ax_main,
                                edge_color='lightgray', width=3, alpha=0.7)
 
-        # Get node states and colors
         states = self._get_node_states(time_ms)
         state_colors = {
             'idle': 'lightblue',
@@ -494,23 +414,19 @@ class AnimatedVisualizer:
         }
         node_colors = [state_colors[states[node]] for node in self.G.nodes()]
 
-        # Draw nodes
         nx.draw_networkx_nodes(self.G, self.pos, ax=self.ax_main,
                                node_color=node_colors, node_size=1200,
                                edgecolors='black', linewidths=2)
 
-        # Draw node ID labels
         nx.draw_networkx_labels(self.G, self.pos, ax=self.ax_main,
                                 font_size=14, font_weight='bold')
 
-        # Draw event labels beside nodes (to the left or right)
         event_labels = self._get_event_labels(time_ms)
         for node, labels in event_labels.items():
             if node in self.pos:
                 x, y = self.pos[node]
-                label_text = '\n'.join(labels[:2])  # Max 2 labels
+                label_text = '\n'.join(labels[:2])
 
-                # Position label to the left or right of node depending on x position
                 if x > 0:
                     label_x = x - 0.35
                     ha = 'right'
@@ -518,7 +434,6 @@ class AnimatedVisualizer:
                     label_x = x + 0.35
                     ha = 'left'
 
-                # Draw label with background box beside the node
                 self.ax_main.annotate(
                     label_text,
                     xy=(x, y),
@@ -531,23 +446,19 @@ class AnimatedVisualizer:
                     arrowprops=dict(arrowstyle='->', color='orange', lw=1.5)
                 )
 
-        # Draw packets in flight
         active_packets = self._get_active_packets(time_ms)
         for anim, progress in active_packets:
             if anim.sender_id in self.pos and anim.receiver_id in self.pos:
                 start_pos = np.array(self.pos[anim.sender_id])
                 end_pos = np.array(self.pos[anim.receiver_id])
 
-                # Interpolate position
                 packet_pos = start_pos + progress * (end_pos - start_pos)
 
-                # Draw packet as a larger, more visible circle
                 color = self.originator_colors.get(anim.originator_id, 'gray')
                 circle = plt.Circle(packet_pos, 0.06, color=color,
                                    ec='black', linewidth=2, zorder=15)
                 self.ax_main.add_patch(circle)
 
-                # Add small label showing originator
                 self.ax_main.text(packet_pos[0], packet_pos[1] + 0.1,
                                  f'{anim.originator_id}',
                                  fontsize=7, ha='center', va='bottom',
@@ -562,7 +473,6 @@ class AnimatedVisualizer:
 
     def _on_slider_change(self, val):
         """Handle slider value change - snap to nearest event."""
-        # Find nearest event time
         if self.sorted_event_times:
             nearest_idx = min(range(len(self.sorted_event_times)),
                             key=lambda i: abs(self.sorted_event_times[i] - val))
@@ -601,25 +511,21 @@ class AnimatedVisualizer:
         if event.key == ' ':
             self._toggle_play()
         elif event.key == 'right':
-            # Step to next event
             self._next_event()
             self.frames_at_current_event = 0
             self.slider.set_val(self.current_time)
             self._draw_frame(self.current_time)
             self.fig.canvas.draw_idle()
         elif event.key == 'left':
-            # Step to previous event
             self._prev_event()
             self.frames_at_current_event = 0
             self.slider.set_val(self.current_time)
             self._draw_frame(self.current_time)
             self.fig.canvas.draw_idle()
         elif event.key == 'up':
-            # Decrease pause duration (faster)
             self.pause_duration = max(10, self.pause_duration - 10)
             self._update_speed_display()
         elif event.key == 'down':
-            # Increase pause duration (slower)
             self.pause_duration = min(120, self.pause_duration + 10)
             self._update_speed_display()
         elif event.key == 'r':
@@ -629,7 +535,7 @@ class AnimatedVisualizer:
 
     def _update_speed_display(self):
         """Update the speed display text."""
-        pause_sec = self.pause_duration / 20.0  # Assuming 20 FPS
+        pause_sec = self.pause_duration / 20.0
         self.speed_text.set_text(f'Pause: {pause_sec:.1f}s')
         self.fig.canvas.draw_idle()
 
@@ -638,12 +544,9 @@ class AnimatedVisualizer:
         self.current_frame = frame
 
         if self.playing and self.auto_advance:
-            # Increment frames at current event
             self.frames_at_current_event += 1
 
-            # Check if we've paused long enough at this event
             if self.frames_at_current_event >= self.pause_duration:
-                # Move to next event
                 self.frames_at_current_event = 0
                 self._next_event()
 
@@ -658,7 +561,6 @@ class AnimatedVisualizer:
             self.current_event_index += 1
             self.current_time = self.sorted_event_times[self.current_event_index]
         else:
-            # Loop back to start
             self.current_event_index = 0
             self.current_time = self.sorted_event_times[0] if self.sorted_event_times else self.min_time
 
@@ -668,24 +570,20 @@ class AnimatedVisualizer:
             self.current_event_index -= 1
             self.current_time = self.sorted_event_times[self.current_event_index]
         else:
-            # Loop to end
             self.current_event_index = len(self.sorted_event_times) - 1
             self.current_time = self.sorted_event_times[self.current_event_index] if self.sorted_event_times else self.max_time
 
     def run(self):
         """Start the animated visualization."""
-        # Initialize to first event
         if self.sorted_event_times:
             self.current_event_index = 0
             self.current_time = self.sorted_event_times[0]
 
-        # Initial draw
         self._draw_frame(self.current_time)
 
-        # Create animation - runs at 20 FPS, event-driven stepping
         self.anim = FuncAnimation(
             self.fig, self._animate,
-            interval=50,  # 20 FPS
+            interval=50,
             blit=False,
             cache_frame_data=False
         )
@@ -735,4 +633,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

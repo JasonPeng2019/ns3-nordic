@@ -1,21 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * Task 7 Comprehensive Test: 4-Slot Discovery Cycle
- *
- * This simulation tests all subtasks for Task 7:
- * - Subtask 1: Discovery cycle timing structure (4 message slots)
- * - Subtask 2: Slot timing mechanism (1 slot for own message, 3 for forwarding)
- * - Subtask 3: Discovery cycle scheduler
- * - Subtask 4: Slot allocation algorithm
- * - Subtask 5: Synchronization mechanism for network-wide cycles
- * - Subtask 6: Cycle timing accuracy and consistency
- *
- * Usage:
- *   ./ns3 run "task-7-test --verbose=true"
- */
-
 #include "ns3/core-module.h"
 #include "ns3/simulator.h"
 #include "ns3/nstime.h"
@@ -31,11 +13,11 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("Task7Test");
 
-// ============================================================================
-// GLOBAL TEST STATE
-// ============================================================================
 
-// Test results tracking
+
+
+
+
 struct SubtaskResult {
     std::string name;
     bool passed;
@@ -44,12 +26,12 @@ struct SubtaskResult {
 
 std::vector<SubtaskResult> g_testResults;
 
-// Verbose mode flag
+
 bool g_verbose = true;
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
+
+
+
 
 void PrintHeader (const std::string& title)
 {
@@ -94,9 +76,9 @@ void RecordResult (const std::string& name, bool passed, const std::string& deta
     g_testResults.push_back(result);
 }
 
-// ============================================================================
-// SUBTASK 1: Discovery Cycle Timing Structure (4 Message Slots)
-// ============================================================================
+
+
+
 
 class Subtask1Test
 {
@@ -107,7 +89,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 1.1: Default slot duration
+        
         PrintSubHeader("Test 1.1: Default Slot Duration");
         {
             Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper>();
@@ -121,7 +103,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.2: Cycle duration = 4 * slot duration
+        
         PrintSubHeader("Test 1.2: Cycle Duration = 4 x Slot Duration");
         {
             Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper>();
@@ -138,7 +120,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.3: Configurable slot duration
+        
         PrintSubHeader("Test 1.3: Configurable Slot Duration");
         {
             Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper>();
@@ -161,7 +143,7 @@ public:
             allPassed &= slotPassed && cyclePassed;
         }
 
-        // Test 1.4: Different time units
+        
         PrintSubHeader("Test 1.4: Different Time Units");
         {
             Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper>();
@@ -185,9 +167,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 2: Slot Timing Mechanism (1 Own + 3 Forwarding)
-// ============================================================================
+
+
+
 
 class Subtask2Test
 {
@@ -208,7 +190,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 2.1: Slot 0 is for own message
+        
         PrintSubHeader("Test 2.1: Slot 0 Callback (Own Message)");
         {
             s_slot0Count = 0;
@@ -221,7 +203,7 @@ public:
             PrintState("Starting cycle with 25ms slots...");
 
             cycle->Start();
-            Simulator::Stop(MilliSeconds(30)); // Run past slot 0
+            Simulator::Stop(MilliSeconds(30)); 
             Simulator::Run();
             cycle->Stop();
             Simulator::Destroy();
@@ -233,7 +215,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.2: Slots 1-3 are for forwarding
+        
         PrintSubHeader("Test 2.2: Slots 1-3 Callbacks (Forwarding)");
         {
             s_slot0Count = 0;
@@ -257,7 +239,7 @@ public:
             PrintState("Starting cycle...");
 
             cycle->Start();
-            Simulator::Stop(MilliSeconds(99)); // Run for 1 full cycle (stop before cycle 2 starts at 100ms)
+            Simulator::Stop(MilliSeconds(99)); 
             Simulator::Run();
             cycle->Stop();
             Simulator::Destroy();
@@ -284,7 +266,7 @@ public:
             allPassed &= slot0Passed && slot1Passed && slot2Passed && slot3Passed && ratioCorrect;
         }
 
-        // Test 2.3: Current slot tracking
+        
         PrintSubHeader("Test 2.3: Current Slot Tracking");
         {
             Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper>();
@@ -307,9 +289,9 @@ uint32_t Subtask2Test::s_slot1Count = 0;
 uint32_t Subtask2Test::s_slot2Count = 0;
 uint32_t Subtask2Test::s_slot3Count = 0;
 
-// ============================================================================
-// SUBTASK 3: Discovery Cycle Scheduler
-// ============================================================================
+
+
+
 
 class Subtask3Test
 {
@@ -332,7 +314,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 3.1: Multiple cycles execute correctly
+        
         PrintSubHeader("Test 3.1: Multiple Cycle Execution");
         {
             s_slotExecutions = 0;
@@ -352,11 +334,11 @@ public:
             PrintState("Running for 3 complete cycles (600ms)...\n");
 
             cycle->Start();
-            // With 50ms slots: cycle duration = 200ms
-            // Cycle completions fire at 200ms, 400ms, 600ms
-            // Slot 3 of cycle 3 fires at 550ms, cycle 3 completes at 600ms
-            // Cycle 4's slot 0 would also be at 600ms but scheduled after completion
-            // Use 601ms to ensure the 3rd cycle completion callback fires
+            
+            
+            
+            
+            
             Simulator::Stop(MilliSeconds(601));
             Simulator::Run();
             cycle->Stop();
@@ -368,9 +350,9 @@ public:
             PrintState("  Cycle completions: " + std::to_string(s_cycleCompletions));
             PrintState("  Expected: 3");
 
-            // Note: When cycle 3 completes at 600ms, ScheduleNextCycle immediately schedules
-            // cycle 4's slots. Slot 0 of cycle 4 is scheduled at Seconds(0) relative to 600ms,
-            // so it fires at 600ms before the simulator stops at 601ms. This is correct behavior.
+            
+            
+            
             bool slotsPassed = (s_slotExecutions == 13);
             bool cyclesPassed = (s_cycleCompletions == 3);
 
@@ -380,7 +362,7 @@ public:
             allPassed &= slotsPassed && cyclesPassed;
         }
 
-        // Test 3.2: Cycle completion timing
+        
         PrintSubHeader("Test 3.2: Cycle Completion Timing");
         {
             if (s_cycleCompleteTimes.size() >= 3)
@@ -402,7 +384,7 @@ public:
             }
         }
 
-        // Test 3.3: Start/Stop behavior
+        
         PrintSubHeader("Test 3.3: Start/Stop Behavior");
         {
             Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper>();
@@ -426,7 +408,7 @@ public:
             allPassed &= initialState && startedState && stoppedState;
         }
 
-        // Test 3.4: Cycle count tracking
+        
         PrintSubHeader("Test 3.4: Cycle Count Tracking");
         {
             s_cycleCompletions = 0;
@@ -438,7 +420,7 @@ public:
             PrintState("Initial cycle count: " + std::to_string(cycle->GetCycleCount()));
 
             cycle->Start();
-            Simulator::Stop(MilliSeconds(250)); // 2.5 cycles
+            Simulator::Stop(MilliSeconds(250)); 
             Simulator::Run();
 
             uint32_t finalCount = cycle->GetCycleCount();
@@ -461,9 +443,9 @@ uint32_t Subtask3Test::s_slotExecutions = 0;
 uint32_t Subtask3Test::s_cycleCompletions = 0;
 std::vector<Time> Subtask3Test::s_cycleCompleteTimes;
 
-// ============================================================================
-// SUBTASK 4: Slot Allocation Algorithm
-// ============================================================================
+
+
+
 
 class Subtask4Test
 {
@@ -492,7 +474,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 4.1: Slot 0 triggers own message send
+        
         PrintSubHeader("Test 4.1: Slot 0 - Own Message Transmission");
         {
             s_ownMessageCount = 0;
@@ -510,7 +492,7 @@ public:
             PrintState("Simulating node behavior over 2 cycles...\n");
 
             cycle->Start();
-            Simulator::Stop(MilliSeconds(399)); // 2 cycles (stop before cycle 3 starts at 400ms)
+            Simulator::Stop(MilliSeconds(399)); 
             Simulator::Run();
             cycle->Stop();
             Simulator::Destroy();
@@ -538,14 +520,14 @@ public:
             allPassed &= ownPassed && fwdPassed && ratioPassed;
         }
 
-        // Test 4.2: Null callback handling (no crash)
+        
         PrintSubHeader("Test 4.2: Null Callback Handling");
         {
             Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper>();
             cycle->SetSlotDuration(MilliSeconds(10));
 
-            // Only set slot 1 callback, leave others null
-            // Set slot 1 callback only (reusing OnOwnMessage to count executions)
+            
+            
             cycle->SetForwardingSlotCallback(1, MakeCallback(&Subtask4Test::OnOwnMessage));
 
             PrintState("Running with only slot 1 callback set (others null)...");
@@ -568,7 +550,7 @@ public:
             allPassed &= !crashed;
         }
 
-        // Test 4.3: Slot execution order within cycle
+        
         PrintSubHeader("Test 4.3: Slot Execution Order");
         {
             s_slotLog.clear();
@@ -584,7 +566,7 @@ public:
             PrintState("Verifying slot order: 0 -> 1 -> 2 -> 3...\n");
 
             cycle->Start();
-            Simulator::Stop(MilliSeconds(110)); // 1 cycle + buffer
+            Simulator::Stop(MilliSeconds(110)); 
             Simulator::Run();
             cycle->Stop();
             Simulator::Destroy();
@@ -617,9 +599,9 @@ uint32_t Subtask4Test::s_ownMessageCount = 0;
 uint32_t Subtask4Test::s_forwardAttemptCount = 0;
 std::vector<std::pair<uint8_t, Time>> Subtask4Test::s_slotLog;
 
-// ============================================================================
-// SUBTASK 5: Synchronization Mechanism for Network-Wide Cycles
-// ============================================================================
+
+
+
 
 class Subtask5Test
 {
@@ -652,14 +634,14 @@ public:
 
         bool allPassed = true;
 
-        // Test 5.1: Multiple nodes with synchronized start
+        
         PrintSubHeader("Test 5.1: Synchronized Start (3 Nodes)");
         {
             s_node1Slot0Times.clear();
             s_node2Slot0Times.clear();
             s_node3Slot0Times.clear();
 
-            // Create 3 independent nodes
+            
             Ptr<BleDiscoveryCycleWrapper> node1 = CreateObject<BleDiscoveryCycleWrapper>();
             Ptr<BleDiscoveryCycleWrapper> node2 = CreateObject<BleDiscoveryCycleWrapper>();
             Ptr<BleDiscoveryCycleWrapper> node3 = CreateObject<BleDiscoveryCycleWrapper>();
@@ -676,12 +658,12 @@ public:
             PrintState("Created 3 nodes with 50ms slot duration (200ms cycle)");
             PrintState("Starting all nodes simultaneously at t=0...\n");
 
-            // Start all nodes at same time
+            
             node1->Start();
             node2->Start();
             node3->Start();
 
-            // Run for 3 cycles
+            
             Simulator::Stop(MilliSeconds(650));
             Simulator::Run();
 
@@ -712,7 +694,7 @@ public:
             }
             std::cout << "\n";
 
-            // Check synchronization
+            
             bool syncPassed = true;
             size_t minSize = std::min({s_node1Slot0Times.size(), s_node2Slot0Times.size(), s_node3Slot0Times.size()});
 
@@ -731,14 +713,14 @@ public:
             allPassed &= syncPassed;
         }
 
-        // Test 5.2: Independent state tracking
+        
         PrintSubHeader("Test 5.2: Independent State Tracking");
         {
             Ptr<BleDiscoveryCycleWrapper> nodeA = CreateObject<BleDiscoveryCycleWrapper>();
             Ptr<BleDiscoveryCycleWrapper> nodeB = CreateObject<BleDiscoveryCycleWrapper>();
 
             nodeA->SetSlotDuration(MilliSeconds(100));
-            nodeB->SetSlotDuration(MilliSeconds(50)); // Different duration
+            nodeB->SetSlotDuration(MilliSeconds(50)); 
 
             PrintState("Node A: 100ms slots, Node B: 50ms slots");
 
@@ -753,7 +735,7 @@ public:
             allPassed &= independent;
         }
 
-        // Test 5.3: Timing consistency over multiple cycles
+        
         PrintSubHeader("Test 5.3: Timing Consistency Across Cycles");
         {
             if (s_node1Slot0Times.size() >= 3)
@@ -787,9 +769,9 @@ std::vector<Time> Subtask5Test::s_node1Slot0Times;
 std::vector<Time> Subtask5Test::s_node2Slot0Times;
 std::vector<Time> Subtask5Test::s_node3Slot0Times;
 
-// ============================================================================
-// SUBTASK 6: Cycle Timing Accuracy and Consistency
-// ============================================================================
+
+
+
 
 class Subtask6Test
 {
@@ -807,7 +789,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 6.1: Precise slot timing over 5 cycles
+        
         PrintSubHeader("Test 6.1: Timing Accuracy Over 5 Cycles");
         {
             s_allSlotTimes.clear();
@@ -825,14 +807,14 @@ public:
             PrintState("Expected 20 slot executions...\n");
 
             cycle->Start();
-            Simulator::Stop(MilliSeconds(520)); // 5 cycles + buffer
+            Simulator::Stop(MilliSeconds(520)); 
             Simulator::Run();
             cycle->Stop();
             Simulator::Destroy();
 
             PrintState("Total slot executions: " + std::to_string(s_allSlotTimes.size()));
 
-            // Verify timing for each slot
+            
             bool timingCorrect = true;
             Time cycleDuration = slotDuration * 4;
 
@@ -863,7 +845,7 @@ public:
             allPassed &= timingCorrect;
         }
 
-        // Test 6.2: Consistent slot intervals
+        
         PrintSubHeader("Test 6.2: Consistent Slot Intervals");
         {
             bool intervalsCorrect = true;
@@ -892,7 +874,7 @@ public:
             allPassed &= intervalsCorrect;
         }
 
-        // Test 6.3: Long-running accuracy test (10 cycles)
+        
         PrintSubHeader("Test 6.3: Extended Accuracy Test (10 Cycles)");
         {
             s_allSlotTimes.clear();
@@ -915,11 +897,11 @@ public:
             cycle->Stop();
             Simulator::Destroy();
 
-            // Check last slot timing
+            
             bool lastSlotCorrect = false;
             if (s_allSlotTimes.size() >= 40)
             {
-                Time lastExpected = MilliSeconds(390); // Cycle 9, slot 3
+                Time lastExpected = MilliSeconds(390); 
                 Time lastActual = s_allSlotTimes[39].second;
                 lastSlotCorrect = (lastActual == lastExpected);
 
@@ -941,9 +923,9 @@ public:
 
 std::vector<std::pair<uint8_t, Time>> Subtask6Test::s_allSlotTimes;
 
-// ============================================================================
-// MAIN TEST RUNNER
-// ============================================================================
+
+
+
 
 void PrintFinalResults ()
 {
@@ -983,7 +965,7 @@ void PrintFinalResults ()
 
 int main (int argc, char *argv[])
 {
-    // Parse command line arguments
+    
     CommandLine cmd;
     cmd.AddValue("verbose", "Enable verbose output", g_verbose);
     cmd.Parse(argc, argv);
@@ -996,7 +978,7 @@ int main (int argc, char *argv[])
     std::cout << "################################################################\n";
     std::cout << "\nVerbose mode: " << (g_verbose ? "ON" : "OFF") << "\n";
 
-    // Run all subtask tests
+    
     Subtask1Test::Run();
     Subtask2Test::Run();
     Subtask3Test::Run();
@@ -1004,7 +986,7 @@ int main (int argc, char *argv[])
     Subtask5Test::Run();
     Subtask6Test::Run();
 
-    // Print final summary
+    
     PrintFinalResults();
 
     return 0;

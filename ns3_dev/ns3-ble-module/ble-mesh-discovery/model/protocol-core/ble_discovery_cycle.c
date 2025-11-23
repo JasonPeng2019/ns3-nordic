@@ -2,10 +2,8 @@
  * @file ble_discovery_cycle.c
  * @brief Pure C implementation of BLE Discovery Cycle state machine
  *
- * Copyright (c) 2025
- * Author: Benjamin Huh <buh07@github>
  */
-
+jason peng
 #include "ble_discovery_cycle.h"
 #include <string.h>
 
@@ -28,7 +26,7 @@ void ble_discovery_cycle_init(ble_discovery_cycle_t *cycle)
     }
 }
 
-//need to change cycle->running to a mutex in zephyr implementation
+
 bool ble_discovery_cycle_set_slot_duration(ble_discovery_cycle_t *cycle, uint32_t duration_ms)
 {
     if (cycle == NULL) {
@@ -43,7 +41,7 @@ bool ble_discovery_cycle_set_slot_duration(ble_discovery_cycle_t *cycle, uint32_
     return true;
 }
 
-// instead of flipping true/false, in zephyr, should work on mutex
+
 uint32_t ble_discovery_cycle_get_slot_duration(const ble_discovery_cycle_t *cycle)
 {
     if (cycle == NULL) {
@@ -66,7 +64,7 @@ bool ble_discovery_cycle_start(ble_discovery_cycle_t *cycle)
         return false;
     }
 
-    /* Already running */
+    
     if (cycle->running) {
         return false;
     }
@@ -153,7 +151,7 @@ void ble_discovery_cycle_set_user_data(ble_discovery_cycle_t *cycle, void *user_
     cycle->user_data = user_data;
 }
 
-//doesn’t advance the slot—that’s the caller’s job.
+
 void ble_discovery_cycle_execute_slot(ble_discovery_cycle_t *cycle)
 {
     if (cycle == NULL || !cycle->running) {
@@ -162,7 +160,7 @@ void ble_discovery_cycle_execute_slot(ble_discovery_cycle_t *cycle)
 
     uint8_t slot = cycle->current_slot;
 
-    /* Execute callback for current slot if set */
+    
     if (slot < BLE_DISCOVERY_NUM_SLOTS && cycle->slot_callbacks[slot] != NULL) {
         cycle->slot_callbacks[slot](slot, cycle->user_data);
     }
@@ -176,12 +174,12 @@ uint8_t ble_discovery_cycle_advance_slot(ble_discovery_cycle_t *cycle)
 
     cycle->current_slot++;
 
-    /* Check for cycle completion */
+    
     if (cycle->current_slot >= BLE_DISCOVERY_NUM_SLOTS) {
         cycle->current_slot = 0;
         cycle->cycle_count++;
 
-        /* Call cycle complete callback */
+        
         if (cycle->cycle_complete_callback != NULL) {
             cycle->cycle_complete_callback(cycle->cycle_count, cycle->user_data);
         }

@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-/* Configuration constants */
+
 #define BLE_QUEUE_MAX_SIZE 100           /**< Maximum number of queued messages */
 #define BLE_SEEN_CACHE_SIZE 200          /**< Maximum size of seen messages cache */
 
@@ -60,7 +60,7 @@ typedef struct {
     ble_seen_message_t seen_cache[BLE_SEEN_CACHE_SIZE]; /**< Seen messages cache */
     uint32_t seen_count;                 /**< Number of entries in seen cache */
 
-    /* Statistics */
+    
     uint32_t total_enqueued;             /**< Total messages enqueued */
     uint32_t total_dequeued;             /**< Total messages dequeued */
     uint32_t total_duplicates;           /**< Total duplicates rejected */
@@ -186,4 +186,4 @@ void ble_queue_get_statistics(const ble_message_queue_t *queue,
 }
 #endif
 
-#endif /* BLE_MESSAGE_QUEUE_H */
+#endif 

@@ -7,13 +7,13 @@
 #include <math.h>
 #include <limits.h>
 
-/* Internal RNG state for probabilistic decisions */
+
 static uint32_t g_forwarding_rng_state = 0x6d2b79f5u;
 
 static double
 ble_forwarding_random_value(void)
 {
-    /* xorshift32 */
+    
     g_forwarding_rng_state ^= g_forwarding_rng_state << 13;
     g_forwarding_rng_state ^= g_forwarding_rng_state >> 17;
     g_forwarding_rng_state ^= g_forwarding_rng_state << 5;
@@ -31,7 +31,7 @@ ble_forwarding_set_random_seed(uint32_t seed)
     }
 }
 
-/* Helper function: Calculate mean of RSSI samples */
+
 static double
 calculate_mean_rssi(const int8_t *samples, uint32_t count)
 {
@@ -51,24 +51,17 @@ double
 ble_forwarding_calculate_crowding_factor(const int8_t *rssi_samples,
                                            uint32_t num_samples)
 {
-    const double RSSI_MIN = -90.0;  /* Weakest signal considered */
-    const double RSSI_MAX = -40.0;  /* Strongest signal considered */
+    const double RSSI_MIN = -90.0;  
+    const double RSSI_MAX = -40.0;  
 
     if (!rssi_samples || num_samples == 0) {
-        return 0.0; /* No crowding if no samples */
+        return 0.0; 
     }
 
-    /* Calculate mean RSSI */
+    
     double mean_rssi = calculate_mean_rssi(rssi_samples, num_samples);
 
-    /* Convert RSSI to crowding factor
-     * Higher (less negative) RSSI = stronger signals = more crowded
-     * Example: -40 dBm = very crowded, -90 dBm = not crowded
-     *
-     * Normalize to 0.0 - 1.0 range:
-     * - RSSI >= -40 dBm: crowding = 1.0 (very crowded)
-     * - RSSI <= -90 dBm: crowding = 0.0 (not crowded)
-     */
+    
 
     if (mean_rssi >= RSSI_MAX) {
         return 1.0;
@@ -77,7 +70,7 @@ ble_forwarding_calculate_crowding_factor(const int8_t *rssi_samples,
         return 0.0;
     }
 
-    /* Linear interpolation */
+    
     double crowding = (mean_rssi - RSSI_MIN) / (RSSI_MAX - RSSI_MIN);
 
     return crowding;
@@ -133,7 +126,7 @@ ble_forwarding_calculate_distance(const ble_gps_location_t *loc1,
         return 0.0;
     }
 
-    /* Simple Euclidean distance in 3D space (assuming x, y, z in meters) */
+    
     double dx = loc2->x - loc1->x;
     double dy = loc2->y - loc1->y;
     double dz = loc2->z - loc1->z;
@@ -147,15 +140,15 @@ ble_forwarding_should_forward_proximity(const ble_gps_location_t *current_locati
                                           double proximity_threshold)
 {
     if (!current_location || !last_hop_location) {
-        /* If GPS not available, skip proximity check */
+        
         return true;
     }
 
-    /* Calculate distance */
+    
     double distance = ble_forwarding_calculate_distance(current_location,
                                                          last_hop_location);
 
-    /* Forward only if distance exceeds threshold */
+    
     return distance > proximity_threshold;
 }
 
@@ -170,17 +163,17 @@ ble_forwarding_should_forward(const ble_discovery_packet_t *packet,
         return false;
     }
 
-    /* Check TTL (must be > 0) */
+    
     if (packet->ttl == 0) {
         return false;
     }
 
-    /* Check crowding factor (picky forwarding) */
+    
     if (!ble_forwarding_should_forward_crowding(crowding_factor, direct_neighbors)) {
         return false;
     }
 
-    /* Check GPS proximity (if GPS available) */
+    
     if (packet->gps_available && current_location) {
         if (!ble_forwarding_should_forward_proximity(current_location,
                                                        &packet->gps_location,
@@ -189,21 +182,19 @@ ble_forwarding_should_forward(const ble_discovery_packet_t *packet,
         }
     }
 
-    /* All checks passed */
+    
     return true;
 }
 
 uint8_t
 ble_forwarding_calculate_priority(uint8_t ttl)
 {
-    /* Higher TTL = higher priority (lower priority number)
-     * Priority range: 0 (highest) to 255 (lowest)
-     */
+    
 
     if (ttl == 0) {
-        return 255; /* Lowest priority for expired messages */
+        return 255; 
     }
 
-    /* Invert TTL: higher TTL gets lower priority number */
+    
     return 255 - ttl;
 }

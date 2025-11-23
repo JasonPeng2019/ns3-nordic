@@ -160,4 +160,4 @@ const ble_mesh_node_t* ble_engine_get_node(const ble_engine_t *engine);
 }
 #endif
 
-#endif /* BLE_DISCOVERY_ENGINE_H */
+#endif 

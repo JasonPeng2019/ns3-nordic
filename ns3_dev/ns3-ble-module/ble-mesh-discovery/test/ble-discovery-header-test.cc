@@ -1,17 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
-
 #include "ns3/test.h"
 #include "ns3/ble-discovery-header-wrapper.h"
 #include "ns3/packet.h"
@@ -48,7 +34,7 @@ BleDiscoveryHeaderTestCase::~BleDiscoveryHeaderTestCase ()
 void
 BleDiscoveryHeaderTestCase::DoRun (void)
 {
-  // Test 1: Basic header creation and getters/setters
+  
   BleDiscoveryHeaderWrapper header;
   header.SetSenderId (42);
   header.SetTtl (10);
@@ -58,12 +44,12 @@ BleDiscoveryHeaderTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (header.HasClusterheadFlag (), false,
                          "Default header should not be flagged as clusterhead");
 
-  // Test 2: TTL decrement
+  
   bool result = header.DecrementTtl ();
   NS_TEST_ASSERT_MSG_EQ (result, true, "DecrementTtl should return true when TTL > 0");
   NS_TEST_ASSERT_MSG_EQ (header.GetTtl (), 9, "TTL should be 9 after decrement");
 
-  // Test 3: Path So Far operations
+  
   header.AddToPath (1);
   header.AddToPath (2);
   header.AddToPath (3);
@@ -76,7 +62,7 @@ BleDiscoveryHeaderTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (path[0], 1, "First node should be 1");
   NS_TEST_ASSERT_MSG_EQ (path[2], 3, "Third node should be 3");
 
-  // Test 4: GPS location
+  
   Vector gpsLoc (10.5, 20.5, 30.5);
   header.SetGpsLocation (gpsLoc);
   header.SetGpsAvailable (true);
@@ -87,7 +73,7 @@ BleDiscoveryHeaderTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (retrieved.y, 20.5, "GPS Y coordinate should match");
   NS_TEST_ASSERT_MSG_EQ (retrieved.z, 30.5, "GPS Z coordinate should match");
 
-  // Test 5: Election announcement fields
+  
   header.SetAsElectionMessage ();
   header.SetClassId (100);
   header.SetPdsf (150);
@@ -103,7 +89,7 @@ BleDiscoveryHeaderTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (header.GetScore (), 0.85, "Score should be 0.85");
   NS_TEST_ASSERT_MSG_EQ (header.GetHash (), 12345, "Hash should be 12345");
 
-  // Test 6: Serialization and deserialization
+  
   Ptr<Packet> packet = Create<Packet> ();
   packet->AddHeader (header);
 
@@ -150,7 +136,7 @@ BleDiscoveryPacketIntegrationTestCase::~BleDiscoveryPacketIntegrationTestCase ()
 void
 BleDiscoveryPacketIntegrationTestCase::DoRun (void)
 {
-  // Test: Multiple serialize/deserialize cycles
+  
   BleDiscoveryHeaderWrapper original;
   original.SetSenderId (999);
   original.SetTtl (15);
@@ -161,7 +147,7 @@ BleDiscoveryPacketIntegrationTestCase::DoRun (void)
 
   for (int cycle = 0; cycle < 3; cycle++)
     {
-      Ptr<Packet> pkt = Create<Packet> (100); // Add payload
+      Ptr<Packet> pkt = Create<Packet> (100); 
       pkt->AddHeader (original);
 
       NS_TEST_ASSERT_MSG_EQ (pkt->GetSize (), original.GetSerializedSize () + 100,
@@ -175,10 +161,10 @@ BleDiscoveryPacketIntegrationTestCase::DoRun (void)
       NS_TEST_ASSERT_MSG_EQ (copy.GetPath ().size (), original.GetPath ().size (),
                              "Path should survive multiple cycles");
 
-      original = copy; // Use for next cycle
+      original = copy; 
     }
 
-  // Test: Packet copy constructor
+  
   Ptr<Packet> pkt1 = Create<Packet> ();
   BleDiscoveryHeaderWrapper hdr1;
   hdr1.SetSenderId (777);
@@ -192,7 +178,7 @@ BleDiscoveryPacketIntegrationTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (hdr2.GetSenderId (), 777, "Packet copy should preserve header");
   NS_TEST_ASSERT_MSG_EQ (hdr2.GetTtl (), 5, "Packet copy should preserve TTL");
 
-  // Test: Packet fragmentation doesn't corrupt header
+  
   Ptr<Packet> largePkt = Create<Packet> (2000);
   BleDiscoveryHeaderWrapper largeHdr;
   largeHdr.SetSenderId (12345);
@@ -238,7 +224,7 @@ BleDiscoveryElectionTestCase::~BleDiscoveryElectionTestCase ()
 void
 BleDiscoveryElectionTestCase::DoRun (void)
 {
-  // Test: Convert discovery to election
+  
   BleDiscoveryHeaderWrapper msg;
   msg.SetSenderId (100);
   msg.SetTtl (8);
@@ -260,7 +246,7 @@ BleDiscoveryElectionTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (msg.GetPath ().size (), 2,
                          "Path should be preserved during conversion");
 
-  // Test: Election-specific fields
+  
   msg.SetClassId (7);
   msg.SetPdsf (200);
   msg.SetScore (0.95);
@@ -274,7 +260,7 @@ BleDiscoveryElectionTestCase::DoRun (void)
   msg.ResetPdsfHistory ();
   uint32_t pdsf = msg.UpdatePdsf (12, 0);
   NS_TEST_ASSERT_MSG_EQ (pdsf, 12, "First hop PDSF should equal direct connections");
-  pdsf = msg.UpdatePdsf (9, 4); // contributes 5 new neighbors
+  pdsf = msg.UpdatePdsf (9, 4); 
   NS_TEST_ASSERT_MSG_EQ (pdsf, 72, "PDSF should accumulate ΣΠ contributions");
 
   std::vector<uint32_t> hopHistory = msg.GetPdsfHopHistory ();
@@ -282,11 +268,11 @@ BleDiscoveryElectionTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (hopHistory[0], 12, "First hop history incorrect");
   NS_TEST_ASSERT_MSG_EQ (hopHistory[1], 5, "Second hop should record deduplicated count");
 
-  // Test: Election serialization size
+  
   uint32_t electionSize = msg.GetSerializedSize ();
   NS_TEST_ASSERT_MSG_GT (electionSize, 50, "Election packet should be substantial size");
 
-  // Test: Election round-trip serialization
+  
   Ptr<Packet> pkt = Create<Packet> ();
   pkt->AddHeader (msg);
 
@@ -333,7 +319,7 @@ BleDiscoveryGpsTestCase::~BleDiscoveryGpsTestCase ()
 void
 BleDiscoveryGpsTestCase::DoRun (void)
 {
-  // Test: Message without GPS should have smaller size
+  
   BleDiscoveryHeaderWrapper noGps;
   noGps.SetSenderId (1);
   noGps.SetTtl (10);
@@ -352,7 +338,7 @@ BleDiscoveryGpsTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (sizeWithGps, sizeNoGps + 24,
                          "GPS adds 24 bytes (3 doubles)");
 
-  // Test: Serialization without GPS
+  
   Ptr<Packet> pkt = Create<Packet> ();
   pkt->AddHeader (noGps);
 
@@ -362,7 +348,7 @@ BleDiscoveryGpsTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (received.IsGpsAvailable (), false,
                          "GPS should not be available");
 
-  // Test: Can set GPS availability independently
+  
   BleDiscoveryHeaderWrapper manual;
   manual.SetGpsLocation (Vector (5.0, 6.0, 7.0));
   NS_TEST_ASSERT_MSG_EQ (manual.IsGpsAvailable (), true,
@@ -372,7 +358,7 @@ BleDiscoveryGpsTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (manual.IsGpsAvailable (), false,
                          "Should be able to disable GPS");
 
-  // GPS coordinates should still be retrievable even if marked unavailable
+  
   Vector loc = manual.GetGpsLocation ();
   NS_TEST_ASSERT_MSG_EQ (loc.x, 5.0, "GPS coordinates preserved");
 }
@@ -403,13 +389,13 @@ BleDiscoveryTypeIdTestCase::~BleDiscoveryTypeIdTestCase ()
 void
 BleDiscoveryTypeIdTestCase::DoRun (void)
 {
-  // Test: TypeId
+  
   BleDiscoveryHeaderWrapper hdr;
   TypeId tid = hdr.GetInstanceTypeId ();
   NS_TEST_ASSERT_MSG_EQ (tid.GetName (), "ns3::BleDiscoveryHeaderWrapper",
                          "TypeId name should match");
 
-  // Test: Print output (basic check it doesn't crash)
+  
   std::ostringstream oss;
   hdr.SetSenderId (42);
   hdr.SetTtl (10);
@@ -422,7 +408,7 @@ BleDiscoveryTypeIdTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_NE (output.find ("42"), std::string::npos,
                          "Print should include sender ID");
 
-  // Test: Print election message
+  
   BleDiscoveryHeaderWrapper election;
   election.SetAsElectionMessage ();
   election.SetClassId (5);

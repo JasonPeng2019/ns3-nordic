@@ -1,21 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * Task 8 Comprehensive Test: Message Forwarding Queue
- *
- * This simulation tests all subtasks for Task 8:
- * - Subtask 1: Message queue data structure for received discovery messages
- * - Subtask 2: Queue management (add, remove, prioritize)
- * - Subtask 3: Message deduplication logic (track seen messages)
- * - Subtask 4: PSF loop detection (message not forwarded if node already in PSF)
- * - Subtask 5: Queue size limits and overflow handling
- * - Subtask 6: Queue behavior under high message load
- *
- * Usage:
- *   ./waf --run "task-8-test --verbose=true"
- */
-
 #include "ns3/core-module.h"
 #include "ns3/simulator.h"
 #include "ns3/nstime.h"
@@ -33,9 +15,9 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("Task8Test");
 
-// ============================================================================
-// GLOBAL TEST STATE
-// ============================================================================
+
+
+
 
 struct SubtaskResult {
     std::string name;
@@ -46,7 +28,7 @@ struct SubtaskResult {
 std::vector<SubtaskResult> g_testResults;
 bool g_verbose = true;
 
-// ANSI color codes
+
 const std::string COLOR_RESET = "\033[0m";
 const std::string COLOR_GREEN = "\033[32m";
 const std::string COLOR_RED = "\033[31m";
@@ -54,9 +36,9 @@ const std::string COLOR_YELLOW = "\033[33m";
 const std::string COLOR_CYAN = "\033[36m";
 const std::string COLOR_BOLD = "\033[1m";
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
+
+
+
 
 void PrintHeader (const std::string& title)
 {
@@ -144,9 +126,9 @@ void PrintQueueState (Ptr<BleMessageQueue> queue, const std::string& label)
               << ", overflows=" << overflows << "\n";
 }
 
-// ============================================================================
-// SUBTASK 1: Message Queue Data Structure
-// ============================================================================
+
+
+
 
 class Subtask1Test
 {
@@ -157,7 +139,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 1.1: Queue Initialization
+        
         PrintSubHeader("Test 1.1: Queue Initialization");
         {
             PrintInit("Creating BleMessageQueue object...");
@@ -182,7 +164,7 @@ public:
             allPassed &= sizePassed && emptyPassed;
         }
 
-        // Test 1.2: Statistics Initialization
+        
         PrintSubHeader("Test 1.2: Statistics Counters Initialization");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -210,7 +192,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.3: Entry Structure Verification
+        
         PrintSubHeader("Test 1.3: Queue Entry Stores All Required Fields");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -228,12 +210,12 @@ public:
             PrintState("Message: sender=12345, TTL=10, path=[12345,100], GPS=(37.77,-122.42,50)");
 
             Ptr<Packet> packet = Create<Packet>();
-            bool enqueueResult = queue->Enqueue(packet, header, 999); // Node 999 receiving
+            bool enqueueResult = queue->Enqueue(packet, header, 999); 
 
             PrintActual("enqueueResult", enqueueResult ? "true" : "false");
             PrintExpected("enqueueResult", "true");
 
-            // Dequeue and verify fields preserved
+            
             BleDiscoveryHeaderWrapper dequeuedHeader;
             Ptr<Packet> dequeuedPacket = queue->Dequeue(dequeuedHeader);
 
@@ -262,9 +244,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 2: Queue Management (Add, Remove, Prioritize)
-// ============================================================================
+
+
+
 
 class Subtask2Test
 {
@@ -275,7 +257,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 2.1: Basic Enqueue/Dequeue
+        
         PrintSubHeader("Test 2.1: Basic Enqueue and Dequeue");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -318,14 +300,14 @@ public:
             allPassed &= enqOk && deqOk && sizeOk;
         }
 
-        // Test 2.2: Priority Ordering (TTL-based)
+        
         PrintSubHeader("Test 2.2: Priority Ordering (Higher TTL = Higher Priority)");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
 
             PrintInit("Enqueueing 3 messages with different TTLs (out of order)...");
 
-            // Enqueue in order: TTL=5, TTL=15, TTL=2
+            
             BleDiscoveryHeaderWrapper h1, h2, h3;
             h1.SetSenderId(1); h1.SetTtl(5);  h1.AddToPath(1);
             h2.SetSenderId(2); h2.SetTtl(15); h2.AddToPath(2);
@@ -341,7 +323,7 @@ public:
 
             PrintQueueState(queue, "After 3 enqueues");
 
-            // Dequeue should return highest TTL first
+            
             BleDiscoveryHeaderWrapper d1, d2, d3;
             queue->Dequeue(d1);
             queue->Dequeue(d2);
@@ -366,7 +348,7 @@ public:
             allPassed &= firstOk && secondOk && thirdOk;
         }
 
-        // Test 2.3: Peek Without Remove
+        
         PrintSubHeader("Test 2.3: Peek Without Removing");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -403,7 +385,7 @@ public:
             allPassed &= peekOk && sizeUnchanged;
         }
 
-        // Test 2.4: Empty Queue Behavior
+        
         PrintSubHeader("Test 2.4: Empty Queue Behavior");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -434,9 +416,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 3: Message Deduplication Logic
-// ============================================================================
+
+
+
 
 class Subtask3Test
 {
@@ -447,7 +429,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 3.1: First Message Accepted
+        
         PrintSubHeader("Test 3.1: First Occurrence Accepted");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -469,7 +451,7 @@ public:
             allPassed &= result;
         }
 
-        // Test 3.2: Duplicate Rejected
+        
         PrintSubHeader("Test 3.2: Duplicate Message Rejected");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -512,7 +494,7 @@ public:
             allPassed &= firstOk && secondRejected && statsOk;
         }
 
-        // Test 3.3: Different Senders OK
+        
         PrintSubHeader("Test 3.3: Same Content, Different Senders Accepted");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -543,7 +525,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.4: Cache Cleanup Allows Re-add
+        
         PrintSubHeader("Test 3.4: Cache Cleanup Allows Re-adding Old Message");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -560,19 +542,19 @@ public:
             bool first = queue->Enqueue(p, header, 999);
             PrintState("First enqueue at t=0ms: " + std::string(first ? "accepted" : "rejected"));
 
-            // Dequeue to make room
+            
             BleDiscoveryHeaderWrapper temp;
             queue->Dequeue(temp);
 
-            // Advance simulation time so the cached entry becomes "old"
-            // The entry was added at t=0ms. We advance to t=100ms.
-            // Then cleaning with maxAge=50ms will remove entries older than 50ms.
-            // Entry age = 100ms - 0ms = 100ms, which is > 50ms, so it gets removed.
+            
+            
+            
+            
             Simulator::Stop(MilliSeconds(100));
             Simulator::Run();
             PrintState("Advanced simulation time to t=100ms");
 
-            // Clean old entries (50ms max age = remove entries older than 50ms)
+            
             PrintState("Cleaning seen cache with maxAge=50ms (entry is 100ms old)...");
             queue->CleanOldEntries(MilliSeconds(50));
 
@@ -595,9 +577,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 4: PSF Loop Detection
-// ============================================================================
+
+
+
 
 class Subtask4Test
 {
@@ -608,7 +590,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 4.1: No Loop - Empty Path
+        
         PrintSubHeader("Test 4.1: No Loop - Empty Path");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -616,7 +598,7 @@ public:
             BleDiscoveryHeaderWrapper header;
             header.SetSenderId(100);
             header.SetTtl(10);
-            // No path added - empty PSF
+            
 
             PrintInit("Message with empty PSF, receiving node=5");
             PrintState("PSF: [] (empty)");
@@ -631,7 +613,7 @@ public:
             allPassed &= result;
         }
 
-        // Test 4.2: No Loop - Node Not in Path
+        
         PrintSubHeader("Test 4.2: No Loop - Receiving Node Not in Path");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -656,7 +638,7 @@ public:
             allPassed &= result;
         }
 
-        // Test 4.3: Loop Detected - Node at Start of Path
+        
         PrintSubHeader("Test 4.3: Loop Detected - Node at Start of Path");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -664,7 +646,7 @@ public:
             BleDiscoveryHeaderWrapper header;
             header.SetSenderId(5);
             header.SetTtl(10);
-            header.AddToPath(5);   // Node 5 is first in path
+            header.AddToPath(5);   
             header.AddToPath(101);
             header.AddToPath(102);
 
@@ -691,7 +673,7 @@ public:
             allPassed &= rejected && statsOk;
         }
 
-        // Test 4.4: Loop Detected - Node in Middle of Path
+        
         PrintSubHeader("Test 4.4: Loop Detected - Node in Middle of Path");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -700,7 +682,7 @@ public:
             header.SetSenderId(100);
             header.SetTtl(10);
             header.AddToPath(100);
-            header.AddToPath(5);   // Node 5 in middle
+            header.AddToPath(5);   
             header.AddToPath(102);
 
             PrintInit("Message with PSF=[100,5,102], receiving node=5");
@@ -716,7 +698,7 @@ public:
             allPassed &= !result;
         }
 
-        // Test 4.5: Loop Detected - Node at End of Path
+        
         PrintSubHeader("Test 4.5: Loop Detected - Node at End of Path");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -726,7 +708,7 @@ public:
             header.SetTtl(10);
             header.AddToPath(100);
             header.AddToPath(101);
-            header.AddToPath(5);   // Node 5 at end
+            header.AddToPath(5);   
 
             PrintInit("Message with PSF=[100,101,5], receiving node=5");
             PrintState("Node 5 IS in path (at end) -> LOOP DETECTED");
@@ -741,7 +723,7 @@ public:
             allPassed &= !result;
         }
 
-        // Test 4.6: Multiple Loop Detections Statistics
+        
         PrintSubHeader("Test 4.6: Multiple Loop Detections Statistics");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -754,7 +736,7 @@ public:
                 header.SetSenderId(100 + i);
                 header.SetTtl(10);
                 header.AddToPath(100 + i);
-                header.AddToPath(7);  // Node 7 in all paths
+                header.AddToPath(7);  
 
                 Ptr<Packet> p = Create<Packet>();
                 queue->Enqueue(p, header, 7);
@@ -779,9 +761,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 5: Queue Size Limits and Overflow Handling
-// ============================================================================
+
+
+
 
 class Subtask5Test
 {
@@ -792,7 +774,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 5.1: Fill to Capacity
+        
         PrintSubHeader("Test 5.1: Fill Queue to Capacity (100 messages)");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -825,14 +807,14 @@ public:
             allPassed &= passed;
         }
 
-        // Test 5.2: Overflow Rejection
+        
         PrintSubHeader("Test 5.2: Overflow Rejection (101st Message)");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
 
             PrintInit("Filling queue to 100, then attempting 101st...");
 
-            // Fill to capacity
+            
             for (uint32_t i = 0; i < 100; i++)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -846,7 +828,7 @@ public:
 
             PrintState("Queue now at capacity (100)");
 
-            // Try to add 101st
+            
             BleDiscoveryHeaderWrapper overflowHeader;
             overflowHeader.SetSenderId(1000);
             overflowHeader.SetTtl(10);
@@ -862,14 +844,14 @@ public:
             allPassed &= !result;
         }
 
-        // Test 5.3: Overflow Statistics
+        
         PrintSubHeader("Test 5.3: Overflow Statistics Counter");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
 
             PrintInit("Filling queue, then attempting 50 more (overflow)...");
 
-            // Fill to capacity
+            
             for (uint32_t i = 0; i < 100; i++)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -881,7 +863,7 @@ public:
                 queue->Enqueue(p, header, 999);
             }
 
-            // Try 50 more (all should overflow)
+            
             for (uint32_t i = 100; i < 150; i++)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -912,12 +894,12 @@ public:
             allPassed &= overflowOk && sizeOk;
         }
 
-        // Test 5.4: Recovery After Dequeue
+        
         PrintSubHeader("Test 5.4: Recovery After Dequeue");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
 
-            // Fill to capacity
+            
             for (uint32_t i = 0; i < 100; i++)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -931,7 +913,7 @@ public:
 
             PrintInit("Queue full (100). Dequeuing 5, then adding 5 new...");
 
-            // Dequeue 5
+            
             for (int i = 0; i < 5; i++)
             {
                 BleDiscoveryHeaderWrapper temp;
@@ -940,7 +922,7 @@ public:
 
             PrintState("After dequeue 5: size = " + std::to_string(queue->GetSize()));
 
-            // Should be able to add 5 more
+            
             uint32_t newAccepted = 0;
             for (uint32_t i = 200; i < 205; i++)
             {
@@ -967,12 +949,12 @@ public:
             allPassed &= passed;
         }
 
-        // Test 5.5: Clear and Refill
+        
         PrintSubHeader("Test 5.5: Clear Queue and Refill");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
 
-            // Fill to capacity
+            
             for (uint32_t i = 0; i < 100; i++)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -992,7 +974,7 @@ public:
 
             PrintState("Refilling with 100 new messages...");
 
-            // Refill
+            
             uint32_t refilled = 0;
             for (uint32_t i = 500; i < 600; i++)
             {
@@ -1022,9 +1004,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 6: High Load Behavior
-// ============================================================================
+
+
+
 
 class Subtask6Test
 {
@@ -1035,7 +1017,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 6.1: Burst Enqueue
+        
         PrintSubHeader("Test 6.1: Burst Enqueue (100 messages rapidly)");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
@@ -1071,14 +1053,14 @@ public:
             allPassed &= passed;
         }
 
-        // Test 6.2: Interleaved Operations
+        
         PrintSubHeader("Test 6.2: Interleaved Enqueue/Dequeue Operations");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
 
             PrintInit("Enqueue 20, Dequeue 10, Enqueue 30, Dequeue 15...");
 
-            // Enqueue 20
+            
             for (uint32_t i = 0; i < 20; i++)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -1091,7 +1073,7 @@ public:
             }
             PrintState("After +20: size = " + std::to_string(queue->GetSize()));
 
-            // Dequeue 10
+            
             for (int i = 0; i < 10; i++)
             {
                 BleDiscoveryHeaderWrapper temp;
@@ -1099,7 +1081,7 @@ public:
             }
             PrintState("After -10: size = " + std::to_string(queue->GetSize()));
 
-            // Enqueue 30 more
+            
             for (uint32_t i = 100; i < 130; i++)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -1112,7 +1094,7 @@ public:
             }
             PrintState("After +30: size = " + std::to_string(queue->GetSize()));
 
-            // Dequeue 15
+            
             for (int i = 0; i < 15; i++)
             {
                 BleDiscoveryHeaderWrapper temp;
@@ -1121,7 +1103,7 @@ public:
             PrintState("After -15: size = " + std::to_string(queue->GetSize()));
 
             uint32_t finalSize = queue->GetSize();
-            uint32_t expectedSize = 20 - 10 + 30 - 15; // = 25
+            uint32_t expectedSize = 20 - 10 + 30 - 15; 
 
             PrintActual("finalSize", std::to_string(finalSize));
             PrintExpected("finalSize", std::to_string(expectedSize) + " (20-10+30-15)");
@@ -1143,14 +1125,14 @@ public:
             allPassed &= sizeOk && statsOk;
         }
 
-        // Test 6.3: Mixed Rejection Types
+        
         PrintSubHeader("Test 6.3: Mixed Rejection Types Under Load");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
 
             PrintInit("Testing: duplicates, loops, and overflows in one scenario");
 
-            // Add 90 unique messages
+            
             for (uint32_t i = 0; i < 90; i++)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -1163,11 +1145,11 @@ public:
             }
             PrintState("Added 90 unique messages");
 
-            // Try 5 duplicates (sender 0-4)
+            
             for (uint32_t i = 0; i < 5; i++)
             {
                 BleDiscoveryHeaderWrapper header;
-                header.SetSenderId(i);  // Same as existing
+                header.SetSenderId(i);  
                 header.SetTtl(10);
                 header.AddToPath(i);
 
@@ -1176,21 +1158,21 @@ public:
             }
             PrintState("Attempted 5 duplicates");
 
-            // Try 5 messages with loops (node 999 in path)
+            
             for (uint32_t i = 200; i < 205; i++)
             {
                 BleDiscoveryHeaderWrapper header;
                 header.SetSenderId(i);
                 header.SetTtl(10);
                 header.AddToPath(i);
-                header.AddToPath(999);  // Our node ID in path
+                header.AddToPath(999);  
 
                 Ptr<Packet> p = Create<Packet>();
                 queue->Enqueue(p, header, 999);
             }
             PrintState("Attempted 5 messages with loops");
 
-            // Add 10 more unique to fill queue
+            
             for (uint32_t i = 300; i < 310; i++)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -1203,7 +1185,7 @@ public:
             }
             PrintState("Added 10 more unique (queue should be at 100)");
 
-            // Try 5 more to cause overflow
+            
             for (uint32_t i = 400; i < 405; i++)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -1243,14 +1225,14 @@ public:
             allPassed &= dupsOk && loopsOk && overOk && sizeOk;
         }
 
-        // Test 6.4: Full Cycle Stress Test
+        
         PrintSubHeader("Test 6.4: Full Cycle Stress Test");
         {
             Ptr<BleMessageQueue> queue = CreateObject<BleMessageQueue>();
 
             PrintInit("Fill -> Drain -> Refill cycle");
 
-            // Fill
+            
             for (uint32_t i = 0; i < 100; i++)
             {
                 BleDiscoveryHeaderWrapper header;
@@ -1263,7 +1245,7 @@ public:
             }
             PrintState("Filled: size = " + std::to_string(queue->GetSize()));
 
-            // Drain completely
+            
             while (!queue->IsEmpty())
             {
                 BleDiscoveryHeaderWrapper temp;
@@ -1271,7 +1253,7 @@ public:
             }
             PrintState("Drained: size = " + std::to_string(queue->GetSize()));
 
-            // Refill
+            
             uint32_t refilled = 0;
             for (uint32_t i = 1000; i < 1100; i++)
             {
@@ -1312,9 +1294,9 @@ public:
     }
 };
 
-// ============================================================================
-// MAIN TEST RUNNER
-// ============================================================================
+
+
+
 
 void PrintFinalResults ()
 {
@@ -1372,7 +1354,7 @@ int main (int argc, char *argv[])
     std::cout << "\nVerbose mode: " << (g_verbose ? "ON" : "OFF") << "\n";
     std::cout << COLOR_YELLOW << "Expected values shown in yellow" << COLOR_RESET << "\n";
 
-    // Run all subtask tests
+    
     Subtask1Test::Run();
     Subtask2Test::Run();
     Subtask3Test::Run();
@@ -1380,7 +1362,7 @@ int main (int argc, char *argv[])
     Subtask5Test::Run();
     Subtask6Test::Run();
 
-    // Print final summary
+    
     PrintFinalResults();
 
     Simulator::Destroy();

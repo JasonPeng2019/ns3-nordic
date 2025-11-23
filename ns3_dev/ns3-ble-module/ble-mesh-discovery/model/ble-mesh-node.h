@@ -1,12 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025 Your Institution
- *
- * Author: Benjamin Huh <buh07@github>
- *
- * BLE Mesh Node - Main protocol coordinator
- */
-
 #ifndef BLE_MESH_NODE_H
 #define BLE_MESH_NODE_H
 
@@ -140,14 +131,14 @@ public:
   typedef Callback<void, Ptr<Packet>, uint32_t> TransmitCallback;
   void SetTransmitCallback (TransmitCallback callback);
 
-  // Statistics and debugging
+
   uint32_t GetMessagesSent () const { return m_messagesSent; }
   uint32_t GetMessagesReceived () const { return m_messagesReceived; }
   uint32_t GetMessagesForwarded () const { return m_messagesForwarded; }
   uint32_t GetMessagesDropped () const { return m_messagesDropped; }
 
 private:
-  // Discovery cycle callbacks (called at each slot)
+
   void OnSlot0 ();  //!< Send own discovery message
   void OnSlot1 ();  //!< Forward queued messages (slot 1)
   void OnSlot2 ();  //!< Forward queued messages (slot 2)
@@ -191,40 +182,40 @@ private:
    */
   double CalculateConnectivityScore ();
 
-  // Node identity and state
+
   uint32_t m_nodeId;                          //!< This node's ID
   Ptr<Node> m_node;                           //!< NS-3 Node object
   BleMeshNodeState m_state;                   //!< Current protocol state
   Ptr<MobilityModel> m_mobility;              //!< Mobility model for GPS
 
-  // Protocol components
+  
   Ptr<BleDiscoveryCycle> m_cycle;             //!< Discovery cycle manager
   Ptr<BleMessageQueue> m_queue;               //!< Message forwarding queue
   Ptr<BleForwardingLogic> m_forwarding;       //!< Forwarding logic
   Ptr<BleElection> m_election;                //!< Clusterhead election (Phase 3)
 
-  // Clusterhead information
+  
   uint32_t m_clusterheadId;                   //!< Assigned clusterhead (if edge node)
   std::vector<uint32_t> m_pathToClusterhead; //!< Path to assigned clusterhead
 
-  // Transmission callback
+  
   TransmitCallback m_transmitCallback;        //!< Callback to lower layer
 
-  // Configuration parameters
+  
   uint8_t m_initialTtl;                       //!< Initial TTL for discovery messages
   double m_proximityThreshold;                //!< GPS proximity threshold (meters)
   uint32_t m_candidacyThreshold;              //!< Min neighbors for candidacy
 
-  // Statistics
+  
   uint32_t m_messagesSent;                    //!< Total messages sent
   uint32_t m_messagesReceived;                //!< Total messages received
   uint32_t m_messagesForwarded;               //!< Total messages forwarded
   uint32_t m_messagesDropped;                 //!< Total messages dropped
 
-  // Traced callbacks for monitoring
+  
   TracedCallback<uint32_t, BleMeshNodeState> m_stateChangeTrace; //!< State change trace
 };
 
-} // namespace ns3
+} 
 
-#endif /* BLE_MESH_NODE_H */
+#endif 

@@ -33,26 +33,26 @@ ble_queue_enqueue(ble_message_queue_t *queue,
         return false;
     }
 
-    /* Check for loop (this node already in path) */
+    
     if (ble_queue_is_in_path(packet, node_id)) {
         queue->total_loops++;
         return false;
     }
 
-    /* Check for duplicate */
+    
     uint64_t message_id = ble_queue_generate_message_id(packet);
     if (ble_queue_has_seen(queue, packet->sender_id, message_id)) {
         queue->total_duplicates++;
         return false;
     }
 
-    /* Check queue size limit */
+    
     if (queue->size >= BLE_QUEUE_MAX_SIZE) {
         queue->total_overflows++;
         return false;
     }
 
-    /* Find first free slot */
+    
     uint32_t slot = 0;
     for (slot = 0; slot < BLE_QUEUE_MAX_SIZE; slot++) {
         if (!queue->messages[slot].valid) {
@@ -65,14 +65,14 @@ ble_queue_enqueue(ble_message_queue_t *queue,
         return false;
     }
 
-    /* Add message to queue */
+    
     memcpy(&queue->messages[slot].packet, packet, sizeof(ble_discovery_packet_t));
     queue->messages[slot].received_time_ms = current_time_ms;
     queue->messages[slot].priority = ble_queue_calculate_priority(packet);
     queue->messages[slot].valid = true;
     queue->size++;
 
-    /* Mark as seen */
+    
     if (queue->seen_count < BLE_SEEN_CACHE_SIZE) {
         uint32_t seen_slot = 0;
         for (seen_slot = 0; seen_slot < BLE_SEEN_CACHE_SIZE; seen_slot++) {
@@ -98,7 +98,7 @@ ble_queue_dequeue(ble_message_queue_t *queue, ble_discovery_packet_t *packet)
         return false;
     }
 
-    /* Find highest priority message (lowest priority value) */
+    
     uint32_t best_slot = 0;
     uint8_t best_priority = 255;
     bool found = false;
@@ -117,7 +117,7 @@ ble_queue_dequeue(ble_message_queue_t *queue, ble_discovery_packet_t *packet)
         return false;
     }
 
-    /* Copy message and mark slot as free */
+    
     memcpy(packet, &queue->messages[best_slot].packet, sizeof(ble_discovery_packet_t));
     queue->messages[best_slot].valid = false;
     queue->size--;
@@ -133,7 +133,7 @@ ble_queue_peek(const ble_message_queue_t *queue, ble_discovery_packet_t *packet)
         return false;
     }
 
-    /* Find highest priority message (lowest priority value) */
+    
     uint32_t best_slot = 0;
     uint8_t best_priority = 255;
     bool found = false;
@@ -152,7 +152,7 @@ ble_queue_peek(const ble_message_queue_t *queue, ble_discovery_packet_t *packet)
         return false;
     }
 
-    /* Copy message without removing from queue */
+    
     memcpy(packet, &queue->messages[best_slot].packet, sizeof(ble_discovery_packet_t));
     return true;
 }
@@ -231,8 +231,8 @@ ble_queue_generate_message_id(const ble_discovery_packet_t *packet)
         return 0;
     }
 
-    /* Simple hash: combine sender ID and TTL */
-    /* In production, you might want to include more fields or use a better hash */
+    
+    
     uint64_t id = ((uint64_t)packet->sender_id << 32) | ((uint64_t)packet->ttl);
 
     return id;
@@ -242,18 +242,18 @@ uint8_t
 ble_queue_calculate_priority(const ble_discovery_packet_t *packet)
 {
     if (!packet) {
-        return 255; /* Lowest priority */
+        return 255; 
     }
 
-    /* Higher TTL = higher priority (lower priority value) */
-    /* Priority range: 0 (highest) to 255 (lowest) */
+    
+    
     uint8_t ttl = packet->ttl;
 
     if (ttl == 0) {
-        return 255; /* Lowest priority for expired messages */
+        return 255; 
     }
 
-    /* Invert TTL: higher TTL gets lower priority number (higher actual priority) */
+    
     return 255 - ttl;
 }
 

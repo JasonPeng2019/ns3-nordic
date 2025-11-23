@@ -1,12 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * Author: Benjamin Huh <buh07@github>
- *
- * C++ Wrapper Implementation - Thin layer over C protocol core
- */
-
 #include "ble-forwarding-logic.h"
 #include "ns3/log.h"
 #include "ns3/double.h"
@@ -62,7 +53,7 @@ BleForwardingLogic::CalculateCrowdingFactor (const std::vector<int8_t>& rssiSamp
       return 0.0;
     }
 
-  // Call C core function
+  
   double crowding = ble_forwarding_calculate_crowding_factor (rssiSamples.data (),
                                                                 rssiSamples.size ());
 
@@ -135,11 +126,11 @@ BleForwardingLogic::CalculateDistance (Vector loc1, Vector loc2) const
 {
   NS_LOG_FUNCTION (this << loc1 << loc2);
 
-  // Convert NS-3 Vector to C GPS locations
+  
   ble_gps_location_t c_loc1 = {loc1.x, loc1.y, loc1.z};
   ble_gps_location_t c_loc2 = {loc2.x, loc2.y, loc2.z};
 
-  // Call C core function
+  
   double distance = ble_forwarding_calculate_distance (&c_loc1, &c_loc2);
 
   NS_LOG_DEBUG ("Distance between locations: " << distance << " meters");
@@ -154,11 +145,11 @@ BleForwardingLogic::ShouldForwardProximity (Vector currentLocation,
 {
   NS_LOG_FUNCTION (this << currentLocation << lastHopLocation << proximityThreshold);
 
-  // Convert NS-3 Vectors to C GPS locations
+  
   ble_gps_location_t c_current = {currentLocation.x, currentLocation.y, currentLocation.z};
   ble_gps_location_t c_lasthop = {lastHopLocation.x, lastHopLocation.y, lastHopLocation.z};
 
-  // Call C core function
+  
   bool shouldForward = ble_forwarding_should_forward_proximity (&c_current,
                                                                  &c_lasthop,
                                                                  proximityThreshold);
@@ -181,13 +172,13 @@ BleForwardingLogic::ShouldForward (const BleDiscoveryHeaderWrapper& header,
 {
   NS_LOG_FUNCTION (this << crowdingFactor << proximityThreshold << directNeighbors);
 
-  // Get C packet from wrapper
+  
   const ble_discovery_packet_t& c_packet = header.GetCPacket ();
 
-  // Convert current location to C GPS
+  
   ble_gps_location_t c_current = {currentLocation.x, currentLocation.y, currentLocation.z};
 
-  // Call C core function (performs all 3 checks)
+  
   bool shouldForward = ble_forwarding_should_forward (&c_packet,
                                                        &c_current,
                                                        crowdingFactor,
@@ -223,7 +214,7 @@ BleForwardingLogic::CalculatePriority (const BleDiscoveryHeaderWrapper& header) 
 
   uint8_t ttl = header.GetTtl ();
 
-  // Call C core function
+  
   uint8_t priority = ble_forwarding_calculate_priority (ttl);
 
   return priority;
@@ -255,7 +246,7 @@ BleForwardingLogic::SetRandomStream (Ptr<RandomVariableStream> stream)
 
   if (m_randomStream)
     {
-      // Use a deterministic seed derived from the stream to keep C engine RNG stable
+      
       uint32_t seed = m_randomStream->GetInteger ();
       if (seed == 0)
         {
@@ -265,4 +256,4 @@ BleForwardingLogic::SetRandomStream (Ptr<RandomVariableStream> stream)
     }
 }
 
-} // namespace ns3
+} 

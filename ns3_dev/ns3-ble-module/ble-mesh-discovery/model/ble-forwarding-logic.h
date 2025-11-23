@@ -1,12 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025 Your Institution
- *
- * Author: Benjamin Huh <buh07@github>
- *
- * C++ Wrapper for BLE Forwarding Logic - Thin layer over C protocol core
- */
-
 #ifndef BLE_FORWARDING_LOGIC_WRAPPER_H
 #define BLE_FORWARDING_LOGIC_WRAPPER_H
 
@@ -135,6 +126,6 @@ private:
   uint32_t m_defaultNeighbors {20};        //!< Default direct-neighbor count for legacy APIs
 };
 
-} // namespace ns3
+}
 
-#endif /* BLE_FORWARDING_LOGIC_WRAPPER_H */
+#endif 

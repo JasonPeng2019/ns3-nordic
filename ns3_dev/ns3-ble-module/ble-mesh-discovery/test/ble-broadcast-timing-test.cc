@@ -32,17 +32,17 @@ private:
     {
         Ptr<BleBroadcastTiming> timing = CreateObject<BleBroadcastTiming>();
 
-        /* Test initialization */
+        
         timing->Initialize(BLE_BROADCAST_SCHEDULE_NOISY, 10, MilliSeconds(100), 0.8);
 
         NS_TEST_ASSERT_MSG_EQ(timing->GetNumSlots(), 10, "Num slots should be 10");
         NS_TEST_ASSERT_MSG_EQ(timing->GetSlotDuration(), MilliSeconds(100), "Slot duration should be 100ms");
 
-        /* Test slot advancement */
+        
         timing->AdvanceSlot();
         NS_TEST_ASSERT_MSG_LT(timing->GetCurrentSlot(), 10, "Current slot should be < 10");
 
-        /* Test success/failure recording */
+        
         timing->RecordSuccess();
         NS_TEST_ASSERT_MSG_EQ_TOL(timing->GetSuccessRate(), 1.0, 0.001, "Success rate should be 1.0");
 
@@ -74,7 +74,7 @@ private:
         timing->Initialize(BLE_BROADCAST_SCHEDULE_NOISY, 10, MilliSeconds(50), 0.8);
         timing->SetSeed(12345);
 
-        /* Advance through many slots */
+        
         int listenCount = 0;
         int broadcastCount = 0;
         int trials = 200;
@@ -92,12 +92,12 @@ private:
             }
         }
 
-        /* Check listen ratio is approximately 0.8 */
+        
         double actualRatio = (double)listenCount / (double)trials;
         NS_TEST_ASSERT_MSG_GT(actualRatio, 0.7, "Listen ratio should be > 0.7");
         NS_TEST_ASSERT_MSG_LT(actualRatio, 0.9, "Listen ratio should be < 0.9");
 
-        /* Verify stochastic randomization */
+        
         NS_TEST_ASSERT_MSG_GT(broadcastCount, 0, "Should have some broadcast slots");
         NS_TEST_ASSERT_MSG_GT(listenCount, 0, "Should have some listen slots");
     }
@@ -125,7 +125,7 @@ private:
         timing->Initialize(BLE_BROADCAST_SCHEDULE_STOCHASTIC, 10, MilliSeconds(100), 0.75);
         timing->SetSeed(999);
 
-        /* Test minority broadcasting (25% broadcast, 75% listen) */
+        
         int trials = 300;
         int broadcastSlots = 0;
 
@@ -140,11 +140,11 @@ private:
 
         double broadcastRatio = (double)broadcastSlots / (double)trials;
 
-        /* Should be around 25% (minority) */
+        
         NS_TEST_ASSERT_MSG_GT(broadcastRatio, 0.15, "Broadcast ratio should be > 0.15");
         NS_TEST_ASSERT_MSG_LT(broadcastRatio, 0.35, "Broadcast ratio should be < 0.35");
 
-        /* Verify actual listen ratio */
+        
         double listenRatio = timing->GetActualListenRatio();
         NS_TEST_ASSERT_MSG_GT(listenRatio, 0.65, "Listen ratio should be > 0.65 (majority)");
         NS_TEST_ASSERT_MSG_LT(listenRatio, 0.85, "Listen ratio should be < 0.85");
@@ -169,7 +169,7 @@ public:
 private:
     virtual void DoRun(void)
     {
-        /* Create two nodes with different seeds */
+        
         Ptr<BleBroadcastTiming> node1 = CreateObject<BleBroadcastTiming>();
         Ptr<BleBroadcastTiming> node2 = CreateObject<BleBroadcastTiming>();
 
@@ -179,7 +179,7 @@ private:
         node1->SetSeed(111);
         node2->SetSeed(222);
 
-        /* Count simultaneous broadcasts (collisions) */
+        
         int collisions = 0;
         int trials = 150;
 
@@ -194,7 +194,7 @@ private:
             }
         }
 
-        /* Collision rate should be low due to randomization */
+        
         double collisionRate = (double)collisions / (double)trials;
         NS_TEST_ASSERT_MSG_LT(collisionRate, 0.1, "Collision rate should be < 10%");
 
@@ -223,19 +223,19 @@ private:
         Ptr<BleBroadcastTiming> timing = CreateObject<BleBroadcastTiming>();
         timing->Initialize(BLE_BROADCAST_SCHEDULE_STOCHASTIC, 10, MilliSeconds(100), 0.5);
 
-        /* First failure - should retry */
+        
         bool shouldRetry = timing->RecordFailure();
         NS_TEST_ASSERT_MSG_EQ(shouldRetry, true, "Should retry after first failure");
 
-        /* Second failure - should retry */
+        
         shouldRetry = timing->RecordFailure();
         NS_TEST_ASSERT_MSG_EQ(shouldRetry, true, "Should retry after second failure");
 
-        /* Third failure - max retries reached */
+        
         shouldRetry = timing->RecordFailure();
         NS_TEST_ASSERT_MSG_EQ(shouldRetry, false, "Should not retry after max retries");
 
-        /* Success resets retry counter */
+        
         timing->RecordSuccess();
         shouldRetry = timing->RecordFailure();
         NS_TEST_ASSERT_MSG_EQ(shouldRetry, true, "Retry counter should reset after success");
@@ -263,7 +263,7 @@ private:
         Ptr<BleBroadcastTiming> timing = CreateObject<BleBroadcastTiming>();
         timing->Initialize(BLE_BROADCAST_SCHEDULE_NOISY, 10, MilliSeconds(100), 0.5);
 
-        /* 8 successes, 2 failures = 80% success rate */
+        
         for (int i = 0; i < 8; i++)
         {
             timing->RecordSuccess();

@@ -115,4 +115,4 @@ uint8_t ble_forwarding_calculate_priority(uint8_t ttl);
 }
 #endif
 
-#endif /* BLE_FORWARDING_LOGIC_H */
+#endif 

@@ -1,17 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025 Your Institution
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
-
 #include "ble-message-queue.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
@@ -49,13 +35,13 @@ BleMessageQueue::Enqueue (Ptr<Packet> packet, const BleDiscoveryHeaderWrapper& h
 {
   NS_LOG_FUNCTION (this << packet << nodeId);
 
-  // Get C packet structure from wrapper (const reference)
+  
   const ble_discovery_packet_t& c_packet = header.GetCPacket ();
 
-  // Get current time in milliseconds
+  
   uint32_t current_time_ms = static_cast<uint32_t> (Simulator::Now ().GetMilliSeconds ());
 
-  // Call C core function
+  
   bool result = ble_queue_enqueue (&m_queue, &c_packet, nodeId, current_time_ms);
 
   if (result)
@@ -79,15 +65,15 @@ BleMessageQueue::Dequeue (BleDiscoveryHeaderWrapper& header)
 
   ble_discovery_packet_t c_packet;
 
-  // Call C core function
+  
   if (!ble_queue_dequeue (&m_queue, &c_packet))
     {
       NS_LOG_DEBUG ("Queue empty, nothing to dequeue");
       return nullptr;
     }
 
-  // Create new wrapper with C packet data
-  // We need to manually set all fields since there's no SetFromCPacket method
+  
+  
   BleDiscoveryHeaderWrapper newHeader;
   newHeader.SetSenderId (c_packet.sender_id);
   newHeader.SetTtl (c_packet.ttl);
@@ -103,7 +89,7 @@ BleMessageQueue::Dequeue (BleDiscoveryHeaderWrapper& header)
     }
   header = newHeader;
 
-  // Create packet
+  
   Ptr<Packet> packet = Create<Packet> ();
 
   NS_LOG_DEBUG ("Message dequeued (sender=" << c_packet.sender_id
@@ -120,13 +106,13 @@ BleMessageQueue::Peek (BleDiscoveryHeaderWrapper& header) const
 
   ble_discovery_packet_t c_packet;
 
-  // Call C core function
+  
   if (!ble_queue_peek (&m_queue, &c_packet))
     {
       return false;
     }
 
-  // Create new wrapper with C packet data
+  
   BleDiscoveryHeaderWrapper newHeader;
   newHeader.SetSenderId (c_packet.sender_id);
   newHeader.SetTtl (c_packet.ttl);
@@ -185,4 +171,4 @@ BleMessageQueue::GetStatistics (uint32_t& totalEnqueued, uint32_t& totalDequeued
                              &totalDuplicates, &totalLoops, &totalOverflows);
 }
 
-} // namespace ns3
+} 

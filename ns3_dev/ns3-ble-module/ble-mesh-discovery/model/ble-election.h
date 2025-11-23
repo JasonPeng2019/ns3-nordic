@@ -1,12 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025 Your Institution
- *
- * Author: Benjamin Huh <buh07@github>
- *
- * C++ Wrapper for BLE Clusterhead Election - Thin layer over C protocol core
- */
-
 #ifndef BLE_ELECTION_WRAPPER_H
 #define BLE_ELECTION_WRAPPER_H
 
@@ -206,6 +197,6 @@ private:
   ble_election_state_t m_state;         //!< C core election state
 };
 
-} // namespace ns3
+} 
 
-#endif /* BLE_ELECTION_WRAPPER_H */
+#endif 

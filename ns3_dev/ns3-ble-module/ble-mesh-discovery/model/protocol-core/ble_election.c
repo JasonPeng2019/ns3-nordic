@@ -8,10 +8,10 @@
 
 #include <math.h>
 
-/* RSSI threshold for considering a connection "direct" (1-hop) */
-#define DEFAULT_DIRECT_RSSI_THRESHOLD -70  /* dBm */
 
-/* Default candidacy thresholds */
+#define DEFAULT_DIRECT_RSSI_THRESHOLD -70  
+
+
 #define DEFAULT_MIN_NEIGHBORS 10
 #define DEFAULT_MIN_CN_RATIO 5.0
 #define DEFAULT_MIN_GEO_DIST 0.3
@@ -25,7 +25,7 @@ ble_election_init(ble_election_state_t *state)
 
     memset(state, 0, sizeof(ble_election_state_t));
 
-    /* Set default thresholds */
+    
     state->min_neighbors_for_candidacy = DEFAULT_MIN_NEIGHBORS;
     state->min_connection_noise_ratio = DEFAULT_MIN_CN_RATIO;
     state->min_geographic_distribution = DEFAULT_MIN_GEO_DIST;
@@ -44,7 +44,7 @@ ble_election_update_neighbor(ble_election_state_t *state,
         return;
     }
 
-    /* Find existing neighbor or add new one */
+    
     ble_neighbor_info_t *neighbor = NULL;
     for (uint32_t i = 0; i < state->neighbor_count; i++) {
         if (state->neighbors[i].node_id == node_id) {
@@ -54,14 +54,14 @@ ble_election_update_neighbor(ble_election_state_t *state,
     }
 
     if (!neighbor && state->neighbor_count < BLE_MAX_NEIGHBORS) {
-        /* Add new neighbor */
+        
         neighbor = &state->neighbors[state->neighbor_count++];
         neighbor->node_id = node_id;
         neighbor->message_count = 0;
     }
 
     if (neighbor) {
-        /* Update neighbor info */
+        
         if (location) {
             neighbor->location = *location;
         }
@@ -69,7 +69,7 @@ ble_election_update_neighbor(ble_election_state_t *state,
         neighbor->message_count++;
         neighbor->last_seen_time_ms = current_time_ms;
 
-        /* Determine if direct connection based on RSSI */
+        
         neighbor->is_direct = (rssi >= state->direct_connection_rssi_threshold);
     }
 }
@@ -84,7 +84,7 @@ ble_election_add_rssi_sample(ble_election_state_t *state, int8_t rssi)
     if (state->rssi_sample_count < 100) {
         state->rssi_samples[state->rssi_sample_count++] = rssi;
     } else {
-        /* Circular buffer - overwrite oldest */
+        
         for (uint32_t i = 0; i < 99; i++) {
             state->rssi_samples[i] = state->rssi_samples[i + 1];
         }
@@ -99,18 +99,14 @@ ble_election_calculate_crowding(const ble_election_state_t *state)
         return 0.0;
     }
 
-    /* Calculate mean RSSI */
+    
     double sum = 0.0;
     for (uint32_t i = 0; i < state->rssi_sample_count; i++) {
         sum += state->rssi_samples[i];
     }
     double mean_rssi = sum / state->rssi_sample_count;
 
-    /* Convert RSSI to crowding factor
-     * Higher (less negative) RSSI = stronger signals = more crowded
-     * -40 dBm = very crowded (1.0)
-     * -90 dBm = not crowded (0.0)
-     */
+    
     const double RSSI_MIN = -90.0;
     const double RSSI_MAX = -40.0;
 
@@ -145,15 +141,15 @@ double
 ble_election_calculate_geographic_distribution(const ble_election_state_t *state)
 {
     if (!state || state->neighbor_count < 2) {
-        return 0.0; /* Not enough neighbors to determine distribution */
+        return 0.0; 
     }
 
-    /* Calculate centroid */
+    
     double centroid_x = 0.0, centroid_y = 0.0, centroid_z = 0.0;
     uint32_t valid_locations = 0;
 
     for (uint32_t i = 0; i < state->neighbor_count; i++) {
-        /* Skip neighbors without valid GPS */
+        
         if (state->neighbors[i].location.x != 0.0 ||
             state->neighbors[i].location.y != 0.0 ||
             state->neighbors[i].location.z != 0.0) {
@@ -165,14 +161,14 @@ ble_election_calculate_geographic_distribution(const ble_election_state_t *state
     }
 
     if (valid_locations < 2) {
-        return 0.0; /* Not enough GPS data */
+        return 0.0; 
     }
 
     centroid_x /= valid_locations;
     centroid_y /= valid_locations;
     centroid_z /= valid_locations;
 
-    /* Calculate variance of distances from centroid */
+    
     double variance = 0.0;
     for (uint32_t i = 0; i < state->neighbor_count; i++) {
         const ble_gps_location_t *loc = &state->neighbors[i].location;
@@ -188,10 +184,7 @@ ble_election_calculate_geographic_distribution(const ble_election_state_t *state
 
     variance /= valid_locations;
 
-    /* Normalize variance to 0.0-1.0 range
-     * Higher variance = better distribution
-     * Assume max reasonable variance is 10000 (100m std dev)
-     */
+    
     double std_dev = sqrt(variance);
     double distribution = std_dev / 100.0;
 
@@ -209,7 +202,7 @@ ble_election_update_metrics(ble_election_state_t *state)
         return;
     }
 
-    /* Update connectivity metrics */
+    
     state->metrics.direct_connections = ble_election_count_direct_connections(state);
     state->metrics.total_neighbors = state->neighbor_count;
     state->metrics.crowding_factor = ble_election_calculate_crowding(state);
@@ -218,7 +211,7 @@ ble_election_update_metrics(ble_election_state_t *state)
     state->metrics.geographic_distribution =
         ble_election_calculate_geographic_distribution(state);
 
-    /* Calculate forwarding success rate */
+    
     if (state->metrics.messages_received > 0) {
         state->metrics.forwarding_success_rate =
             (double)state->metrics.messages_forwarded / state->metrics.messages_received;
@@ -263,27 +256,27 @@ ble_election_should_become_candidate(ble_election_state_t *state)
         return false;
     }
 
-    /* Update metrics before checking */
+    
     ble_election_update_metrics(state);
 
-    /* Check minimum direct neighbors */
+    
     if (state->metrics.direct_connections < state->min_neighbors_for_candidacy) {
         return false;
     }
 
-    /* Check connection:noise ratio */
+    
     if (state->metrics.connection_noise_ratio < state->min_connection_noise_ratio) {
         return false;
     }
 
-    /* Check geographic distribution (only if GPS available) */
+    
     if (state->neighbor_count >= 2) {
         if (state->metrics.geographic_distribution < state->min_geographic_distribution) {
             return false;
         }
     }
 
-    /* All criteria met */
+    
     state->is_candidate = true;
     state->candidacy_score = ble_election_calculate_candidacy_score(state);
 
@@ -337,7 +330,7 @@ ble_election_clean_old_neighbors(ble_election_state_t *state,
         uint32_t age = current_time_ms - state->neighbors[i].last_seen_time_ms;
 
         if (age <= timeout_ms) {
-            /* Keep this neighbor */
+            
             if (new_count != i) {
                 state->neighbors[new_count] = state->neighbors[i];
             }

@@ -1,8 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * BLE Discovery Engine NS-3 Wrapper
- */
-
 #include "ble-discovery-engine-wrapper.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
@@ -270,4 +265,4 @@ BleDiscoveryEngineWrapper::HandleEngineSend (const ble_discovery_packet_t *packe
   m_txCallback (pkt);
 }
 
-} // namespace ns3
+}

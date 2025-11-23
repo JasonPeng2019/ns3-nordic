@@ -1,22 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * Author: Benjamin Huh <buh07@github>
- *
- * C++ Wrapper for Pure C Node State Machine Implementation
- * This wraps the C node core to work with NS-3's C++ framework
- */
-
 #ifndef BLE_MESH_NODE_WRAPPER_H
 #define BLE_MESH_NODE_WRAPPER_H
 
@@ -63,7 +44,7 @@ public:
    */
   void Initialize (uint32_t nodeId);
 
-  // ===== GPS Management =====
+  
 
   /**
    * \brief Set node GPS location
@@ -118,7 +99,7 @@ public:
    */
   bool UpdateGpsFromMobilityModel (Ptr<MobilityModel> mobilityModel);
 
-  // ===== State Management =====
+
 
   /**
    * \brief Get current node state
@@ -152,7 +133,7 @@ public:
    */
   std::string GetCurrentStateName (void) const;
 
-  // ===== Cycle Management =====
+
 
   /**
    * \brief Advance to next discovery cycle
@@ -165,7 +146,7 @@ public:
    */
   uint32_t GetCurrentCycle (void) const;
 
-  // ===== Neighbor Management =====
+
 
   /**
    * \brief Add or update neighbor
@@ -209,7 +190,7 @@ public:
    */
   uint16_t PruneStaleNeighbors (uint32_t maxAge);
 
-  // ===== Election & Clustering =====
+  
 
   /**
    * \brief Calculate candidacy score
@@ -295,7 +276,7 @@ public:
    */
   uint16_t GetClusterClass (void) const;
 
-  // ===== Statistics =====
+  
 
   /**
    * \brief Update statistics
@@ -352,7 +333,7 @@ public:
    */
   void IncrementDropped (void);
 
-  // ===== Identity =====
+  
 
   /**
    * \brief Get node ID
@@ -360,7 +341,7 @@ public:
    */
   uint32_t GetNodeId (void) const;
 
-  // ===== Direct C Access =====
+  
 
   /**
    * \brief Get reference to underlying C node structure
@@ -368,7 +349,7 @@ public:
    */
   const ble_mesh_node_t& GetCNode (void) const { return m_node; }
 
-  // ===== Traced Callbacks =====
+  
 
   /**
    * \brief TracedCallback for state changes
@@ -391,6 +372,6 @@ private:
   bool m_gpsEnabled;
 };
 
-} // namespace ns3
+} 
 
-#endif /* BLE_MESH_NODE_WRAPPER_H */
+#endif 

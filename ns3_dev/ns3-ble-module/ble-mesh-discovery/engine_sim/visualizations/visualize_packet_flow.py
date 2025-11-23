@@ -1,22 +1,4 @@
-#!/usr/bin/env python3
-"""
-Animated packet flow visualization for BLE mesh discovery traces.
 
-This utility replays the simulation events recorded in simulation_trace_random.csv,
-showing:
-  * Network topology with numbered nodes
-  * Time-synchronized playback that pauses whenever packets are exchanged
-  * Directional arrows between nodes for each transmission
-  * Arrow colors keyed to the originator of every packet
-  * Legend describing node states and packet origins
-
-Run from the repository root:
-
-    python3 ns3-nordic/ns3_dev/ns3-ble-module/ble-mesh-discovery/engine_sim/visualizations/visualize_packet_flow.py
-
-By default the script looks for ns3-nordic/ns3_dev/ns-3-dev/simulation_trace_random.csv.
-Provide a different file path if needed.
-"""
 
 from __future__ import annotations
 
@@ -74,7 +56,6 @@ class PacketFlowAnimator:
             float(self.df["time_ms"].min()) if not self.df.empty else 0.0
         )
 
-        # Matplotlib structures populated in _setup_plot
         self.fig = None
         self.ax = None
         self.node_collection = None
@@ -83,7 +64,7 @@ class PacketFlowAnimator:
         self.arrow_artists: List[FancyArrowPatch] = []
 
         self._setup_plot()
-        total_events = len(self.events) + 1  # include initial idle frame
+        total_events = len(self.events) + 1
         self.total_frames = max(1, total_events * self.pause_frames)
 
     def _load_trace(self, path: Path) -> pd.DataFrame:
@@ -287,11 +268,9 @@ class PacketFlowAnimator:
         self._build_legend()
 
     def _build_legend(self) -> None:
-        # Stack legends in the upper-left corner, moving downward to avoid overlapping nodes.
         anchor_x = 0.02
         current_anchor_y = 0.98
 
-        # Node state legend (top entry of the stack)
         idle_patch = mpatches.Patch(color="#cfe2ff", label="Idle node")
         send_patch = mpatches.Patch(color="#f26b5c", label="Sending")
         recv_patch = mpatches.Patch(color="#6fcf79", label="Receiving")
@@ -306,9 +285,8 @@ class PacketFlowAnimator:
             title="Node states",
         )
         self.ax.add_artist(state_legend)
-        current_anchor_y -= 0.24  # shift down for the next legend
+        current_anchor_y -= 0.24
 
-        # Transmission type legend (self broadcast vs forwarded)
         own_handle = Line2D(
             [0],
             [0],
@@ -337,7 +315,6 @@ class PacketFlowAnimator:
         self.ax.add_artist(tx_type_legend)
         current_anchor_y -= 0.18
 
-        # Arrow origin legend (stacked below node states and transmission type)
         if self.originator_colors:
             arrow_handles: List[Line2D] = []
             for origin, color in self.originator_colors.items():
@@ -375,7 +352,6 @@ class PacketFlowAnimator:
             interval=self.frame_interval_ms,
             repeat=False,
         )
-        # keep reference to avoid GC
         self.animation = animation
         plt.show()
 
@@ -464,7 +440,6 @@ class PacketFlowAnimator:
             )
             return
 
-        # RECV phase
         if event.get("recv_details"):
             preview = event["recv_details"][:6]
             if len(event["recv_details"]) > 6:
@@ -492,7 +467,7 @@ def resolve_default_trace_path() -> Path:
     script_dir = Path(__file__).resolve()
     try:
         default_root = script_dir.parents[4]
-    except IndexError:  # fallback if directory layout changes
+    except IndexError:
         default_root = script_dir.parent
 
     project_root = default_root / "ns-3-dev"

@@ -1,12 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * Author: Benjamin Huh <buh07@github>
- *
- * C++ Wrapper Implementation - Thin layer over C protocol core
- */
-
 #include "ble-discovery-header-wrapper.h"
 #include "ns3/log.h"
 #include "ns3/assert.h"
@@ -104,7 +95,7 @@ BleDiscoveryHeaderWrapper::Serialize (Buffer::Iterator start) const
       bytes_written = ble_discovery_serialize (&m_packet, buffer, size);
     }
 
-  // Write to NS-3 buffer
+  
   start.Write (buffer, bytes_written);
 
   delete[] buffer;
@@ -115,11 +106,11 @@ BleDiscoveryHeaderWrapper::Deserialize (Buffer::Iterator start)
 {
   NS_LOG_FUNCTION (this << &start);
 
-  // Read first byte to determine message type
+  
   uint8_t msg_type = start.PeekU8 ();
   m_isElection = (msg_type == BLE_MSG_ELECTION_ANNOUNCEMENT);
 
-  // Read into temporary buffer
+  
   uint32_t available = start.GetRemainingSize ();
   uint8_t *buffer = new uint8_t[available];
   start.Read (buffer, available);
@@ -128,7 +119,7 @@ BleDiscoveryHeaderWrapper::Deserialize (Buffer::Iterator start)
   if (m_isElection)
     {
       bytes_read = ble_election_deserialize (&m_election, buffer, available);
-      // Sync the base packet reference
+      
       m_packet = m_election.base;
       m_isElection = m_packet.is_clusterhead_message;
     }
@@ -142,7 +133,7 @@ BleDiscoveryHeaderWrapper::Deserialize (Buffer::Iterator start)
   return bytes_read;
 }
 
-// ===== Discovery Packet Methods =====
+
 
 bool
 BleDiscoveryHeaderWrapper::IsElectionMessage (void) const
@@ -229,7 +220,7 @@ BleDiscoveryHeaderWrapper::AddToPath (uint32_t nodeId)
   bool result = ble_discovery_add_to_path (&m_packet, nodeId);
   if (m_isElection && result)
     {
-      // Sync election packet
+      
       m_election.base.path[m_election.base.path_length++] = nodeId;
     }
   return result;
@@ -287,17 +278,17 @@ BleDiscoveryHeaderWrapper::IsGpsAvailable (void) const
   return m_packet.gps_available;
 }
 
-// ===== Election Methods =====
+
 
 void
 BleDiscoveryHeaderWrapper::SetAsElectionMessage (void)
 {
   m_isElection = true;
-  // Copy current packet state first
+  
   ble_discovery_packet_t temp = m_packet;
-  // Initialize election packet (sets message type and zeros election fields)
+  
   ble_election_packet_init (&m_election);
-  // Restore the base packet fields except message_type
+  
   m_election.base.sender_id = temp.sender_id;
   m_election.base.ttl = temp.ttl;
   m_election.base.path_length = temp.path_length;
@@ -308,7 +299,7 @@ BleDiscoveryHeaderWrapper::SetAsElectionMessage (void)
   m_election.base.gps_available = temp.gps_available;
   m_election.base.gps_location = temp.gps_location;
   m_election.base.is_clusterhead_message = true;
-  // Sync m_packet with election base
+  
   m_packet = m_election.base;
   m_packet.is_clusterhead_message = true;
 }
@@ -402,4 +393,4 @@ BleDiscoveryHeaderWrapper::GetHash (void) const
   return m_isElection ? m_election.election.hash : 0;
 }
 
-} // namespace ns3
+} 

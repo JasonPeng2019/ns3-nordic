@@ -1,0 +1,6 @@
+sources: used github copilot for debugging;
+used claude code autocomplete when code sections were easily finished
+
+All header comments were manually written, then formatted with pretty print
+by claude code
+All .md files were reformatted with pretty print using claude code

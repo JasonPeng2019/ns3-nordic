@@ -1,7 +1,7 @@
 /**
  * @file ble_mesh_node.c
  * @brief Pure C implementation of BLE Mesh Node state machine
- * @author Benjamin Huh
+ * @author jason peng
  * @date 2025-11-21
  */
 
@@ -29,7 +29,7 @@ ble_mesh_node_get_candidate_requirement(const ble_mesh_node_t *node)
     return 1;
 }
 
-/* ===== Node Initialization ===== */
+
 
 void ble_mesh_node_init(ble_mesh_node_t *node, uint32_t node_id)
 {
@@ -47,7 +47,7 @@ void ble_mesh_node_init(ble_mesh_node_t *node, uint32_t node_id)
     node->gps_location.y = 0.0;
     node->gps_location.z = 0.0;
     node->gps_last_update_cycle = 0;
-    node->gps_cache_ttl = 0; // No expiration by default
+    node->gps_cache_ttl = 0; 
 
     node->clusterhead_id = BLE_MESH_INVALID_NODE_ID;
     node->cluster_class = 0;
@@ -65,7 +65,7 @@ void ble_mesh_node_init(ble_mesh_node_t *node, uint32_t node_id)
     memset(&node->stats, 0, sizeof(ble_node_statistics_t));
 }
 
-/* ===== GPS Management ===== */
+
 
 void ble_mesh_node_set_gps(ble_mesh_node_t *node, double x, double y, double z)
 {
@@ -96,12 +96,12 @@ bool ble_mesh_node_is_gps_cache_valid(const ble_mesh_node_t *node)
         return false;
     }
 
-    // If TTL is 0, cache never expires
+    
     if (node->gps_cache_ttl == 0) {
         return true;
     }
 
-    // Check if cache has expired
+    
     uint32_t age = node->current_cycle - node->gps_last_update_cycle;
     return (age < node->gps_cache_ttl);
 }
@@ -110,16 +110,16 @@ void ble_mesh_node_invalidate_gps_cache(ble_mesh_node_t *node)
 {
     if (!node) return;
 
-    // Set last update cycle to force expiration
-    // Make age >= TTL to invalidate cache
+    
+    
     if (node->gps_cache_ttl > 0) {
-        // Set to current cycle - TTL to make age exactly TTL (expired)
+        
         if (node->current_cycle >= node->gps_cache_ttl) {
             node->gps_last_update_cycle = node->current_cycle - node->gps_cache_ttl;
         } else {
             node->gps_last_update_cycle = 0;
         }
-        // Also mark GPS as unavailable to force refresh
+        
         node->gps_available = false;
     }
 }
@@ -134,7 +134,7 @@ uint32_t ble_mesh_node_get_gps_age(const ble_mesh_node_t *node)
     return 0;
 }
 
-/* ===== State Management ===== */
+
 
 ble_node_state_t ble_mesh_node_get_state(const ble_mesh_node_t *node)
 {
@@ -144,39 +144,39 @@ ble_node_state_t ble_mesh_node_get_state(const ble_mesh_node_t *node)
 
 bool ble_mesh_node_is_valid_transition(ble_node_state_t current, ble_node_state_t new_state)
 {
-    // Allow staying in same state
+    
     if (current == new_state) {
         return true;
     }
 
     switch (current) {
         case BLE_NODE_STATE_INIT:
-            // From INIT, can only go to DISCOVERY
+            
             return (new_state == BLE_NODE_STATE_DISCOVERY);
 
         case BLE_NODE_STATE_DISCOVERY:
-            // From DISCOVERY, can go to EDGE, CANDIDATE, or stay
+            
             return (new_state == BLE_NODE_STATE_EDGE ||
                     new_state == BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE);
 
         case BLE_NODE_STATE_EDGE:
-            // Edge nodes can become candidates if conditions change
+            
             return (new_state == BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE ||
                     new_state == BLE_NODE_STATE_CLUSTER_MEMBER);
 
         case BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE:
-            // Candidates can become clusterheads or members
+            
             return (new_state == BLE_NODE_STATE_CLUSTERHEAD ||
                     new_state == BLE_NODE_STATE_CLUSTER_MEMBER ||
                     new_state == BLE_NODE_STATE_EDGE);
 
         case BLE_NODE_STATE_CLUSTERHEAD:
-            // Clusterheads typically stay as clusterheads
-            // (but could transition if needed)
+            
+            
             return (new_state == BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE);
 
         case BLE_NODE_STATE_CLUSTER_MEMBER:
-            // Members can become candidates if clusterhead fails
+            
             return (new_state == BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE ||
                     new_state == BLE_NODE_STATE_EDGE);
 
@@ -220,7 +220,7 @@ const char* ble_mesh_node_state_name(ble_node_state_t state)
     }
 }
 
-/* ===== Cycle Management ===== */
+
 
 void ble_mesh_node_advance_cycle(ble_mesh_node_t *node)
 {
@@ -229,7 +229,7 @@ void ble_mesh_node_advance_cycle(ble_mesh_node_t *node)
     node->stats.discovery_cycles++;
 }
 
-/* ===== Neighbor Management ===== */
+
 
 ble_neighbor_info_t* ble_mesh_node_find_neighbor(ble_mesh_node_t *node, uint32_t neighbor_id)
 {
@@ -250,19 +250,19 @@ bool ble_mesh_node_add_neighbor(ble_mesh_node_t *node,
 {
     if (!node) return false;
 
-    // Check if neighbor already exists
+    
     ble_neighbor_info_t *existing = ble_mesh_node_find_neighbor(node, neighbor_id);
     if (existing) {
-        // Update existing neighbor
+        
         existing->rssi = rssi;
         existing->hop_count = hop_count;
         existing->last_seen_cycle = node->current_cycle;
         return true;
     }
 
-    // Add new neighbor if space available
+    
     if (node->neighbors.count >= BLE_MESH_MAX_NEIGHBORS) {
-        return false; // Table full
+        return false; 
     }
 
     ble_neighbor_info_t *new_neighbor = &node->neighbors.neighbors[node->neighbors.count];
@@ -327,13 +327,13 @@ uint16_t ble_mesh_node_prune_stale_neighbors(ble_mesh_node_t *node, uint32_t max
         uint32_t age = node->current_cycle - node->neighbors.neighbors[read_idx].last_seen_cycle;
 
         if (age <= max_age) {
-            // Keep this neighbor
+            
             if (write_idx != read_idx) {
                 node->neighbors.neighbors[write_idx] = node->neighbors.neighbors[read_idx];
             }
             write_idx++;
         } else {
-            // Remove (don't copy)
+            
             removed++;
         }
     }
@@ -342,7 +342,7 @@ uint16_t ble_mesh_node_prune_stale_neighbors(ble_mesh_node_t *node, uint32_t max
     return removed;
 }
 
-/* ===== Election & Decision Logic ===== */
+
 
 double ble_mesh_node_calculate_candidacy_score(const ble_mesh_node_t *node,
                                                  double noise_level)
@@ -365,9 +365,9 @@ bool ble_mesh_node_should_become_edge(const ble_mesh_node_t *node)
 {
     if (!node) return false;
 
-    // Node becomes edge if:
-    // 1. Very few direct neighbors (< 3)
-    // 2. OR average RSSI is very weak
+    
+    
+    
     uint16_t direct_neighbors = ble_mesh_node_count_direct_neighbors(node);
     int8_t avg_rssi = ble_mesh_node_calculate_avg_rssi(node);
 
@@ -432,7 +432,7 @@ void ble_mesh_node_mark_candidate_heard(ble_mesh_node_t *node)
     node->last_candidate_heard_cycle = node->current_cycle;
 }
 
-/* ===== Statistics ===== */
+
 
 void ble_mesh_node_update_statistics(ble_mesh_node_t *node)
 {

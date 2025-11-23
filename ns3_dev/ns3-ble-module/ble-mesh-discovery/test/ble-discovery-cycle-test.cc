@@ -1,27 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * NS-3 Tests for BLE Discovery Cycle Wrapper (Task 7)
- *
- * Tests cover:
- * - Discovery cycle timing structure (4 message slots)
- * - Slot timing mechanism (1 slot for own message, 3 for forwarding)
- * - Discovery cycle scheduler
- * - Slot allocation algorithm
- * - Synchronization mechanism for network-wide cycles
- * - Cycle timing accuracy and consistency
- */
-
 #include "ns3/test.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
@@ -69,24 +45,24 @@ BleDiscoveryCycleWrapperBasicTestCase::DoRun (void)
 {
   Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper> ();
 
-  // Test default values
+  
   NS_TEST_ASSERT_MSG_EQ (cycle->IsRunning (), false, "Cycle should not be running initially");
   NS_TEST_ASSERT_MSG_EQ (cycle->GetCurrentSlot (), 0, "Initial slot should be 0");
 
-  // Test default slot duration (100ms)
+  
   Time slotDuration = cycle->GetSlotDuration ();
   NS_TEST_ASSERT_MSG_EQ (slotDuration, MilliSeconds (100), "Default slot duration should be 100ms");
 
-  // Test cycle duration (4 slots)
+  
   Time cycleDuration = cycle->GetCycleDuration ();
   NS_TEST_ASSERT_MSG_EQ (cycleDuration, MilliSeconds (400), "Cycle duration should be 4x slot duration (400ms)");
 
-  // Test setting custom slot duration
+  
   cycle->SetSlotDuration (MilliSeconds (50));
   NS_TEST_ASSERT_MSG_EQ (cycle->GetSlotDuration (), MilliSeconds (50), "Slot duration should be 50ms");
   NS_TEST_ASSERT_MSG_EQ (cycle->GetCycleDuration (), MilliSeconds (200), "Cycle duration should be 200ms");
 
-  // Test setting slot duration with different time unit
+  
   cycle->SetSlotDuration (Seconds (1));
   NS_TEST_ASSERT_MSG_EQ (cycle->GetSlotDuration (), Seconds (1), "Slot duration should be 1s");
   NS_TEST_ASSERT_MSG_EQ (cycle->GetCycleDuration (), Seconds (4), "Cycle duration should be 4s");
@@ -161,7 +137,7 @@ BleDiscoveryCycleWrapperTimingStructureTestCase::DoRun (void)
   Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper> ();
   cycle->SetSlotDuration (MilliSeconds (100));
 
-  // Set callbacks for each slot
+  
   cycle->SetSlot0Callback (MakeCallback (&BleDiscoveryCycleWrapperTimingStructureTestCase::RecordSlot0, this));
   cycle->SetForwardingSlotCallback (1, MakeCallback (&BleDiscoveryCycleWrapperTimingStructureTestCase::RecordSlot1, this));
   cycle->SetForwardingSlotCallback (2, MakeCallback (&BleDiscoveryCycleWrapperTimingStructureTestCase::RecordSlot2, this));
@@ -169,24 +145,24 @@ BleDiscoveryCycleWrapperTimingStructureTestCase::DoRun (void)
 
   cycle->Start ();
 
-  // Run simulation for one complete cycle (slots at 0, 100, 200, 300ms)
-  // Stop before the next cycle starts at 400ms
+  
+  
   Simulator::Stop (MilliSeconds (350));
   Simulator::Run ();
 
   cycle->Stop ();
   Simulator::Destroy ();
 
-  // Verify 4 slots were executed
+  
   NS_TEST_ASSERT_MSG_EQ (m_slotExecutions.size (), 4, "Should have executed 4 slots in one cycle");
 
-  // Verify slot order: 0, 1, 2, 3
+  
   NS_TEST_ASSERT_MSG_EQ (m_slotExecutions[0].first, 0, "First slot should be 0");
   NS_TEST_ASSERT_MSG_EQ (m_slotExecutions[1].first, 1, "Second slot should be 1");
   NS_TEST_ASSERT_MSG_EQ (m_slotExecutions[2].first, 2, "Third slot should be 2");
   NS_TEST_ASSERT_MSG_EQ (m_slotExecutions[3].first, 3, "Fourth slot should be 3");
 
-  // Verify timing: slot 0 at 0ms, slot 1 at 100ms, slot 2 at 200ms, slot 3 at 300ms
+  
   NS_TEST_ASSERT_MSG_EQ (m_slotExecutions[0].second, MilliSeconds (0), "Slot 0 should execute at 0ms");
   NS_TEST_ASSERT_MSG_EQ (m_slotExecutions[1].second, MilliSeconds (100), "Slot 1 should execute at 100ms");
   NS_TEST_ASSERT_MSG_EQ (m_slotExecutions[2].second, MilliSeconds (200), "Slot 2 should execute at 200ms");
@@ -271,31 +247,31 @@ BleDiscoveryCycleWrapperSlotAllocationTestCase::DoRun (void)
   Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper> ();
   cycle->SetSlotDuration (MilliSeconds (10));
 
-  // Set callback for slot 0 (own message)
+  
   cycle->SetSlot0Callback (MakeCallback (&BleDiscoveryCycleWrapperSlotAllocationTestCase::OnSlot0, this));
 
-  // Set callbacks for forwarding slots (1-3)
+  
   cycle->SetForwardingSlotCallback (1, MakeCallback (&BleDiscoveryCycleWrapperSlotAllocationTestCase::OnSlot1, this));
   cycle->SetForwardingSlotCallback (2, MakeCallback (&BleDiscoveryCycleWrapperSlotAllocationTestCase::OnSlot2, this));
   cycle->SetForwardingSlotCallback (3, MakeCallback (&BleDiscoveryCycleWrapperSlotAllocationTestCase::OnSlot3, this));
 
-  // Test invalid slot numbers (should be silently ignored based on implementation)
-  // Slots 0 and 4+ are invalid for forwarding callback - these calls should be rejected
-  // We don't set callbacks for invalid slots as they would be ignored anyway
+  
+  
+  
 
   cycle->Start ();
 
-  // Run for one cycle
+  
   Simulator::Stop (MilliSeconds (50));
   Simulator::Run ();
 
   cycle->Stop ();
   Simulator::Destroy ();
 
-  // Verify slot 0 (own message) was called
+  
   NS_TEST_ASSERT_MSG_EQ (m_slot0Called, true, "Slot 0 (own message) should be called");
 
-  // Verify forwarding slots 1-3 were called
+  
   NS_TEST_ASSERT_MSG_EQ (m_slot1Called, true, "Forwarding slot 1 should be called");
   NS_TEST_ASSERT_MSG_EQ (m_slot2Called, true, "Forwarding slot 2 should be called");
   NS_TEST_ASSERT_MSG_EQ (m_slot3Called, true, "Forwarding slot 3 should be called");
@@ -362,7 +338,7 @@ BleDiscoveryCycleWrapperSchedulerTestCase::DoRun (void)
   Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper> ();
   cycle->SetSlotDuration (MilliSeconds (50));
 
-  // Set callbacks for all slots
+  
   cycle->SetSlot0Callback (MakeCallback (&BleDiscoveryCycleWrapperSchedulerTestCase::OnSlotExecuted, this));
   cycle->SetForwardingSlotCallback (1, MakeCallback (&BleDiscoveryCycleWrapperSchedulerTestCase::OnSlotExecuted, this));
   cycle->SetForwardingSlotCallback (2, MakeCallback (&BleDiscoveryCycleWrapperSchedulerTestCase::OnSlotExecuted, this));
@@ -371,22 +347,22 @@ BleDiscoveryCycleWrapperSchedulerTestCase::DoRun (void)
 
   cycle->Start ();
 
-  // Run for 3 complete cycles (3 * 200ms = 600ms)
-  // With 50ms slots: slots at 0,50,100,150 (cycle 1), 200,250,300,350 (cycle 2), 400,450,500,550 (cycle 3)
-  // Stop after last slot (550ms) but before cycle complete callback and next cycle
+  
+  
+  
   Simulator::Stop (MilliSeconds (599));
   Simulator::Run ();
 
   cycle->Stop ();
   Simulator::Destroy ();
 
-  // Should have 12 slot executions (4 slots * 3 cycles)
+  
   NS_TEST_ASSERT_MSG_EQ (m_slotCount, 12, "Should have 12 slot executions (4 slots * 3 cycles)");
 
-  // Should have 2 cycle completions (at 200ms and 400ms, the 3rd at 600ms hasn't fired yet)
+  
   NS_TEST_ASSERT_MSG_EQ (m_cycleCount, 2, "Should have 2 cycle completions");
 
-  // Verify cycle completion timing
+  
   NS_TEST_ASSERT_MSG_EQ (m_cycleCompleteTimes.size (), 2, "Should have 2 cycle completion times");
   NS_TEST_ASSERT_MSG_EQ (m_cycleCompleteTimes[0], MilliSeconds (200), "First cycle should complete at 200ms");
   NS_TEST_ASSERT_MSG_EQ (m_cycleCompleteTimes[1], MilliSeconds (400), "Second cycle should complete at 400ms");
@@ -443,36 +419,36 @@ BleDiscoveryCycleWrapperStartStopTestCase::DoRun (void)
   cycle->SetSlotDuration (MilliSeconds (10));
   cycle->SetSlot0Callback (MakeCallback (&BleDiscoveryCycleWrapperStartStopTestCase::OnSlotExecuted, this));
 
-  // Test initial state
+  
   NS_TEST_ASSERT_MSG_EQ (cycle->IsRunning (), false, "Should not be running initially");
 
-  // Test starting
+  
   cycle->Start ();
   NS_TEST_ASSERT_MSG_EQ (cycle->IsRunning (), true, "Should be running after Start()");
 
-  // Test double start (should be graceful)
+  
   cycle->Start ();
   NS_TEST_ASSERT_MSG_EQ (cycle->IsRunning (), true, "Should still be running after double Start()");
 
-  // Test cannot change slot duration while running
+  
   Time originalDuration = cycle->GetSlotDuration ();
   cycle->SetSlotDuration (MilliSeconds (500));
   NS_TEST_ASSERT_MSG_EQ (cycle->GetSlotDuration (), originalDuration,
                          "Slot duration should not change while running");
 
-  // Run a bit
+  
   Simulator::Stop (MilliSeconds (25));
   Simulator::Run ();
 
-  // Test stopping
+  
   cycle->Stop ();
   NS_TEST_ASSERT_MSG_EQ (cycle->IsRunning (), false, "Should not be running after Stop()");
 
-  // Test double stop (should be graceful)
+  
   cycle->Stop ();
   NS_TEST_ASSERT_MSG_EQ (cycle->IsRunning (), false, "Should still not be running after double Stop()");
 
-  // Verify that stopping actually cancelled events
+  
   uint32_t countBeforeMoreTime = m_executionCount;
 
   Simulator::Stop (MilliSeconds (100));
@@ -481,7 +457,7 @@ BleDiscoveryCycleWrapperStartStopTestCase::DoRun (void)
   NS_TEST_ASSERT_MSG_EQ (m_executionCount, countBeforeMoreTime,
                          "No more executions should occur after Stop()");
 
-  // Test can change slot duration after stopping
+  
   cycle->SetSlotDuration (MilliSeconds (25));
   NS_TEST_ASSERT_MSG_EQ (cycle->GetSlotDuration (), MilliSeconds (25),
                          "Slot duration should change after stopping");
@@ -557,7 +533,7 @@ BleDiscoveryCycleWrapperCurrentSlotTestCase::DoRun (void)
   m_cycle = CreateObject<BleDiscoveryCycleWrapper> ();
   m_cycle->SetSlotDuration (MilliSeconds (100));
 
-  // Set callbacks that record current slot
+  
   m_cycle->SetSlot0Callback (MakeCallback (&BleDiscoveryCycleWrapperCurrentSlotTestCase::RecordCurrentSlot0, this));
   m_cycle->SetForwardingSlotCallback (1, MakeCallback (&BleDiscoveryCycleWrapperCurrentSlotTestCase::RecordCurrentSlot1, this));
   m_cycle->SetForwardingSlotCallback (2, MakeCallback (&BleDiscoveryCycleWrapperCurrentSlotTestCase::RecordCurrentSlot2, this));
@@ -565,14 +541,14 @@ BleDiscoveryCycleWrapperCurrentSlotTestCase::DoRun (void)
 
   m_cycle->Start ();
 
-  // Run for one cycle (slots at 0, 100, 200, 300ms), stop before next cycle at 400ms
+  
   Simulator::Stop (MilliSeconds (350));
   Simulator::Run ();
 
   m_cycle->Stop ();
   Simulator::Destroy ();
 
-  // Verify current slot values match
+  
   NS_TEST_ASSERT_MSG_EQ (m_slotRecordings.size (), 4, "Should have 4 recordings");
 
   NS_TEST_ASSERT_MSG_EQ (m_slotRecordings[0].second, 0, "Current slot should be 0 at slot 0 callback");
@@ -657,20 +633,20 @@ BleDiscoveryCycleWrapperTimingAccuracyTestCase::DoRun (void)
 
   cycle->Start ();
 
-  // Run for 5 complete cycles (5 * 100ms = 500ms)
-  // With 25ms slots: cycle duration is 100ms
-  // Slots at: 0,25,50,75 (c1), 100,125,150,175 (c2), 200,225,250,275 (c3), 300,325,350,375 (c4), 400,425,450,475 (c5)
-  // Stop before cycle 6 starts at 500ms
+  
+  
+  
+  
   Simulator::Stop (MilliSeconds (499));
   Simulator::Run ();
 
   cycle->Stop ();
   Simulator::Destroy ();
 
-  // Should have 20 slot executions (4 slots * 5 cycles)
+  
   NS_TEST_ASSERT_MSG_EQ (m_timings.size (), 20, "Should have 20 slot executions");
 
-  // Verify timing for each slot across all cycles
+  
   Time cycleDuration = slotDuration * 4;
 
   for (uint32_t cycleNum = 0; cycleNum < 5; cycleNum++)
@@ -678,7 +654,7 @@ BleDiscoveryCycleWrapperTimingAccuracyTestCase::DoRun (void)
       uint32_t baseIndex = cycleNum * 4;
       Time cycleStart = cycleDuration * cycleNum;
 
-      // Expected times for this cycle
+      
       Time expectedSlot0 = cycleStart;
       Time expectedSlot1 = cycleStart + slotDuration;
       Time expectedSlot2 = cycleStart + slotDuration * 2;
@@ -770,7 +746,7 @@ BleDiscoveryCycleWrapperSynchronizationTestCase::DoRun (void)
   m_node2Slot0Times.clear ();
   m_node3Slot0Times.clear ();
 
-  // Create 3 nodes with same cycle parameters
+  
   Ptr<BleDiscoveryCycleWrapper> node1Cycle = CreateObject<BleDiscoveryCycleWrapper> ();
   Ptr<BleDiscoveryCycleWrapper> node2Cycle = CreateObject<BleDiscoveryCycleWrapper> ();
   Ptr<BleDiscoveryCycleWrapper> node3Cycle = CreateObject<BleDiscoveryCycleWrapper> ();
@@ -784,13 +760,13 @@ BleDiscoveryCycleWrapperSynchronizationTestCase::DoRun (void)
   node2Cycle->SetSlot0Callback (MakeCallback (&BleDiscoveryCycleWrapperSynchronizationTestCase::RecordNode2Slot0, this));
   node3Cycle->SetSlot0Callback (MakeCallback (&BleDiscoveryCycleWrapperSynchronizationTestCase::RecordNode3Slot0, this));
 
-  // Start all cycles at the same time (synchronized start)
+  
   node1Cycle->Start ();
   node2Cycle->Start ();
   node3Cycle->Start ();
 
-  // Run for 3 cycles with 50ms slots (cycle duration = 200ms)
-  // Slot 0 fires at: 0, 200, 400ms. Stop before 4th cycle at 600ms.
+  
+  
   Simulator::Stop (MilliSeconds (599));
   Simulator::Run ();
 
@@ -799,12 +775,12 @@ BleDiscoveryCycleWrapperSynchronizationTestCase::DoRun (void)
   node3Cycle->Stop ();
   Simulator::Destroy ();
 
-  // All nodes should have 3 slot 0 executions
+  
   NS_TEST_ASSERT_MSG_EQ (m_node1Slot0Times.size (), 3, "Node 1 should have 3 slot 0 executions");
   NS_TEST_ASSERT_MSG_EQ (m_node2Slot0Times.size (), 3, "Node 2 should have 3 slot 0 executions");
   NS_TEST_ASSERT_MSG_EQ (m_node3Slot0Times.size (), 3, "Node 3 should have 3 slot 0 executions");
 
-  // Verify all nodes are synchronized (slot 0 at same times)
+  
   for (size_t i = 0; i < 3; i++)
     {
       std::stringstream ss;
@@ -813,7 +789,7 @@ BleDiscoveryCycleWrapperSynchronizationTestCase::DoRun (void)
       NS_TEST_ASSERT_MSG_EQ (m_node2Slot0Times[i], m_node3Slot0Times[i], ss.str ());
     }
 
-  // Verify timing is correct
+  
   Time cycleDuration = slotDuration * 4;
   NS_TEST_ASSERT_MSG_EQ (m_node1Slot0Times[0], MilliSeconds (0), "First slot 0 at 0ms");
   NS_TEST_ASSERT_MSG_EQ (m_node1Slot0Times[1], cycleDuration, "Second slot 0 at cycle duration");
@@ -852,19 +828,19 @@ BleDiscoveryCycleWrapperTypeIdTestCase::~BleDiscoveryCycleWrapperTypeIdTestCase 
 void
 BleDiscoveryCycleWrapperTypeIdTestCase::DoRun (void)
 {
-  // Test TypeId registration
+  
   TypeId tid = BleDiscoveryCycleWrapper::GetTypeId ();
   NS_TEST_ASSERT_MSG_EQ (tid.GetName (), "ns3::BleDiscoveryCycleWrapper", "TypeId name should match");
 
-  // Test creating object through TypeId
+  
   Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper> ();
   NS_TEST_ASSERT_MSG_NE (cycle, 0, "Should be able to create BleDiscoveryCycleWrapper object");
 
-  // Test default slot duration
+  
   NS_TEST_ASSERT_MSG_EQ (cycle->GetSlotDuration (), MilliSeconds (100),
                          "Default slot duration should be 100ms");
 
-  // Test setting slot duration via method
+  
   cycle->SetSlotDuration (MilliSeconds (75));
   NS_TEST_ASSERT_MSG_EQ (cycle->GetSlotDuration (), MilliSeconds (75),
                          "Slot duration should be settable");
@@ -917,10 +893,10 @@ BleDiscoveryCycleWrapperNullCallbackTestCase::DoRun (void)
   Ptr<BleDiscoveryCycleWrapper> cycle = CreateObject<BleDiscoveryCycleWrapper> ();
   cycle->SetSlotDuration (MilliSeconds (10));
 
-  // Only set slot 1 callback, leave others null
+  
   cycle->SetForwardingSlotCallback (1, MakeCallback (&BleDiscoveryCycleWrapperNullCallbackTestCase::OnSlot1, this));
 
-  // Should not crash with null callbacks
+  
   cycle->Start ();
 
   Simulator::Stop (MilliSeconds (50));
@@ -929,7 +905,7 @@ BleDiscoveryCycleWrapperNullCallbackTestCase::DoRun (void)
   cycle->Stop ();
   Simulator::Destroy ();
 
-  // Slot 1 should still be called
+  
   NS_TEST_ASSERT_MSG_EQ (m_slot1Called, true, "Slot 1 callback should be called even with other null callbacks");
 }
 
@@ -981,22 +957,22 @@ BleDiscoveryCycleWrapperCycleCountTestCase::DoRun (void)
   m_cycle->SetSlotDuration (MilliSeconds (25));
   m_cycle->SetCycleCompleteCallback (MakeCallback (&BleDiscoveryCycleWrapperCycleCountTestCase::OnCycleComplete, this));
 
-  // Initial cycle count should be 0
+  
   NS_TEST_ASSERT_MSG_EQ (m_cycle->GetCycleCount (), 0, "Initial cycle count should be 0");
 
   m_cycle->Start ();
 
-  // Run for 4 cycles
+  
   Simulator::Stop (MilliSeconds (450));
   Simulator::Run ();
 
   m_cycle->Stop ();
   Simulator::Destroy ();
 
-  // Should have 4 cycle completions
+  
   NS_TEST_ASSERT_MSG_EQ (m_cycleCountsAtCompletion.size (), 4, "Should have 4 cycle completions");
 
-  // Verify cycle count incremented correctly
+  
   NS_TEST_ASSERT_MSG_EQ (m_cycleCountsAtCompletion[0], 1, "First cycle count should be 1");
   NS_TEST_ASSERT_MSG_EQ (m_cycleCountsAtCompletion[1], 2, "Second cycle count should be 2");
   NS_TEST_ASSERT_MSG_EQ (m_cycleCountsAtCompletion[2], 3, "Third cycle count should be 3");
@@ -1018,29 +994,29 @@ public:
 BleDiscoveryCycleWrapperTestSuite::BleDiscoveryCycleWrapperTestSuite ()
   : TestSuite ("ble-discovery-cycle", UNIT)
 {
-  // Basic tests
+  
   AddTestCase (new BleDiscoveryCycleWrapperBasicTestCase, TestCase::QUICK);
   AddTestCase (new BleDiscoveryCycleWrapperTypeIdTestCase, TestCase::QUICK);
 
-  // Timing structure tests
+  
   AddTestCase (new BleDiscoveryCycleWrapperTimingStructureTestCase, TestCase::QUICK);
   AddTestCase (new BleDiscoveryCycleWrapperSlotAllocationTestCase, TestCase::QUICK);
   AddTestCase (new BleDiscoveryCycleWrapperCurrentSlotTestCase, TestCase::QUICK);
 
-  // Scheduler tests
+  
   AddTestCase (new BleDiscoveryCycleWrapperSchedulerTestCase, TestCase::QUICK);
   AddTestCase (new BleDiscoveryCycleWrapperStartStopTestCase, TestCase::QUICK);
 
-  // Timing accuracy tests
+  
   AddTestCase (new BleDiscoveryCycleWrapperTimingAccuracyTestCase, TestCase::QUICK);
 
-  // Synchronization tests
+  
   AddTestCase (new BleDiscoveryCycleWrapperSynchronizationTestCase, TestCase::QUICK);
 
-  // Edge cases
+  
   AddTestCase (new BleDiscoveryCycleWrapperNullCallbackTestCase, TestCase::QUICK);
 
-  // Cycle count test
+  
   AddTestCase (new BleDiscoveryCycleWrapperCycleCountTestCase, TestCase::QUICK);
 }
 

@@ -1,21 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * Task 10 Comprehensive Test: GPS Proximity Filtering
- *
- * This simulation tests all subtasks for Task 10:
- * - Subtask 1: Implement distance calculation between GPS coordinates
- * - Subtask 2: Define proximity threshold (configure based on network density)
- * - Subtask 3: Add LHGPS comparison logic in forwarding decision
- * - Subtask 4: Skip proximity check when GPS unavailable
- * - Subtask 5: Test with different proximity threshold values
- * - Subtask 6: Validate spatial message distribution
- *
- * Usage:
- *   ./waf --run "task-10-test --verbose=true"
- */
-
 #include "ns3/core-module.h"
 #include "ns3/simulator.h"
 #include "ns3/nstime.h"
@@ -36,9 +18,9 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("Task10Test");
 
-// ============================================================================
-// GLOBAL TEST STATE
-// ============================================================================
+
+
+
 
 struct SubtaskResult {
     std::string name;
@@ -49,7 +31,7 @@ struct SubtaskResult {
 std::vector<SubtaskResult> g_testResults;
 bool g_verbose = true;
 
-// ANSI color codes
+
 const std::string COLOR_RESET = "\033[0m";
 const std::string COLOR_GREEN = "\033[32m";
 const std::string COLOR_RED = "\033[31m";
@@ -58,9 +40,9 @@ const std::string COLOR_CYAN = "\033[36m";
 const std::string COLOR_BOLD = "\033[1m";
 const std::string COLOR_MAGENTA = "\033[35m";
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
+
+
+
 
 void PrintHeader (const std::string& title)
 {
@@ -130,9 +112,9 @@ std::string VectorToString (const Vector& v)
     return ss.str();
 }
 
-// ============================================================================
-// SUBTASK 1: Distance Calculation Between GPS Coordinates
-// ============================================================================
+
+
+
 
 class Subtask1Test
 {
@@ -143,7 +125,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 1.1: Same location (distance = 0)
+        
         PrintSubHeader("Test 1.1: Same Location (Distance = 0)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -165,7 +147,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.2: Horizontal X-axis only
+        
         PrintSubHeader("Test 1.2: Horizontal X-Axis Distance");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -187,7 +169,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.3: Horizontal Y-axis only
+        
         PrintSubHeader("Test 1.3: Horizontal Y-Axis Distance");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -209,7 +191,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.4: Vertical Z-axis only (altitude)
+        
         PrintSubHeader("Test 1.4: Vertical Z-Axis Distance (Altitude)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -231,7 +213,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.5: 2D diagonal (3-4-5 triangle)
+        
         PrintSubHeader("Test 1.5: 2D Diagonal (3-4-5 Pythagorean Triangle)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -254,7 +236,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.6: 3D diagonal
+        
         PrintSubHeader("Test 1.6: 3D Diagonal Distance");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -277,7 +259,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.7: Negative coordinates
+        
         PrintSubHeader("Test 1.7: Negative Coordinates");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -301,7 +283,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.8: Large distances
+        
         PrintSubHeader("Test 1.8: Large Distances");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -324,7 +306,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.9: Small distances (precision)
+        
         PrintSubHeader("Test 1.9: Small Distances (Precision)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -346,7 +328,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.10: Symmetry (A to B == B to A)
+        
         PrintSubHeader("Test 1.10: Distance Symmetry (A→B == B→A)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -369,13 +351,13 @@ public:
             allPassed &= passed;
         }
 
-        // Test 1.11: Non-origin starting point
+        
         PrintSubHeader("Test 1.11: Non-Origin Starting Point");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Vector loc1(100.0, 200.0, 50.0);
-            Vector loc2(103.0, 204.0, 50.0);  // 3-4-5 triangle from loc1
+            Vector loc2(103.0, 204.0, 50.0);  
 
             PrintInit("Location 1: " + VectorToString(loc1));
             PrintInit("Location 2: " + VectorToString(loc2));
@@ -397,9 +379,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 2: Proximity Threshold Configuration
-// ============================================================================
+
+
+
 
 class Subtask2Test
 {
@@ -410,7 +392,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 2.1: Default proximity threshold
+        
         PrintSubHeader("Test 2.1: Default Proximity Threshold");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -427,7 +409,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.2: Set threshold via setter method
+        
         PrintSubHeader("Test 2.2: Set Threshold via Setter Method");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -446,7 +428,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.3: Set threshold via NS-3 attribute system
+        
         PrintSubHeader("Test 2.3: Set Threshold via NS-3 Attribute System");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -466,7 +448,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.4: Zero threshold
+        
         PrintSubHeader("Test 2.4: Zero Threshold (Edge Case)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -485,7 +467,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.5: Very small threshold
+        
         PrintSubHeader("Test 2.5: Very Small Threshold");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -504,7 +486,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.6: Very large threshold
+        
         PrintSubHeader("Test 2.6: Very Large Threshold");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -523,7 +505,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.7: Multiple sequential updates
+        
         PrintSubHeader("Test 2.7: Multiple Sequential Updates");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -551,7 +533,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 2.8: Network density configuration scenarios
+        
         PrintSubHeader("Test 2.8: Network Density Configuration Scenarios");
         {
             PrintInit("Testing typical threshold values for different network densities");
@@ -597,9 +579,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 3: LHGPS Comparison Logic in Forwarding Decision
-// ============================================================================
+
+
+
 
 class Subtask3Test
 {
@@ -610,13 +592,13 @@ public:
 
         bool allPassed = true;
 
-        // Test 3.1: Distance exceeds threshold - should forward
+        
         PrintSubHeader("Test 3.1: Distance Exceeds Threshold (Forward)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Vector currentLoc(0.0, 0.0, 0.0);
-            Vector lastHopLoc(20.0, 0.0, 0.0);  // 20m away
+            Vector lastHopLoc(20.0, 0.0, 0.0);  
             double threshold = 10.0;
 
             PrintInit("Current location: " + VectorToString(currentLoc));
@@ -633,13 +615,13 @@ public:
             allPassed &= shouldForward;
         }
 
-        // Test 3.2: Distance below threshold - should drop
+        
         PrintSubHeader("Test 3.2: Distance Below Threshold (Drop)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Vector currentLoc(0.0, 0.0, 0.0);
-            Vector lastHopLoc(5.0, 0.0, 0.0);  // 5m away
+            Vector lastHopLoc(5.0, 0.0, 0.0);  
             double threshold = 10.0;
 
             PrintInit("Current location: " + VectorToString(currentLoc));
@@ -657,13 +639,13 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.3: Distance exactly at threshold - should drop (> not >=)
+        
         PrintSubHeader("Test 3.3: Distance Exactly at Threshold (Boundary)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Vector currentLoc(0.0, 0.0, 0.0);
-            Vector lastHopLoc(10.0, 0.0, 0.0);  // Exactly 10m
+            Vector lastHopLoc(10.0, 0.0, 0.0);  
             double threshold = 10.0;
 
             PrintInit("Current location: " + VectorToString(currentLoc));
@@ -681,13 +663,13 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.4: Just above threshold
+        
         PrintSubHeader("Test 3.4: Just Above Threshold");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Vector currentLoc(0.0, 0.0, 0.0);
-            Vector lastHopLoc(10.01, 0.0, 0.0);  // Just over 10m
+            Vector lastHopLoc(10.01, 0.0, 0.0);  
             double threshold = 10.0;
 
             PrintInit("Current location: " + VectorToString(currentLoc));
@@ -703,13 +685,13 @@ public:
             allPassed &= shouldForward;
         }
 
-        // Test 3.5: Just below threshold
+        
         PrintSubHeader("Test 3.5: Just Below Threshold");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Vector currentLoc(0.0, 0.0, 0.0);
-            Vector lastHopLoc(9.99, 0.0, 0.0);  // Just under 10m
+            Vector lastHopLoc(9.99, 0.0, 0.0);  
             double threshold = 10.0;
 
             PrintInit("Current location: " + VectorToString(currentLoc));
@@ -726,13 +708,13 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.6: Zero threshold
+        
         PrintSubHeader("Test 3.6: Zero Threshold (Any Distance Forwards)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Vector currentLoc(0.0, 0.0, 0.0);
-            Vector lastHopLoc(1.0, 0.0, 0.0);  // 1m away
+            Vector lastHopLoc(1.0, 0.0, 0.0);  
             double threshold = 0.0;
 
             PrintInit("Distance: 1m, Threshold: 0m");
@@ -747,13 +729,13 @@ public:
             allPassed &= shouldForward;
         }
 
-        // Test 3.7: Same location with zero threshold
+        
         PrintSubHeader("Test 3.7: Same Location with Zero Threshold");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Vector currentLoc(5.0, 5.0, 0.0);
-            Vector lastHopLoc(5.0, 5.0, 0.0);  // Same location
+            Vector lastHopLoc(5.0, 5.0, 0.0);  
             double threshold = 0.0;
 
             PrintInit("Same location, threshold: 0m");
@@ -769,13 +751,13 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.8: 3D distance affects decision
+        
         PrintSubHeader("Test 3.8: 3D Distance Affects Decision");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Vector currentLoc(0.0, 0.0, 0.0);
-            Vector lastHopLoc(6.0, 8.0, 0.0);  // 2D distance = 10m
+            Vector lastHopLoc(6.0, 8.0, 0.0);  
             double threshold = 9.0;
 
             double distance = logic->CalculateDistance(currentLoc, lastHopLoc);
@@ -791,13 +773,13 @@ public:
             allPassed &= shouldForward;
         }
 
-        // Test 3.9: Vertical separation matters
+        
         PrintSubHeader("Test 3.9: Vertical Separation (Altitude Difference)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Vector currentLoc(0.0, 0.0, 0.0);
-            Vector lastHopLoc(0.0, 0.0, 15.0);  // 15m altitude difference
+            Vector lastHopLoc(0.0, 0.0, 15.0);  
             double threshold = 10.0;
 
             PrintInit("Current: ground level, Last hop: 15m altitude");
@@ -812,13 +794,13 @@ public:
             allPassed &= shouldForward;
         }
 
-        // Test 3.10: Different thresholds, same distance
+        
         PrintSubHeader("Test 3.10: Same Distance, Different Thresholds");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
             Vector currentLoc(0.0, 0.0, 0.0);
-            Vector lastHopLoc(15.0, 0.0, 0.0);  // Fixed 15m distance
+            Vector lastHopLoc(15.0, 0.0, 0.0);  
 
             PrintInit("Fixed distance: 15m");
             PrintState("Testing thresholds: 10m, 15m, 20m");
@@ -839,17 +821,17 @@ public:
             allPassed &= passed;
         }
 
-        // Test 3.11: LHGPS from message header
+        
         PrintSubHeader("Test 3.11: LHGPS Extracted from Message Header");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
-            // Create message with GPS location
+            
             BleDiscoveryHeaderWrapper header;
             header.SetSenderId(100);
             header.SetTtl(10);
             header.AddToPath(100);
-            header.SetGpsLocation(Vector(30.0, 0.0, 0.0));  // Last hop was at (30,0,0)
+            header.SetGpsLocation(Vector(30.0, 0.0, 0.0));  
 
             Vector currentLoc(0.0, 0.0, 0.0);
             Vector lastHopLoc = header.GetGpsLocation();
@@ -873,9 +855,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 4: Skip Proximity Check When GPS Unavailable
-// ============================================================================
+
+
+
 
 class Subtask4Test
 {
@@ -886,14 +868,14 @@ public:
 
         bool allPassed = true;
 
-        // Test 4.1: New header has no GPS by default
+        
         PrintSubHeader("Test 4.1: New Header Has No GPS by Default");
         {
             BleDiscoveryHeaderWrapper header;
             header.SetSenderId(100);
             header.SetTtl(10);
             header.AddToPath(100);
-            // GPS not set
+            
 
             PrintInit("Created header without setting GPS");
 
@@ -907,7 +889,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 4.2: Setting GPS makes it available
+        
         PrintSubHeader("Test 4.2: Setting GPS Makes It Available");
         {
             BleDiscoveryHeaderWrapper header;
@@ -930,23 +912,23 @@ public:
             allPassed &= passed;
         }
 
-        // Test 4.3: Combined decision skips proximity when GPS unavailable
+        
         PrintSubHeader("Test 4.3: ShouldForward Skips Proximity Check When GPS Unavailable");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
-            // Low random to pass crowding check
+            
             Ptr<UniformRandomVariable> lowRandom = CreateObject<UniformRandomVariable>();
             lowRandom->SetAttribute("Min", DoubleValue(0.0));
             lowRandom->SetAttribute("Max", DoubleValue(0.01));
             logic->SetRandomStream(lowRandom);
 
-            // Create message WITHOUT GPS
+            
             BleDiscoveryHeaderWrapper headerNoGps;
             headerNoGps.SetSenderId(100);
             headerNoGps.SetTtl(10);
             headerNoGps.AddToPath(100);
-            // GPS not set - proximity check should be skipped
+            
 
             Vector currentLoc(0.0, 0.0, 0.0);
 
@@ -963,7 +945,7 @@ public:
             allPassed &= shouldForward;
         }
 
-        // Test 4.4: With GPS and too close - should drop
+        
         PrintSubHeader("Test 4.4: With GPS and Too Close (Should Drop)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -973,12 +955,12 @@ public:
             lowRandom->SetAttribute("Max", DoubleValue(0.01));
             logic->SetRandomStream(lowRandom);
 
-            // Create message WITH GPS (close location)
+            
             BleDiscoveryHeaderWrapper headerWithGps;
             headerWithGps.SetSenderId(100);
             headerWithGps.SetTtl(10);
             headerWithGps.AddToPath(100);
-            headerWithGps.SetGpsLocation(Vector(5.0, 0.0, 0.0));  // Only 5m away
+            headerWithGps.SetGpsLocation(Vector(5.0, 0.0, 0.0));  
 
             Vector currentLoc(0.0, 0.0, 0.0);
 
@@ -996,7 +978,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 4.5: With GPS and far enough - should forward
+        
         PrintSubHeader("Test 4.5: With GPS and Far Enough (Should Forward)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1006,12 +988,12 @@ public:
             lowRandom->SetAttribute("Max", DoubleValue(0.01));
             logic->SetRandomStream(lowRandom);
 
-            // Create message WITH GPS (far location)
+            
             BleDiscoveryHeaderWrapper headerWithGps;
             headerWithGps.SetSenderId(100);
             headerWithGps.SetTtl(10);
             headerWithGps.AddToPath(100);
-            headerWithGps.SetGpsLocation(Vector(50.0, 0.0, 0.0));  // 50m away
+            headerWithGps.SetGpsLocation(Vector(50.0, 0.0, 0.0));  
 
             Vector currentLoc(0.0, 0.0, 0.0);
 
@@ -1028,7 +1010,7 @@ public:
             allPassed &= shouldForward;
         }
 
-        // Test 4.6: TTL=0 still fails even without GPS
+        
         PrintSubHeader("Test 4.6: TTL=0 Fails Even Without GPS");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1040,9 +1022,9 @@ public:
 
             BleDiscoveryHeaderWrapper headerTtl0;
             headerTtl0.SetSenderId(100);
-            headerTtl0.SetTtl(0);  // EXPIRED
+            headerTtl0.SetTtl(0);  
             headerTtl0.AddToPath(100);
-            // GPS not set
+            
 
             Vector currentLoc(0.0, 0.0, 0.0);
 
@@ -1059,12 +1041,12 @@ public:
             allPassed &= passed;
         }
 
-        // Test 4.7: High crowding can still cause drop without GPS
+        
         PrintSubHeader("Test 4.7: High Crowding Causes Drop Even Without GPS");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
 
-            // High random to fail crowding check at high crowding
+            
             Ptr<UniformRandomVariable> highRandom = CreateObject<UniformRandomVariable>();
             highRandom->SetAttribute("Min", DoubleValue(0.5));
             highRandom->SetAttribute("Max", DoubleValue(1.0));
@@ -1074,7 +1056,7 @@ public:
             headerNoGps.SetSenderId(100);
             headerNoGps.SetTtl(10);
             headerNoGps.AddToPath(100);
-            // GPS not set
+            
 
             Vector currentLoc(0.0, 0.0, 0.0);
 
@@ -1082,8 +1064,8 @@ public:
             PrintInit("Crowding: 0.9 (high), Random: 0.5-1.0");
             PrintState("Crowding check happens BEFORE GPS → may drop due to crowding");
 
-            // With 0.9 crowding, probability = 0.1
-            // With random 0.5-1.0, will fail (0.5 > 0.1)
+            
+            
             bool shouldForward = logic->ShouldForward(headerNoGps, currentLoc, 0.9, 10.0);
 
             PrintActual("should forward", shouldForward ? "true" : "false");
@@ -1094,7 +1076,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 4.8: GPS check order verification
+        
         PrintSubHeader("Test 4.8: Check Order: TTL → Crowding → GPS");
         {
             PrintInit("Verifying checks happen in correct order");
@@ -1110,7 +1092,7 @@ public:
             PrintState("  - GPS check only reached if TTL and crowding pass");
 
             PrintCheck("Check order documented", true);
-            // This is documentation, always passes
+            
         }
 
         RecordResult("Subtask 4: Skip Proximity Check When GPS Unavailable", allPassed);
@@ -1118,9 +1100,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 5: Test with Different Proximity Threshold Values
-// ============================================================================
+
+
+
 
 class Subtask5Test
 {
@@ -1131,7 +1113,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 5.1: Range of thresholds
+        
         PrintSubHeader("Test 5.1: Range of Threshold Values");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1149,20 +1131,20 @@ public:
             };
 
             std::vector<TestCase> cases = {
-                {0.0, 0.1, true},    // 0.1 > 0
-                {0.0, 0.0, false},   // 0 is NOT > 0
-                {1.0, 0.5, false},   // 0.5 < 1
-                {1.0, 1.5, true},    // 1.5 > 1
-                {5.0, 3.0, false},   // 3 < 5
-                {5.0, 7.0, true},    // 7 > 5
-                {10.0, 8.0, false},  // 8 < 10
-                {10.0, 12.0, true},  // 12 > 10
-                {25.0, 20.0, false}, // 20 < 25
-                {25.0, 30.0, true},  // 30 > 25
-                {50.0, 40.0, false}, // 40 < 50
-                {50.0, 60.0, true},  // 60 > 50
-                {100.0, 90.0, false},  // 90 < 100
-                {100.0, 110.0, true},  // 110 > 100
+                {0.0, 0.1, true},    
+                {0.0, 0.0, false},   
+                {1.0, 0.5, false},   
+                {1.0, 1.5, true},    
+                {5.0, 3.0, false},   
+                {5.0, 7.0, true},    
+                {10.0, 8.0, false},  
+                {10.0, 12.0, true},  
+                {25.0, 20.0, false}, 
+                {25.0, 30.0, true},  
+                {50.0, 40.0, false}, 
+                {50.0, 60.0, true},  
+                {100.0, 90.0, false},  
+                {100.0, 110.0, true},  
             };
 
             bool allCorrect = true;
@@ -1191,7 +1173,7 @@ public:
             allPassed &= allCorrect;
         }
 
-        // Test 5.2: Statistical test - uniform distribution
+        
         PrintSubHeader("Test 5.2: Statistical Test - Forward Rate vs Distance");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1220,7 +1202,7 @@ public:
             bool ratesCorrect = true;
             Vector currentLoc(0.0, 0.0, 0.0);
 
-            // Use deterministic pattern instead of random
+            
             for (const auto& band : bands)
             {
                 uint32_t forwards = 0;
@@ -1228,7 +1210,7 @@ public:
 
                 for (uint32_t i = 0; i < total; ++i)
                 {
-                    // Evenly distribute within band
+                    
                     double distance = band.minDist + (band.maxDist - band.minDist) * (i / (double)total);
                     Vector lastHopLoc(distance, 0.0, 0.0);
 
@@ -1245,27 +1227,27 @@ public:
                           << " | " << std::setw(5) << total
                           << " | " << std::fixed << std::setprecision(1) << rate << "%\n";
 
-                // Verify expected rates
-                if (band.maxDist <= threshold && forwards > 10) ratesCorrect = false;  // Should be ~0%
-                if (band.minDist > threshold && forwards < 90) ratesCorrect = false;   // Should be ~100%
+                
+                if (band.maxDist <= threshold && forwards > 10) ratesCorrect = false;  
+                if (band.minDist > threshold && forwards < 90) ratesCorrect = false;   
             }
 
             PrintCheck("Forward rates correlate with distance vs threshold", ratesCorrect);
             allPassed &= ratesCorrect;
         }
 
-        // Test 5.3: Threshold affects network behavior
+        
         PrintSubHeader("Test 5.3: Threshold Impact on Message Filtering");
         {
             PrintInit("Comparing small vs large thresholds");
 
             Vector currentLoc(0.0, 0.0, 0.0);
 
-            // Generate 20 distances from 1m to 40m
+            
             std::vector<double> distances;
             for (int i = 1; i <= 20; ++i)
             {
-                distances.push_back(i * 2.0);  // 2, 4, 6, ..., 40
+                distances.push_back(i * 2.0);  
             }
 
             double smallThreshold = 5.0;
@@ -1291,15 +1273,15 @@ public:
             PrintActual("forwards with 25m threshold", std::to_string(forwardsLarge) + "/20");
             PrintExpected("relationship", "small threshold forwards more (less filtering)");
 
-            // Small threshold = more forwards (18/20 forward: 6,8,10...40 > 5)
-            // Large threshold = fewer forwards (8/20 forward: 26,28,30...40 > 25)
+            
+            
             bool passed = (forwardsSmall > forwardsLarge);
             PrintCheck("Smaller threshold results in more forwarding", passed);
 
             allPassed &= passed;
         }
 
-        // Test 5.4: Extreme threshold values
+        
         PrintSubHeader("Test 5.4: Extreme Threshold Values");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1307,16 +1289,16 @@ public:
 
             PrintInit("Testing extreme threshold values");
 
-            // Very small threshold (0.001m = 1mm)
+            
             logic->SetProximityThreshold(0.001);
-            Vector nearbyLoc(0.01, 0.0, 0.0);  // 1cm away
+            Vector nearbyLoc(0.01, 0.0, 0.0);  
             bool fwdTiny = logic->ShouldForwardProximity(currentLoc, nearbyLoc, 0.001);
 
             PrintActual("1cm distance, 1mm threshold", fwdTiny ? "forward" : "drop");
             PrintExpected("1cm distance, 1mm threshold", "forward (10mm > 1mm)");
 
-            // Very large threshold (1km)
-            Vector farLoc(500.0, 0.0, 0.0);  // 500m away
+            
+            Vector farLoc(500.0, 0.0, 0.0);  
             bool fwdLarge = logic->ShouldForwardProximity(currentLoc, farLoc, 1000.0);
 
             PrintActual("500m distance, 1km threshold", fwdLarge ? "forward" : "drop");
@@ -1333,9 +1315,9 @@ public:
     }
 };
 
-// ============================================================================
-// SUBTASK 6: Validate Spatial Message Distribution
-// ============================================================================
+
+
+
 
 class Subtask6Test
 {
@@ -1346,7 +1328,7 @@ public:
 
         bool allPassed = true;
 
-        // Test 6.1: Linear network propagation
+        
         PrintSubHeader("Test 6.1: Linear Network Propagation");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1355,17 +1337,17 @@ public:
             PrintInit("Linear network: A(0m) → B(15m) → C(30m)");
             PrintInit("Threshold: " + std::to_string(threshold) + "m");
 
-            // Locations
+            
             Vector locA(0.0, 0.0, 0.0);
             Vector locB(15.0, 0.0, 0.0);
             Vector locC(30.0, 0.0, 0.0);
 
-            // A's message reaches B - should B forward?
-            // B compares its location to A's (last hop GPS)
+            
+            
             bool bForwardsFromA = logic->ShouldForwardProximity(locB, locA, threshold);
 
-            // B's forwarded message reaches C - should C forward?
-            // C compares its location to B's (last hop GPS)
+            
+            
             bool cForwardsFromB = logic->ShouldForwardProximity(locC, locB, threshold);
 
             PrintState("B receives from A: distance = 15m");
@@ -1382,7 +1364,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 6.2: Clustered nodes (limited forwarding)
+        
         PrintSubHeader("Test 6.2: Clustered Nodes (Limited Forwarding)");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1391,10 +1373,10 @@ public:
             PrintInit("Cluster: A, B, C all within 5m of each other");
             PrintInit("Threshold: " + std::to_string(threshold) + "m");
 
-            // Clustered locations
+            
             Vector locA(0.0, 0.0, 0.0);
-            Vector locB(3.0, 2.0, 0.0);   // ~3.6m from A
-            Vector locC(1.0, 4.0, 0.0);   // ~4.1m from A, ~3.6m from B
+            Vector locB(3.0, 2.0, 0.0);   
+            Vector locC(1.0, 4.0, 0.0);   
 
             double distAB = logic->CalculateDistance(locA, locB);
             double distBC = logic->CalculateDistance(locB, locC);
@@ -1419,7 +1401,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 6.3: Hub and spoke topology
+        
         PrintSubHeader("Test 6.3: Hub and Spoke Topology");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1428,14 +1410,14 @@ public:
             PrintInit("Hub A at center, spokes B,C,D at 20m in different directions");
             PrintInit("Threshold: " + std::to_string(threshold) + "m");
 
-            // Hub at center
+            
             Vector locA(0.0, 0.0, 0.0);
-            // Spokes at 20m in different directions
+            
             Vector locB(20.0, 0.0, 0.0);
             Vector locC(0.0, 20.0, 0.0);
             Vector locD(-20.0, 0.0, 0.0);
 
-            // All spokes receive from hub A - should they forward?
+            
             bool bForwards = logic->ShouldForwardProximity(locB, locA, threshold);
             bool cForwards = logic->ShouldForwardProximity(locC, locA, threshold);
             bool dForwards = logic->ShouldForwardProximity(locD, locA, threshold);
@@ -1451,7 +1433,7 @@ public:
             allPassed &= passed;
         }
 
-        // Test 6.4: Geographic spread vs hop count
+        
         PrintSubHeader("Test 6.4: Geographic Spread - Distant Nodes Forward More");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1494,13 +1476,13 @@ public:
             PrintState("Forward count: " + std::to_string(forwardCount) + "/6");
             PrintState("Only nodes > 10m should forward: 3 out of 6");
 
-            bool passed = (forwardCount == 3);  // 12m, 20m, 50m
+            bool passed = (forwardCount == 3);  
             PrintCheck("Only distant nodes forward (spatial filtering works)", passed);
 
             allPassed &= passed;
         }
 
-        // Test 6.5: Multi-hop distance accumulation
+        
         PrintSubHeader("Test 6.5: Multi-Hop Chain - Progressive Distance");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1510,11 +1492,11 @@ public:
             PrintInit("Each hop is 15m apart, all > 10m threshold");
 
             std::vector<Vector> chain = {
-                Vector(0.0, 0.0, 0.0),   // A
-                Vector(15.0, 0.0, 0.0),  // B
-                Vector(30.0, 0.0, 0.0),  // C
-                Vector(45.0, 0.0, 0.0),  // D
-                Vector(60.0, 0.0, 0.0),  // E
+                Vector(0.0, 0.0, 0.0),   
+                Vector(15.0, 0.0, 0.0),  
+                Vector(30.0, 0.0, 0.0),  
+                Vector(45.0, 0.0, 0.0),  
+                Vector(60.0, 0.0, 0.0),  
             };
 
             std::vector<std::string> names = {"A", "B", "C", "D", "E"};
@@ -1534,7 +1516,7 @@ public:
             allPassed &= allForward;
         }
 
-        // Test 6.6: Backtrack prevention
+        
         PrintSubHeader("Test 6.6: Backtrack Prevention");
         {
             Ptr<BleForwardingLogic> logic = CreateObject<BleForwardingLogic>();
@@ -1545,7 +1527,7 @@ public:
 
             Vector locA(0.0, 0.0, 0.0);
             Vector locB(15.0, 0.0, 0.0);
-            Vector locC(7.5, 13.0, 0.0);  // Roughly equilateral triangle
+            Vector locC(7.5, 13.0, 0.0);  
 
             double distCA = logic->CalculateDistance(locC, locA);
             double distCB = logic->CalculateDistance(locC, locB);
@@ -1553,22 +1535,22 @@ public:
             PrintState("C-A distance: " + std::to_string(distCA) + "m");
             PrintState("C-B distance: " + std::to_string(distCB) + "m");
 
-            // C received from B, so LHGPS is B's location
-            // C should compare against B, not A
+            
+            
             bool cForwards = logic->ShouldForwardProximity(locC, locB, threshold);
 
             PrintActual("C forwards (comparing to B)", cForwards ? "yes" : "no");
             PrintExpected("C forwards", std::string(distCB > threshold ? "yes" : "no") +
                          " (" + std::to_string(distCB) + "m vs 10m threshold)");
 
-            // The key insight: LHGPS is always the immediate sender, not the origin
+            
             PrintState("Note: LHGPS comparison uses last hop (B), not origin (A)");
 
             PrintCheck("LHGPS comparison uses correct reference point", true);
-            allPassed &= true;  // Documentation test
+            allPassed &= true;  
         }
 
-        // Test 6.7: Coverage summary
+        
         PrintSubHeader("Test 6.7: Spatial Distribution Summary");
         {
             PrintInit("Summary of spatial filtering behavior:");
@@ -1590,9 +1572,9 @@ public:
     }
 };
 
-// ============================================================================
-// MAIN TEST RUNNER
-// ============================================================================
+
+
+
 
 void PrintFinalResults ()
 {
@@ -1658,7 +1640,7 @@ int main (int argc, char *argv[])
     std::cout << "  5. Test with different proximity threshold values\n";
     std::cout << "  6. Validate spatial message distribution\n";
 
-    // Run all subtask tests
+    
     Subtask1Test::Run();
     Subtask2Test::Run();
     Subtask3Test::Run();
@@ -1666,7 +1648,7 @@ int main (int argc, char *argv[])
     Subtask5Test::Run();
     Subtask6Test::Run();
 
-    // Print final summary
+    
     PrintFinalResults();
 
     Simulator::Destroy();

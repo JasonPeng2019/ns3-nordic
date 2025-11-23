@@ -1,5 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-
 #include "ble-election-header.h"
 #include "ns3/log.h"
 #include "ns3/assert.h"
@@ -57,4 +55,4 @@ BleElectionHeader::Deserialize (Buffer::Iterator start)
   return bytes;
 }
 
-} // namespace ns3
+} 

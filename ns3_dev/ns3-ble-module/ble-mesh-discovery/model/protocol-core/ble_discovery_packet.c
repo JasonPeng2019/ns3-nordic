@@ -1,7 +1,7 @@
 /**
  * @file ble_discovery_packet.c
  * @brief Pure C implementation of BLE Discovery Protocol packet operations
- * @author Benjamin Huh
+ * @author jason peng
  * @date 2025-11-20
  */
 
@@ -16,7 +16,7 @@ const ble_score_weights_t BLE_DEFAULT_SCORE_WEIGHTS = {
 };
 #include <limits.h>
 
-/* ===== Helper Functions for Serialization ===== */
+
 
 /**
  * @brief Write uint8_t to buffer
@@ -108,7 +108,7 @@ static inline double read_double(const uint8_t **buf)
     return value;
 }
 
-/* ===== Packet Initialization ===== */
+
 
 void ble_discovery_packet_init(ble_discovery_packet_t *packet)
 {
@@ -141,7 +141,7 @@ void ble_election_packet_init(ble_election_packet_t *packet)
     ble_election_pdsf_history_reset(&packet->election.pdsf_history);
 }
 
-/* ===== TTL Operations ===== */
+
 
 bool ble_discovery_decrement_ttl(ble_discovery_packet_t *packet)
 {
@@ -154,7 +154,7 @@ bool ble_discovery_decrement_ttl(ble_discovery_packet_t *packet)
     return false;
 }
 
-/* ===== Path Operations ===== */
+
 
 bool ble_discovery_add_to_path(ble_discovery_packet_t *packet, uint32_t node_id)
 {
@@ -178,7 +178,7 @@ bool ble_discovery_is_in_path(const ble_discovery_packet_t *packet, uint32_t nod
     return false;
 }
 
-/* ===== GPS Operations ===== */
+
 
 void ble_discovery_set_gps(ble_discovery_packet_t *packet, double x, double y, double z)
 {
@@ -190,22 +190,22 @@ void ble_discovery_set_gps(ble_discovery_packet_t *packet, double x, double y, d
     packet->gps_available = true;
 }
 
-/* ===== Size Calculations ===== */
+
 
 uint32_t ble_discovery_get_size(const ble_discovery_packet_t *packet)
 {
     if (!packet) return 0;
 
-    // Message Type (1) + Clusterhead flag (1) + Sender ID (4) + TTL (1)
+    
     uint32_t size = 1 + 1 + 4 + 1;
 
-    // PSF: length (2) + node IDs (4 each)
+    
     size += 2 + (packet->path_length * 4);
 
-    // GPS: availability flag (1) + coordinates (24 if available)
+    
     size += 1;
     if (packet->gps_available) {
-        size += 3 * 8; // 3 doubles
+        size += 3 * 8; 
     }
 
     return size;
@@ -215,18 +215,18 @@ uint32_t ble_election_get_size(const ble_election_packet_t *packet)
 {
     if (!packet) return 0;
 
-    // Base discovery size + election fields
+    
     uint32_t size = ble_discovery_get_size(&packet->base);
 
-    // Class ID (2) + Direct Connections (4) + PDSF (4) + Score (8) + Hash (4)
+    
     size += 2 + 4 + 4 + 8 + 4;
-    // PDSF history: hop count (2) + per-hop counts (4 bytes each)
+    
     size += 2 + (packet->election.pdsf_history.hop_count * 4);
 
     return size;
 }
 
-/* ===== Serialization ===== */
+
 
 uint32_t ble_discovery_serialize(const ble_discovery_packet_t *packet,
                                    uint8_t *buffer,
@@ -239,25 +239,25 @@ uint32_t ble_discovery_serialize(const ble_discovery_packet_t *packet,
 
     uint8_t *ptr = buffer;
 
-    // Write message type
+    
     write_u8(&ptr, (uint8_t)packet->message_type);
 
-    // Write clusterhead flag
+    
     write_u8(&ptr, packet->is_clusterhead_message ? 1 : 0);
 
-    // Write sender ID
+    
     write_u32(&ptr, packet->sender_id);
 
-    // Write TTL
+    
     write_u8(&ptr, packet->ttl);
 
-    // Write Path So Far
+    
     write_u16(&ptr, packet->path_length);
     for (uint16_t i = 0; i < packet->path_length; i++) {
         write_u32(&ptr, packet->path[i]);
     }
 
-    // Write GPS availability
+    
     write_u8(&ptr, packet->gps_available ? 1 : 0);
     if (packet->gps_available) {
         write_double(&ptr, packet->gps_location.x);
@@ -276,29 +276,29 @@ uint32_t ble_discovery_deserialize(ble_discovery_packet_t *packet,
 
     const uint8_t *ptr = buffer;
 
-    // Read message type
+    
     packet->message_type = (ble_message_type_t)read_u8(&ptr);
 
-    // Read clusterhead flag
+    
     packet->is_clusterhead_message = (read_u8(&ptr) == 1);
 
-    // Read sender ID
+    
     packet->sender_id = read_u32(&ptr);
 
-    // Read TTL
+    
     packet->ttl = read_u8(&ptr);
 
-    // Read Path So Far
+    
     packet->path_length = read_u16(&ptr);
     if (packet->path_length > BLE_DISCOVERY_MAX_PATH_LENGTH) {
-        return 0; // Invalid path length
+        return 0; 
     }
 
     for (uint16_t i = 0; i < packet->path_length; i++) {
         packet->path[i] = read_u32(&ptr);
     }
 
-    // Read GPS availability
+    
     packet->gps_available = (read_u8(&ptr) == 1);
     if (packet->gps_available) {
         packet->gps_location.x = read_double(&ptr);
@@ -318,13 +318,13 @@ uint32_t ble_election_serialize(const ble_election_packet_t *packet,
     uint32_t required_size = ble_election_get_size(packet);
     if (buffer_size < required_size) return 0;
 
-    // Serialize base discovery packet
+    
     uint32_t bytes_written = ble_discovery_serialize(&packet->base, buffer, buffer_size);
     if (bytes_written == 0) return 0;
 
     uint8_t *ptr = buffer + bytes_written;
 
-    // Write election-specific fields
+    
     write_u16(&ptr, packet->election.class_id);
     write_u32(&ptr, packet->election.direct_connections);
     write_u32(&ptr, packet->election.pdsf);
@@ -344,14 +344,14 @@ uint32_t ble_election_deserialize(ble_election_packet_t *packet,
 {
     if (!packet || !buffer) return 0;
 
-    // Deserialize base discovery packet
+    
     uint32_t bytes_read = ble_discovery_deserialize(&packet->base, buffer, buffer_size);
     if (bytes_read == 0) return 0;
 
     const uint8_t *ptr = buffer + bytes_read;
     ble_election_pdsf_history_reset(&packet->election.pdsf_history);
 
-    // Read election-specific fields
+    
     packet->election.class_id = read_u16(&ptr);
     packet->election.direct_connections = read_u32(&ptr);
     packet->election.pdsf = read_u32(&ptr);
@@ -368,7 +368,7 @@ uint32_t ble_election_deserialize(ble_election_packet_t *packet,
     return (uint32_t)(ptr - buffer);
 }
 
-/* ===== Election Calculations ===== */
+
 
 void ble_election_pdsf_history_reset(ble_pdsf_history_t *history)
 {
@@ -411,10 +411,10 @@ uint32_t ble_election_update_pdsf(ble_election_packet_t *packet,
 
 uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf, uint32_t direct_neighbors)
 {
-    /* Caller is expected to pass previous_pdsf = 1 for the originator, but guard against 0 */
+    
     uint32_t baseline = (previous_pdsf == 0) ? 1 : previous_pdsf;
 
-    /* Predict how many NEW nodes will hear this hop */
+    
     uint64_t increment = (uint64_t)baseline * (uint64_t)direct_neighbors;
     uint64_t updated = (uint64_t)baseline + increment;
 
@@ -458,11 +458,11 @@ double ble_election_calculate_score(uint32_t direct_connections,
 
 uint32_t ble_election_generate_hash(uint32_t node_id)
 {
-    //JASON TODO: Update hash function for when you talk back to edges to factor in 
-    //node distribution
+    
+    
 
-    // Simple hash function for FDMA/TDMA slot assignment
-    // FNV-1a hash variant
+    
+    
     uint32_t hash = 2166136261u;
     hash ^= (node_id & 0xFF);
     hash *= 16777619;

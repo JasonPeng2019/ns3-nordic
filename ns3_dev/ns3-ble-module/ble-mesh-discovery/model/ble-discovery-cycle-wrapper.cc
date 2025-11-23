@@ -1,12 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * Author: Benjamin Huh <buh07@github>
- *
- * C++ Wrapper Implementation - Thin layer over C protocol core
- */
-
 #include "ble-discovery-cycle-wrapper.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
@@ -159,7 +150,7 @@ BleDiscoveryCycleWrapper::ExecuteSlot0 ()
 {
   NS_LOG_FUNCTION (this);
 
-  /* Update C structure state */
+  
   m_cycle.current_slot = 0;
 
   NS_LOG_DEBUG ("Executing Slot 0 - Own message transmission");
@@ -175,7 +166,7 @@ BleDiscoveryCycleWrapper::ExecuteForwardingSlot (uint8_t slotNumber)
 {
   NS_LOG_FUNCTION (this << static_cast<uint32_t> (slotNumber));
 
-  /* Update C structure state */
+  
   m_cycle.current_slot = slotNumber;
 
   NS_LOG_DEBUG ("Executing Slot " << static_cast<uint32_t> (slotNumber) << " - Forwarding");
@@ -214,10 +205,10 @@ BleDiscoveryCycleWrapper::ScheduleNextCycle ()
       return;
     }
 
-  /* Increment cycle count in C structure */
+  
   m_cycle.cycle_count++;
 
-  /* Call cycle complete callback */
+  
   if (!m_cycleCompleteCallback.IsNull ())
     {
       m_cycleCompleteCallback ();
@@ -225,10 +216,10 @@ BleDiscoveryCycleWrapper::ScheduleNextCycle ()
 
   NS_LOG_DEBUG ("Cycle " << m_cycle.cycle_count << " complete, scheduling next cycle");
 
-  /* Reset slot to 0 */
+  
   m_cycle.current_slot = 0;
 
-  /* Schedule next cycle's slots */
+  
   ScheduleAllSlots ();
 }
 
@@ -237,12 +228,12 @@ BleDiscoveryCycleWrapper::ScheduleAllSlots ()
 {
   Time slotDuration = GetSlotDuration ();
 
-  /* Schedule slot 0 immediately */
+  
   m_slot0Event = Simulator::Schedule (Seconds (0),
                                        &BleDiscoveryCycleWrapper::ExecuteSlot0,
                                        this);
 
-  /* Schedule slots 1, 2, 3 */
+  
   m_slot1Event = Simulator::Schedule (slotDuration,
                                        &BleDiscoveryCycleWrapper::ExecuteForwardingSlot,
                                        this, (uint8_t) 1);
@@ -253,7 +244,7 @@ BleDiscoveryCycleWrapper::ScheduleAllSlots ()
                                        &BleDiscoveryCycleWrapper::ExecuteForwardingSlot,
                                        this, (uint8_t) 3);
 
-  /* Schedule next cycle */
+  
   m_cycleEvent = Simulator::Schedule (slotDuration * 4,
                                        &BleDiscoveryCycleWrapper::ScheduleNextCycle,
                                        this);
@@ -269,4 +260,4 @@ BleDiscoveryCycleWrapper::CancelAllEvents ()
   Simulator::Cancel (m_cycleEvent);
 }
 
-} // namespace ns3
+} 

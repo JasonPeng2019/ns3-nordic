@@ -1,10 +1,3 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2025
- *
- * BLE Election Header - Thin wrapper dedicated to election announcements.
- */
-
 #ifndef BLE_ELECTION_HEADER_H
 #define BLE_ELECTION_HEADER_H
 
@@ -33,9 +26,9 @@ public:
   void Serialize (Buffer::Iterator start) const override;
   uint32_t Deserialize (Buffer::Iterator start) override;
 
-  // Election-specific convenience methods are inherited from the base class.
+  
 };
 
-} // namespace ns3
+} 
 
-#endif /* BLE_ELECTION_HEADER_H */
+#endif 

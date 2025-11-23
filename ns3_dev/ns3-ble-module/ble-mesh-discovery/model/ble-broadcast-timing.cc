@@ -28,7 +28,7 @@ BleBroadcastTiming::BleBroadcastTiming()
       m_rng(nullptr)
 {
     NS_LOG_FUNCTION(this);
-    /* Default initialization - call Initialize() for proper setup */
+    
 }
 
 BleBroadcastTiming::~BleBroadcastTiming()
@@ -46,14 +46,14 @@ BleBroadcastTiming::Initialize(ble_broadcast_schedule_type_t scheduleType,
 
     m_slotDuration = slotDuration;
 
-    /* Initialize C core */
+    
     ble_broadcast_timing_init(&m_state,
                                scheduleType,
                                numSlots,
                                slotDuration.GetMilliSeconds(),
                                listenRatio);
 
-    /* RNG will be set via SetRandomStream() if needed */
+    
 
     NS_LOG_INFO("Initialized broadcast timing: "
                 << "type=" << (scheduleType == BLE_BROADCAST_SCHEDULE_NOISY ? "NOISY" : "STOCHASTIC")
@@ -81,12 +81,12 @@ BleBroadcastTiming::AdvanceSlot()
 {
     NS_LOG_FUNCTION(this);
 
-    /* Use NS-3 RNG if available, otherwise use C core RNG */
+    
     if (m_rng)
     {
         double random_value = m_rng->GetValue();
 
-        /* Manually perform slot advancement with NS-3 RNG */
+        
         m_state.current_slot = (m_state.current_slot + 1) % m_state.num_slots;
 
         if (random_value < m_state.listen_ratio)
@@ -109,7 +109,7 @@ BleBroadcastTiming::AdvanceSlot()
     }
     else
     {
-        /* Use C core RNG */
+        
         bool isBroadcast = ble_broadcast_timing_advance_slot(&m_state);
 
         NS_LOG_DEBUG("Slot " << m_state.current_slot << ": "
@@ -193,4 +193,4 @@ BleBroadcastTiming::GetNumSlots() const
     return m_state.num_slots;
 }
 
-} // namespace ns3
+} 

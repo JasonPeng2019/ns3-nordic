@@ -13,7 +13,7 @@
  *   ./test-discovery-cycle-c
  *
  * Copyright (c) 2025
- * Author: Benjamin Huh <buh07@github>
+ * Author: jason peng <jason.p>
  */
 
 #include <stdio.h>
@@ -22,11 +22,11 @@
 #include <assert.h>
 #include "ble_discovery_cycle.h"
 
-/* Test counters */
+
 static int tests_passed = 0;
 static int tests_failed = 0;
 
-/* Test helper macros */
+
 #define TEST_ASSERT(cond, msg) do { \
     if (!(cond)) { \
         printf("FAIL: %s (line %d)\n", msg, __LINE__); \
@@ -54,14 +54,14 @@ static int tests_failed = 0;
     } \
 } while(0)
 
-/* Callback tracking for tests */
+
 static int slot_callback_counts[BLE_DISCOVERY_NUM_SLOTS];
 static int cycle_complete_count;
 static uint32_t last_cycle_count;
 static uint8_t last_slot_number;
 static void *last_user_data;
 
-/* Reset callback counters */
+
 static void reset_callback_counters(void)
 {
     for (int i = 0; i < BLE_DISCOVERY_NUM_SLOTS; i++) {
@@ -73,7 +73,7 @@ static void reset_callback_counters(void)
     last_user_data = NULL;
 }
 
-/* Test callbacks */
+
 static void test_slot_callback(uint8_t slot_number, void *user_data)
 {
     if (slot_number < BLE_DISCOVERY_NUM_SLOTS) {
@@ -90,9 +90,7 @@ static void test_cycle_complete_callback(uint32_t cycle_count, void *user_data)
     last_user_data = user_data;
 }
 
-/*
- * Test 1: Initialization
- */
+
 void test_init(void)
 {
     printf("Test: Initialization...\n");
@@ -112,15 +110,13 @@ void test_init(void)
         TEST_ASSERT(cycle.slot_callbacks[i] == NULL, "Slot callbacks should be NULL");
     }
 
-    /* Test NULL handling */
-    ble_discovery_cycle_init(NULL); /* Should not crash */
+    
+    ble_discovery_cycle_init(NULL); 
 
     printf("  Passed!\n");
 }
 
-/*
- * Test 2: Slot duration configuration
- */
+
 void test_slot_duration(void)
 {
     printf("Test: Slot duration configuration...\n");
@@ -128,21 +124,21 @@ void test_slot_duration(void)
     ble_discovery_cycle_t cycle;
     ble_discovery_cycle_init(&cycle);
 
-    /* Test getting default duration */
+    
     TEST_ASSERT_EQ(ble_discovery_cycle_get_slot_duration(&cycle), 100,
                    "Default slot duration");
 
-    /* Test setting duration when not running */
+    
     TEST_ASSERT(ble_discovery_cycle_set_slot_duration(&cycle, 50),
                 "Should be able to set duration when not running");
     TEST_ASSERT_EQ(ble_discovery_cycle_get_slot_duration(&cycle), 50,
                    "Slot duration should be 50");
 
-    /* Test cycle duration calculation */
+    
     TEST_ASSERT_EQ(ble_discovery_cycle_get_cycle_duration(&cycle), 200,
                    "Cycle duration should be 4 * 50 = 200");
 
-    /* Test cannot change while running */
+    
     ble_discovery_cycle_start(&cycle);
     TEST_ASSERT(!ble_discovery_cycle_set_slot_duration(&cycle, 75),
                 "Should not be able to change duration while running");
@@ -150,13 +146,13 @@ void test_slot_duration(void)
                    "Duration should still be 50");
     ble_discovery_cycle_stop(&cycle);
 
-    /* Test can change after stopping */
+    
     TEST_ASSERT(ble_discovery_cycle_set_slot_duration(&cycle, 75),
                 "Should be able to change duration after stopping");
     TEST_ASSERT_EQ(ble_discovery_cycle_get_slot_duration(&cycle), 75,
                    "Duration should be 75");
 
-    /* Test NULL handling */
+    
     TEST_ASSERT_EQ(ble_discovery_cycle_get_slot_duration(NULL), 0,
                    "NULL cycle should return 0");
     TEST_ASSERT_EQ(ble_discovery_cycle_get_cycle_duration(NULL), 0,
@@ -167,9 +163,7 @@ void test_slot_duration(void)
     printf("  Passed!\n");
 }
 
-/*
- * Test 3: Start/Stop behavior
- */
+
 void test_start_stop(void)
 {
     printf("Test: Start/Stop behavior...\n");
@@ -177,43 +171,41 @@ void test_start_stop(void)
     ble_discovery_cycle_t cycle;
     ble_discovery_cycle_init(&cycle);
 
-    /* Test initial state */
+    
     TEST_ASSERT(!ble_discovery_cycle_is_running(&cycle), "Should not be running initially");
 
-    /* Test starting */
+    
     TEST_ASSERT(ble_discovery_cycle_start(&cycle), "Start should succeed");
     TEST_ASSERT(ble_discovery_cycle_is_running(&cycle), "Should be running after start");
     TEST_ASSERT_EQ(ble_discovery_cycle_get_current_slot(&cycle), 0,
                    "Current slot should be 0 after start");
 
-    /* Test double start */
+    
     TEST_ASSERT(!ble_discovery_cycle_start(&cycle), "Double start should return false");
     TEST_ASSERT(ble_discovery_cycle_is_running(&cycle), "Should still be running");
 
-    /* Test stopping */
+    
     ble_discovery_cycle_stop(&cycle);
     TEST_ASSERT(!ble_discovery_cycle_is_running(&cycle), "Should not be running after stop");
 
-    /* Test double stop (should not crash) */
+    
     ble_discovery_cycle_stop(&cycle);
     TEST_ASSERT(!ble_discovery_cycle_is_running(&cycle), "Should still not be running");
 
-    /* Test NULL handling */
+    
     TEST_ASSERT(!ble_discovery_cycle_start(NULL), "NULL cycle start should return false");
     TEST_ASSERT(!ble_discovery_cycle_is_running(NULL), "NULL cycle is_running should return false");
-    ble_discovery_cycle_stop(NULL); /* Should not crash */
+    ble_discovery_cycle_stop(NULL); 
 
     printf("  Passed!\n");
 }
 
-/*
- * Test 4: Slot validation
- */
+
 void test_slot_validation(void)
 {
     printf("Test: Slot validation...\n");
 
-    /* Test valid slots */
+    
     TEST_ASSERT(ble_discovery_cycle_is_valid_slot(0), "Slot 0 should be valid");
     TEST_ASSERT(ble_discovery_cycle_is_valid_slot(1), "Slot 1 should be valid");
     TEST_ASSERT(ble_discovery_cycle_is_valid_slot(2), "Slot 2 should be valid");
@@ -221,14 +213,14 @@ void test_slot_validation(void)
     TEST_ASSERT(!ble_discovery_cycle_is_valid_slot(4), "Slot 4 should be invalid");
     TEST_ASSERT(!ble_discovery_cycle_is_valid_slot(255), "Slot 255 should be invalid");
 
-    /* Test forwarding slots */
+    
     TEST_ASSERT(!ble_discovery_cycle_is_forwarding_slot(0), "Slot 0 is not forwarding");
     TEST_ASSERT(ble_discovery_cycle_is_forwarding_slot(1), "Slot 1 is forwarding");
     TEST_ASSERT(ble_discovery_cycle_is_forwarding_slot(2), "Slot 2 is forwarding");
     TEST_ASSERT(ble_discovery_cycle_is_forwarding_slot(3), "Slot 3 is forwarding");
     TEST_ASSERT(!ble_discovery_cycle_is_forwarding_slot(4), "Slot 4 is not forwarding");
 
-    /* Test slot types */
+    
     TEST_ASSERT_EQ(ble_discovery_cycle_get_slot_type(0), BLE_SLOT_TYPE_OWN_MESSAGE,
                    "Slot 0 type should be OWN_MESSAGE");
     TEST_ASSERT_EQ(ble_discovery_cycle_get_slot_type(1), BLE_SLOT_TYPE_FORWARDING,
@@ -241,9 +233,7 @@ void test_slot_validation(void)
     printf("  Passed!\n");
 }
 
-/*
- * Test 5: Slot offset calculation
- */
+
 void test_slot_offset(void)
 {
     printf("Test: Slot offset calculation...\n");
@@ -261,25 +251,23 @@ void test_slot_offset(void)
     TEST_ASSERT_EQ(ble_discovery_cycle_get_slot_offset(&cycle, 3), 300,
                    "Slot 3 offset should be 300");
 
-    /* Invalid slot */
+    
     TEST_ASSERT_EQ(ble_discovery_cycle_get_slot_offset(&cycle, 4), 0,
                    "Invalid slot should return 0");
 
-    /* Different slot duration */
+    
     ble_discovery_cycle_set_slot_duration(&cycle, 50);
     TEST_ASSERT_EQ(ble_discovery_cycle_get_slot_offset(&cycle, 2), 100,
                    "Slot 2 offset with 50ms slots should be 100");
 
-    /* NULL handling */
+    
     TEST_ASSERT_EQ(ble_discovery_cycle_get_slot_offset(NULL, 0), 0,
                    "NULL cycle should return 0");
 
     printf("  Passed!\n");
 }
 
-/*
- * Test 6: Callback registration
- */
+
 void test_callback_registration(void)
 {
     printf("Test: Callback registration...\n");
@@ -287,7 +275,7 @@ void test_callback_registration(void)
     ble_discovery_cycle_t cycle;
     ble_discovery_cycle_init(&cycle);
 
-    /* Test slot callback registration */
+    
     TEST_ASSERT(ble_discovery_cycle_set_slot_callback(&cycle, 0, test_slot_callback),
                 "Setting slot 0 callback should succeed");
     TEST_ASSERT(ble_discovery_cycle_set_slot_callback(&cycle, 1, test_slot_callback),
@@ -297,32 +285,30 @@ void test_callback_registration(void)
     TEST_ASSERT(ble_discovery_cycle_set_slot_callback(&cycle, 3, test_slot_callback),
                 "Setting slot 3 callback should succeed");
 
-    /* Invalid slot number */
+    
     TEST_ASSERT(!ble_discovery_cycle_set_slot_callback(&cycle, 4, test_slot_callback),
                 "Setting slot 4 callback should fail");
 
-    /* Test cycle complete callback */
+    
     ble_discovery_cycle_set_complete_callback(&cycle, test_cycle_complete_callback);
     TEST_ASSERT(cycle.cycle_complete_callback == test_cycle_complete_callback,
                 "Cycle complete callback should be set");
 
-    /* Test user data */
+    
     int user_data = 42;
     ble_discovery_cycle_set_user_data(&cycle, &user_data);
     TEST_ASSERT(cycle.user_data == &user_data, "User data should be set");
 
-    /* NULL handling */
+    
     TEST_ASSERT(!ble_discovery_cycle_set_slot_callback(NULL, 0, test_slot_callback),
                 "NULL cycle should return false");
-    ble_discovery_cycle_set_complete_callback(NULL, test_cycle_complete_callback); /* Should not crash */
-    ble_discovery_cycle_set_user_data(NULL, &user_data); /* Should not crash */
+    ble_discovery_cycle_set_complete_callback(NULL, test_cycle_complete_callback); 
+    ble_discovery_cycle_set_user_data(NULL, &user_data); 
 
     printf("  Passed!\n");
 }
 
-/*
- * Test 7: Slot execution
- */
+
 void test_slot_execution(void)
 {
     printf("Test: Slot execution...\n");
@@ -332,7 +318,7 @@ void test_slot_execution(void)
     ble_discovery_cycle_t cycle;
     ble_discovery_cycle_init(&cycle);
 
-    /* Set up callbacks */
+    
     for (int i = 0; i < BLE_DISCOVERY_NUM_SLOTS; i++) {
         ble_discovery_cycle_set_slot_callback(&cycle, i, test_slot_callback);
     }
@@ -340,46 +326,44 @@ void test_slot_execution(void)
     int user_data = 12345;
     ble_discovery_cycle_set_user_data(&cycle, &user_data);
 
-    /* Start cycle */
+    
     ble_discovery_cycle_start(&cycle);
 
-    /* Execute slot 0 */
+    
     cycle.current_slot = 0;
     ble_discovery_cycle_execute_slot(&cycle);
     TEST_ASSERT_EQ(slot_callback_counts[0], 1, "Slot 0 callback should be called once");
     TEST_ASSERT_EQ(last_slot_number, 0, "Last slot number should be 0");
     TEST_ASSERT(last_user_data == &user_data, "User data should be passed");
 
-    /* Execute slot 1 */
+    
     cycle.current_slot = 1;
     ble_discovery_cycle_execute_slot(&cycle);
     TEST_ASSERT_EQ(slot_callback_counts[1], 1, "Slot 1 callback should be called once");
 
-    /* Execute slot 2 */
+    
     cycle.current_slot = 2;
     ble_discovery_cycle_execute_slot(&cycle);
     TEST_ASSERT_EQ(slot_callback_counts[2], 1, "Slot 2 callback should be called once");
 
-    /* Execute slot 3 */
+    
     cycle.current_slot = 3;
     ble_discovery_cycle_execute_slot(&cycle);
     TEST_ASSERT_EQ(slot_callback_counts[3], 1, "Slot 3 callback should be called once");
 
-    /* Test execution when not running */
+    
     ble_discovery_cycle_stop(&cycle);
     cycle.current_slot = 0;
     ble_discovery_cycle_execute_slot(&cycle);
     TEST_ASSERT_EQ(slot_callback_counts[0], 1, "Callback should not be called when stopped");
 
-    /* NULL handling */
-    ble_discovery_cycle_execute_slot(NULL); /* Should not crash */
+    
+    ble_discovery_cycle_execute_slot(NULL); 
 
     printf("  Passed!\n");
 }
 
-/*
- * Test 8: Slot advancement and cycle completion
- */
+
 void test_slot_advancement(void)
 {
     printf("Test: Slot advancement and cycle completion...\n");
@@ -396,7 +380,7 @@ void test_slot_advancement(void)
 
     ble_discovery_cycle_start(&cycle);
 
-    /* Advance through slots */
+    
     TEST_ASSERT_EQ(ble_discovery_cycle_get_current_slot(&cycle), 0, "Should start at slot 0");
 
     uint8_t next_slot = ble_discovery_cycle_advance_slot(&cycle);
@@ -409,7 +393,7 @@ void test_slot_advancement(void)
     next_slot = ble_discovery_cycle_advance_slot(&cycle);
     TEST_ASSERT_EQ(next_slot, 3, "Next slot should be 3");
 
-    /* This advance should complete the cycle */
+    
     next_slot = ble_discovery_cycle_advance_slot(&cycle);
     TEST_ASSERT_EQ(next_slot, 0, "Should wrap to slot 0");
     TEST_ASSERT_EQ(ble_discovery_cycle_get_current_slot(&cycle), 0, "Current slot should be 0");
@@ -418,27 +402,25 @@ void test_slot_advancement(void)
     TEST_ASSERT(last_user_data == &user_data, "User data should be passed to callback");
     TEST_ASSERT_EQ(ble_discovery_cycle_get_cycle_count(&cycle), 1, "Cycle count should be 1");
 
-    /* Complete another cycle */
+    
     for (int i = 0; i < 4; i++) {
         ble_discovery_cycle_advance_slot(&cycle);
     }
     TEST_ASSERT_EQ(cycle_complete_count, 2, "Cycle complete callback should be called twice");
     TEST_ASSERT_EQ(ble_discovery_cycle_get_cycle_count(&cycle), 2, "Cycle count should be 2");
 
-    /* Test advancement when not running */
+    
     ble_discovery_cycle_stop(&cycle);
     next_slot = ble_discovery_cycle_advance_slot(&cycle);
     TEST_ASSERT_EQ(next_slot, 0, "Should return 0 when not running");
 
-    /* NULL handling */
+    
     TEST_ASSERT_EQ(ble_discovery_cycle_advance_slot(NULL), 0, "NULL cycle should return 0");
 
     printf("  Passed!\n");
 }
 
-/*
- * Test 9: Cycle count reset
- */
+
 void test_cycle_count_reset(void)
 {
     printf("Test: Cycle count reset...\n");
@@ -448,7 +430,7 @@ void test_cycle_count_reset(void)
 
     ble_discovery_cycle_start(&cycle);
 
-    /* Complete a few cycles */
+    
     for (int c = 0; c < 5; c++) {
         for (int s = 0; s < 4; s++) {
             ble_discovery_cycle_advance_slot(&cycle);
@@ -457,20 +439,18 @@ void test_cycle_count_reset(void)
 
     TEST_ASSERT_EQ(ble_discovery_cycle_get_cycle_count(&cycle), 5, "Should have 5 cycles");
 
-    /* Reset count */
+    
     ble_discovery_cycle_reset_count(&cycle);
     TEST_ASSERT_EQ(ble_discovery_cycle_get_cycle_count(&cycle), 0, "Cycle count should be 0");
 
-    /* NULL handling */
+    
     TEST_ASSERT_EQ(ble_discovery_cycle_get_cycle_count(NULL), 0, "NULL cycle should return 0");
-    ble_discovery_cycle_reset_count(NULL); /* Should not crash */
+    ble_discovery_cycle_reset_count(NULL); 
 
     printf("  Passed!\n");
 }
 
-/*
- * Test 10: Slot names
- */
+
 void test_slot_names(void)
 {
     printf("Test: Slot names...\n");
@@ -494,9 +474,7 @@ void test_slot_names(void)
     printf("  Passed!\n");
 }
 
-/*
- * Test 11: Full cycle simulation
- */
+
 void test_full_cycle_simulation(void)
 {
     printf("Test: Full cycle simulation...\n");
@@ -506,7 +484,7 @@ void test_full_cycle_simulation(void)
     ble_discovery_cycle_t cycle;
     ble_discovery_cycle_init(&cycle);
 
-    /* Set up all callbacks */
+    
     for (int i = 0; i < BLE_DISCOVERY_NUM_SLOTS; i++) {
         ble_discovery_cycle_set_slot_callback(&cycle, i, test_slot_callback);
     }
@@ -514,7 +492,7 @@ void test_full_cycle_simulation(void)
 
     ble_discovery_cycle_start(&cycle);
 
-    /* Simulate 3 complete cycles */
+    
     for (int c = 0; c < 3; c++) {
         for (int s = 0; s < 4; s++) {
             ble_discovery_cycle_execute_slot(&cycle);
@@ -522,7 +500,7 @@ void test_full_cycle_simulation(void)
         }
     }
 
-    /* Verify callback counts */
+    
     TEST_ASSERT_EQ(slot_callback_counts[0], 3, "Slot 0 should be called 3 times");
     TEST_ASSERT_EQ(slot_callback_counts[1], 3, "Slot 1 should be called 3 times");
     TEST_ASSERT_EQ(slot_callback_counts[2], 3, "Slot 2 should be called 3 times");
@@ -533,9 +511,7 @@ void test_full_cycle_simulation(void)
     printf("  Passed!\n");
 }
 
-/*
- * Test 12: Null callback handling
- */
+
 void test_null_callbacks(void)
 {
     printf("Test: Null callback handling...\n");
@@ -545,18 +521,18 @@ void test_null_callbacks(void)
     ble_discovery_cycle_t cycle;
     ble_discovery_cycle_init(&cycle);
 
-    /* Only set slot 1 callback */
+    
     ble_discovery_cycle_set_slot_callback(&cycle, 1, test_slot_callback);
 
     ble_discovery_cycle_start(&cycle);
 
-    /* Execute all slots - should not crash with NULL callbacks */
+    
     for (int s = 0; s < 4; s++) {
         cycle.current_slot = s;
         ble_discovery_cycle_execute_slot(&cycle);
     }
 
-    /* Only slot 1 should have been recorded */
+    
     TEST_ASSERT_EQ(slot_callback_counts[0], 0, "Slot 0 callback was not set");
     TEST_ASSERT_EQ(slot_callback_counts[1], 1, "Slot 1 callback should be called");
     TEST_ASSERT_EQ(slot_callback_counts[2], 0, "Slot 2 callback was not set");
@@ -565,9 +541,7 @@ void test_null_callbacks(void)
     printf("  Passed!\n");
 }
 
-/*
- * Main test runner
- */
+
 int main(int argc, char *argv[])
 {
     printf("===========================================\n");
