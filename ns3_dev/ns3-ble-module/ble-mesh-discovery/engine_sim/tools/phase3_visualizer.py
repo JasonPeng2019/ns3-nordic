@@ -17,12 +17,40 @@ Usage:
 """
 
 import argparse
+import atexit
 import itertools
+import signal
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
 import matplotlib
+# Set backend early to avoid macOS backend crashes - must be before importing pyplot
+# Try multiple backends in order of preference, avoiding the unstable macOS native backend
+_backend_set = False
+for _backend in ['Qt5Agg', 'TkAgg', 'WXAgg', 'Agg']:
+    try:
+        # Test if the backend module is actually available before setting it
+        if _backend == 'Qt5Agg':
+            import PyQt5  # noqa
+        elif _backend == 'TkAgg':
+            import tkinter  # noqa
+        elif _backend == 'WXAgg':
+            import wx  # noqa
+        # If we get here, the backend dependencies are available
+        matplotlib.use(_backend)
+        _backend_set = True
+        print(f"Using matplotlib backend: {_backend}", file=sys.stderr)
+        break
+    except (ImportError, ModuleNotFoundError):
+        continue
+
+if not _backend_set:
+    # Fall back to Agg (non-interactive but stable)
+    matplotlib.use('Agg')
+    print("Warning: No GUI backend available. Using 'Agg' (non-interactive).", file=sys.stderr)
+    print("Windows will not be interactive. Install PyQt5 or tkinter for interactive mode.", file=sys.stderr)
+
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -35,11 +63,16 @@ from matplotlib.widgets import Button, Slider
 # Configuration
 ENABLE_FADE = False  # Set to True to enable message fade effect
 
-# Message colors
+# Message colors by type
 MESSAGE_COLORS = {
-    "send_origin": "#ffa726",  # self advertisement
-    "send_fwd": "#fb8c00",     # forwarded/election floods
-    "recv": "#66bb6a",         # reception
+    "DISCOVERY": "#42a5f5",
+    "ELECTION": "#ec407a",
+    "RENOUNCE": "#ef6c00",
+    "UNKNOWN": "#9e9e9e",
+    # Backward-compat keys used elsewhere in the script
+    "send_origin": "#42a5f5",
+    "send_fwd": "#ec407a",
+    "recv": "#66bb6a",
 }
 
 # Base node colors for election-cycle phases (time-based approximation)
@@ -60,10 +93,29 @@ ACTIVITY_COLORS = {
 def load_trace(path: Path) -> pd.DataFrame:
     """Load the CSV trace (phase2/phase3 schema)."""
     df = pd.read_csv(path)
-    numeric_cols = ["time_ms", "sender_id", "receiver_id", "originator_id", "ttl", "path_length", "rssi"]
+    numeric_cols = [
+        "time_ms",
+        "sender_id",
+        "receiver_id",
+        "originator_id",
+        "ttl",
+        "path_length",
+        "rssi",
+        "is_renouncement",
+        "class_id",
+        "direct_connections",
+        "score",
+        "hash",
+        "pdsf",
+        "last_pi",
+    ]
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+    if "message_type" in df.columns:
+        df["message_type"] = df["message_type"].fillna("DISCOVERY")
+    else:
+        df["message_type"] = "DISCOVERY"
     return df
 
 
@@ -127,20 +179,41 @@ def plot_packet_timeline(df: pd.DataFrame, ax: plt.Axes):
         orig = int(row["originator_id"]) if pd.notna(row["originator_id"]) else int(row["sender_id"])
         marker = ">" if pd.isna(row["path_length"]) or int(row["path_length"]) == 0 else "s"
         size = 110 if marker == ">" else 70
-        ax.scatter(row["time_ms"], row["sender_id"], c=[orig_colors.get(orig, "gray")], marker=marker, s=size,
-                   edgecolors="black", linewidths=0.6)
+        msg_type = row.get("message_type", "DISCOVERY")
+        color = MESSAGE_COLORS.get(str(msg_type).upper(), MESSAGE_COLORS["UNKNOWN"])
+        ax.scatter(
+            row["time_ms"],
+            row["sender_id"],
+            c=[color],
+            marker=marker,
+            s=size,
+            edgecolors="black",
+            linewidths=0.6,
+            alpha=0.9,
+        )
 
     for _, row in recv_df.iterrows():
-        orig = int(row["originator_id"]) if pd.notna(row["originator_id"]) else 0
-        ax.scatter(row["time_ms"], row["receiver_id"], c=[orig_colors.get(orig, "gray")], marker="o", s=55, alpha=0.7,
-                   edgecolors="black", linewidths=0.5)
+        msg_type = row.get("message_type", "DISCOVERY")
+        color = MESSAGE_COLORS.get(str(msg_type).upper(), MESSAGE_COLORS["UNKNOWN"])
+        ax.scatter(
+            row["time_ms"],
+            row["receiver_id"],
+            c=[color],
+            marker="o",
+            s=55,
+            alpha=0.6,
+            edgecolors="black",
+            linewidths=0.5,
+        )
 
     legend_elements = [
-        plt.Line2D([0], [0], marker=">", color="w", markerfacecolor=MESSAGE_COLORS["send_origin"],
-                   markersize=10, markeredgecolor="black", label="SEND (origin)"),
-        plt.Line2D([0], [0], marker="s", color="w", markerfacecolor=MESSAGE_COLORS["send_fwd"],
-                   markersize=8, markeredgecolor="black", label="SEND (forward)"),
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=MESSAGE_COLORS["recv"],
+        plt.Line2D([0], [0], marker=">", color="w", markerfacecolor=MESSAGE_COLORS["DISCOVERY"],
+                   markersize=10, markeredgecolor="black", label="Discovery SEND"),
+        plt.Line2D([0], [0], marker="s", color="w", markerfacecolor=MESSAGE_COLORS["ELECTION"],
+                   markersize=8, markeredgecolor="black", label="Election SEND"),
+        plt.Line2D([0], [0], marker="s", color="w", markerfacecolor=MESSAGE_COLORS["RENOUNCE"],
+                   markersize=8, markeredgecolor="black", label="Renouncement SEND"),
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="#66bb6a",
                    markersize=8, markeredgecolor="black", label="RECV"),
     ]
     ax.legend(handles=legend_elements, loc="upper right", fontsize=8)
@@ -155,6 +228,7 @@ def plot_statistics(stats_df: pd.DataFrame, ax: plt.Axes):
         ax.text(0.5, 0.5, "No statistics available", ha="center", va="center")
         ax.set_title("Node Statistics")
         return
+    stats_df = stats_df.copy()
     x = stats_df["node_id"].astype(int)
     width = 0.2
     ax.bar(x - 1.5 * width, stats_df["messages_sent"], width, label="Sent", color="steelblue")
@@ -260,6 +334,25 @@ def build_animation(df: pd.DataFrame, G: nx.Graph):
     highlight_coll = LineCollection([], colors=[], linewidths=2.8, alpha=0.9, zorder=2.5)
     ax_anim.add_collection(highlight_coll)
     time_text = ax_anim.text(0.02, 0.95, "", transform=ax_anim.transAxes, fontsize=10)
+
+    # Legend for node phase colors + activity overlays
+    phase_handles = [
+        mpatches.Patch(color=PHASE_COLORS["noise"], label="Noise phase"),
+        mpatches.Patch(color=PHASE_COLORS["neighbor"], label="Neighbor phase"),
+        mpatches.Patch(color=PHASE_COLORS["candidate"], label="Candidate phase"),
+        mpatches.Patch(color=PHASE_COLORS["election"], label="Election phase"),
+    ]
+    activity_handles = [
+        mpatches.Patch(color=ACTIVITY_COLORS["send"], label="Send activity"),
+        mpatches.Patch(color=ACTIVITY_COLORS["recv"], label="Receive activity"),
+    ]
+    ax_anim.legend(handles=phase_handles + activity_handles,
+                   loc="upper right",
+                   fontsize=8,
+                   framealpha=0.85,
+                   title="Node color guide",
+                   title_fontsize=9)
+
     ax_anim.set_axis_off()
     ax_anim.set_title("Phase 3 Message Flow (looping)")
 
@@ -305,6 +398,7 @@ def build_animation(df: pd.DataFrame, G: nx.Graph):
                     "receiver_id": row["receiver_id"],
                     "event": row["event"],
                     "path_length": row["path_length"],
+                    "message_type": row.get("message_type", "DISCOVERY"),
                 })
 
             # Remove messages older than fade duration (in simulation time, not real-time)
@@ -347,7 +441,7 @@ def build_animation(df: pd.DataFrame, G: nx.Graph):
             for msg in state["message_history"]:
                 src = int(msg["sender_id"]) if pd.notna(msg["sender_id"]) else None
                 dst = int(msg["receiver_id"]) if pd.notna(msg["receiver_id"]) else None
-                path_len = int(msg["path_length"]) if pd.notna(msg["path_length"]) else 0
+                msg_type = str(msg.get("message_type", "DISCOVERY")).upper()
                 if src is None or dst is None or src not in pos or dst not in pos:
                     continue
 
@@ -358,7 +452,7 @@ def build_animation(df: pd.DataFrame, G: nx.Graph):
                 segments.append([(pos[src][0], pos[src][1]), (pos[dst][0], pos[dst][1])])
 
                 if msg["event"] == "SEND":
-                    base_color = MESSAGE_COLORS["send_origin"] if path_len == 0 else MESSAGE_COLORS["send_fwd"]
+                    base_color = MESSAGE_COLORS.get(msg_type, MESSAGE_COLORS["UNKNOWN"])
                 else:
                     base_color = MESSAGE_COLORS["recv"]
 
@@ -399,14 +493,13 @@ def build_animation(df: pd.DataFrame, G: nx.Graph):
             for _, row in frame_events.iterrows():
                 src = int(row["sender_id"]) if pd.notna(row["sender_id"]) else None
                 dst = int(row["receiver_id"]) if pd.notna(row["receiver_id"]) else None
-                path_len = int(row["path_length"]) if pd.notna(row["path_length"]) else 0
+                msg_type = str(row.get("message_type", "DISCOVERY")).upper()
                 if src is None or dst is None or src not in pos or dst not in pos:
                     continue
                 segments.append([(pos[src][0], pos[src][1]), (pos[dst][0], pos[dst][1])])
-                if row["event"] == "SEND":
-                    colors.append(MESSAGE_COLORS["send_origin"] if path_len == 0 else MESSAGE_COLORS["send_fwd"])
-                else:
-                    colors.append(MESSAGE_COLORS["recv"])
+                colors.append(MESSAGE_COLORS.get(msg_type, MESSAGE_COLORS["UNKNOWN"])
+                              if row["event"] == "SEND"
+                              else MESSAGE_COLORS["recv"])
             highlight_coll.set_segments(segments)
             highlight_coll.set_colors(colors if colors else ["none"])
 
@@ -559,12 +652,23 @@ def build_animation(df: pd.DataFrame, G: nx.Graph):
     def on_close(event):
         """Clean up resources when figure is closed."""
         try:
-            # Stop animation
-            if hasattr(anim, "event_source") and anim.event_source is not None:
-                anim.event_source.stop()
+            # Stop animation first
+            if hasattr(fig, "_phase3_anim"):
+                anim_obj = fig._phase3_anim
+                if hasattr(anim_obj, "event_source") and anim_obj.event_source is not None:
+                    try:
+                        anim_obj.event_source.stop()
+                    except Exception:
+                        pass
             # Disconnect all callbacks
             for handler in getattr(fig, "_cleanup_handlers", []):
-                if hasattr(handler, "disconnect"):
+                if isinstance(handler, int):
+                    # It's a connection ID
+                    try:
+                        fig.canvas.mpl_disconnect(handler)
+                    except Exception:
+                        pass
+                elif hasattr(handler, "disconnect"):
                     try:
                         handler.disconnect()
                     except Exception:
@@ -575,12 +679,33 @@ def build_animation(df: pd.DataFrame, G: nx.Graph):
         except Exception:
             pass  # Ignore errors during cleanup
 
-    fig.canvas.mpl_connect("close_event", on_close)
+    close_cid = fig.canvas.mpl_connect("close_event", on_close)
+    fig._cleanup_handlers.append(close_cid)
 
     return fig
 
 
+def cleanup_all():
+    """Clean up all matplotlib resources."""
+    try:
+        plt.close("all")
+    except Exception:
+        pass
+
+
+def signal_handler(sig, frame):
+    """Handle interrupt signals gracefully."""
+    print("\nInterrupt received, cleaning up...", file=sys.stderr)
+    cleanup_all()
+    sys.exit(0)
+
+
 def main():
+    # Register cleanup handlers
+    atexit.register(cleanup_all)
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     parser = argparse.ArgumentParser(description="Phase 3 discovery trace visualizer with interactive controls.")
     parser.add_argument("--trace", required=True, help="Path to phase3_trace.csv")
     parser.add_argument("--no-static", action="store_true", help="Disable static plots and show only the animation")
@@ -588,13 +713,14 @@ def main():
     parser.add_argument("--backend", default=None, help="Matplotlib backend to use (e.g., 'TkAgg', 'Qt5Agg')")
     args = parser.parse_args()
 
-    # Set backend if specified (must be done before importing pyplot operations)
+    # Set backend if specified (overrides default TkAgg)
     if args.backend:
         try:
-            matplotlib.use(args.backend)
+            matplotlib.use(args.backend, force=True)
             print(f"Using matplotlib backend: {args.backend}", file=sys.stderr)
         except Exception as e:
             print(f"Warning: Could not set backend to {args.backend}: {e}", file=sys.stderr)
+            print(f"Falling back to default backend: TkAgg", file=sys.stderr)
 
     trace_path = Path(args.trace)
     if not trace_path.exists():
@@ -616,9 +742,11 @@ def main():
         plt.show()
     except KeyboardInterrupt:
         print("\nClosing visualizer...", file=sys.stderr)
+    except Exception as e:
+        print(f"Error during visualization: {e}", file=sys.stderr)
     finally:
         # Ensure clean shutdown
-        plt.close("all")
+        cleanup_all()
 
 
 if __name__ == "__main__":

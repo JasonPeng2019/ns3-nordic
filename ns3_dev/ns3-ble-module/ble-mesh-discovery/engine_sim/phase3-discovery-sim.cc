@@ -21,6 +21,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 extern "C" {
 #include "ns3/ble_mesh_node.h"
@@ -32,10 +33,16 @@ using namespace ns3;
 
 /*
  * Global trace file for CSV output (same schema as phase2).
- * Columns: time_ms,event,sender_id,receiver_id,originator_id,ttl,path_length,rssi
+ * Extended columns record election metadata to make phase 3 observable.
+ * Columns:
+ *   time_ms,event,sender_id,receiver_id,originator_id,ttl,path_length,rssi,
+ *   message_type,is_renouncement,class_id,direct_connections,score,hash,
+ *   pdsf,last_pi,node_state,clusterhead_id,cluster_class
  */
 static const char TRACE_HEADER[] =
-  "time_ms,event,sender_id,receiver_id,originator_id,ttl,path_length,rssi";
+  "time_ms,event,sender_id,receiver_id,originator_id,ttl,path_length,rssi,"
+  "message_type,is_renouncement,class_id,direct_connections,score,hash,"
+  "pdsf,last_pi,node_state,clusterhead_id,cluster_class";
 static std::ofstream g_traceFile;
 
 // Speed up simulation while keeping the original phase proportions (noise vs neighbour).
@@ -172,6 +179,11 @@ SimpleVirtualChannel::Transmit (uint32_t senderId, Ptr<Packet> packet) const
                           << " pathLen=" << header.GetPath ().size ());
   double nowMs = Simulator::Now ().GetMilliSeconds ();
 
+  bool isElection = header.IsElectionMessage ();
+  bool isRenounce = isElection && header.IsRenouncement ();
+  const auto &cElection = isElection ? header.GetCElectionPacket () : ble_election_packet_t{};
+  std::string msgType = isElection ? (isRenounce ? "RENOUNCE" : "ELECTION") : "DISCOVERY";
+
   // TRACE: SEND event (broadcast)
   std::vector<uint32_t> path = header.GetPath ();
   uint32_t originatorId = path.empty () ? senderId : path.front ();
@@ -179,7 +191,19 @@ SimpleVirtualChannel::Transmit (uint32_t senderId, Ptr<Packet> packet) const
               << "" << ","  // receiver blank for broadcast
               << originatorId << ","
               << (uint32_t)header.GetTtl () << "," << path.size () << ","
-              << "" << "\n";
+              << "" << ","
+              << msgType << ","
+              << (isRenounce ? 1 : 0) << ","
+              << (isElection ? cElection.election.class_id : 0) << ","
+              << (isElection ? cElection.election.direct_connections : 0) << ","
+              << (isElection ? cElection.election.score : 0.0) << ","
+              << (isElection ? cElection.election.hash : 0) << ","
+              << (isElection ? cElection.election.pdsf : 0) << ","
+              << (isElection ? cElection.election.last_pi : 0) << ","
+              << "" << ","  // node_state
+              << "" << ","  // clusterhead_id
+              << ""         // cluster_class
+              << "\n";
 
   for (uint32_t neighbor : it->second)
     {
@@ -213,13 +237,29 @@ SimpleVirtualChannel::Deliver (uint32_t receiverId,
   traceCopy->RemoveHeader (header);
   std::vector<uint32_t> path = header.GetPath ();
   uint32_t originatorId = path.empty () ? 0 : path.front ();
+  bool isElection = header.IsElectionMessage ();
+  bool isRenounce = isElection && header.IsRenouncement ();
+  const auto &cElection = isElection ? header.GetCElectionPacket () : ble_election_packet_t{};
+  std::string msgType = isElection ? (isRenounce ? "RENOUNCE" : "ELECTION") : "DISCOVERY";
 
   g_traceFile << Simulator::Now ().GetMilliSeconds () << ",RECV,"
               << senderId << "," << receiverId << ","
               << originatorId << ","
               << (uint32_t)header.GetTtl () << ","
               << path.size () << ","
-              << (int)rssi << "\n";
+              << (int)rssi << ","
+              << msgType << ","
+              << (isRenounce ? 1 : 0) << ","
+              << (isElection ? cElection.election.class_id : 0) << ","
+              << (isElection ? cElection.election.direct_connections : 0) << ","
+              << (isElection ? cElection.election.score : 0.0) << ","
+              << (isElection ? cElection.election.hash : 0) << ","
+              << (isElection ? cElection.election.pdsf : 0) << ","
+              << (isElection ? cElection.election.last_pi : 0) << ","
+              << "" << ","  // node_state
+              << "" << ","  // clusterhead_id
+              << ""         // cluster_class
+              << "\n";
 
   dstIt->second->ReceivePacket (packet, rssi);
 }
@@ -670,6 +710,18 @@ main (int argc, char *argv[])
                   << state->stats.messages_received << ","
                   << state->stats.messages_forwarded << ","
                   << state->stats.messages_dropped << ","
+                  << "" << ","  // rssi column unused for STATS
+                  << "" << ","  // message_type
+                  << "" << ","  // is_renouncement
+                  << "" << ","  // class_id
+                  << "" << ","  // direct_connections
+                  << "" << ","  // score
+                  << "" << ","  // hash
+                  << "" << ","  // pdsf
+                  << "" << ","  // last_pi
+                  << ble_mesh_node_state_name (state->state) << ","
+                  << state->clusterhead_id << ","
+                  << state->cluster_class
                   << "\n";
     }
 
