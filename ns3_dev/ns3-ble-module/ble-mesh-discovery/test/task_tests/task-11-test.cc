@@ -486,11 +486,11 @@ public:
             }
 
             std::vector<uint8_t> dequeuedTtls;
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
 
             while (ble_queue_dequeue(&queue, &dequeuedPacket))
             {
-                dequeuedTtls.push_back(dequeuedPacket.ttl);
+                dequeuedTtls.push_back(dequeuedPacket.base.ttl);
             }
 
             PrintActual("dequeue order", TtlVectorToString(dequeuedTtls));
@@ -531,11 +531,11 @@ public:
 
             // Dequeue and verify order
             std::vector<uint8_t> dequeuedTtls;
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
 
             while (ble_queue_dequeue(&queue, &dequeuedPacket))
             {
-                dequeuedTtls.push_back(dequeuedPacket.ttl);
+                dequeuedTtls.push_back(dequeuedPacket.base.ttl);
             }
 
             // Verify descending order
@@ -582,11 +582,11 @@ public:
 
             // Dequeue all
             std::vector<uint32_t> dequeuedSenders;
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
 
             while (ble_queue_dequeue(&queue, &dequeuedPacket))
             {
-                dequeuedSenders.push_back(dequeuedPacket.sender_id);
+                dequeuedSenders.push_back(dequeuedPacket.base.sender_id);
             }
 
             PrintActual("number of messages dequeued", std::to_string(dequeuedSenders.size()));
@@ -621,18 +621,18 @@ public:
 
             uint32_t sizeBeforePeek = ble_queue_get_size(&queue);
 
-            ble_discovery_packet_t peekedPacket;
+            ble_election_packet_t peekedPacket;
             bool peekResult = ble_queue_peek(&queue, &peekedPacket);
 
             uint32_t sizeAfterPeek = ble_queue_get_size(&queue);
 
-            PrintActual("peeked TTL", std::to_string(peekedPacket.ttl));
+            PrintActual("peeked TTL", std::to_string(peekedPacket.base.ttl));
             PrintExpected("peeked TTL", "15 (highest TTL = highest priority)");
             PrintActual("queue size before peek", std::to_string(sizeBeforePeek));
             PrintActual("queue size after peek", std::to_string(sizeAfterPeek));
             PrintExpected("queue size unchanged", "3");
 
-            bool passed = peekResult && (peekedPacket.ttl == 15) &&
+            bool passed = peekResult && (peekedPacket.base.ttl == 15) &&
                          (sizeBeforePeek == 3) && (sizeAfterPeek == 3);
 
             PrintCheck("Peek returns highest priority without removing", passed);
@@ -660,9 +660,9 @@ public:
                 ble_queue_enqueue(&queue, &packet, 999, time_ms++);
             }
 
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
             ble_queue_dequeue(&queue, &dequeuedPacket);
-            uint8_t firstDequeued = dequeuedPacket.ttl;
+            uint8_t firstDequeued = dequeuedPacket.base.ttl;
 
             // Add more
             for (uint8_t ttl : {15, 2})
@@ -678,7 +678,7 @@ public:
             std::vector<uint8_t> remainingTtls;
             while (ble_queue_dequeue(&queue, &dequeuedPacket))
             {
-                remainingTtls.push_back(dequeuedPacket.ttl);
+                remainingTtls.push_back(dequeuedPacket.base.ttl);
             }
 
             PrintActual("first dequeued TTL", std::to_string(firstDequeued));
@@ -739,13 +739,13 @@ public:
 
             // Dequeue top 3
             std::vector<uint8_t> top3;
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
 
             for (int i = 0; i < 3; ++i)
             {
                 if (ble_queue_dequeue(&queue, &dequeuedPacket))
                 {
-                    top3.push_back(dequeuedPacket.ttl);
+                    top3.push_back(dequeuedPacket.base.ttl);
                 }
             }
 
@@ -783,13 +783,13 @@ public:
             }
 
             std::vector<uint8_t> dequeued;
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
 
             for (int i = 0; i < 3; ++i)
             {
                 if (ble_queue_dequeue(&queue, &dequeuedPacket))
                 {
-                    dequeued.push_back(dequeuedPacket.ttl);
+                    dequeued.push_back(dequeuedPacket.base.ttl);
                 }
             }
 
@@ -819,13 +819,13 @@ public:
             ble_queue_enqueue(&queue, &packet, 999, 1000);
 
             std::vector<uint8_t> dequeued;
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
 
             for (int i = 0; i < 3; ++i)
             {
                 if (ble_queue_dequeue(&queue, &dequeuedPacket))
                 {
-                    dequeued.push_back(dequeuedPacket.ttl);
+                    dequeued.push_back(dequeuedPacket.base.ttl);
                 }
             }
 
@@ -848,7 +848,7 @@ public:
             PrintInit("Attempting to dequeue from empty queue...");
 
             uint32_t successCount = 0;
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
 
             for (int i = 0; i < 3; ++i)
             {
@@ -888,13 +888,13 @@ public:
             }
 
             std::vector<uint8_t> top3;
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
 
             for (int i = 0; i < 3; ++i)
             {
                 if (ble_queue_dequeue(&queue, &dequeuedPacket))
                 {
-                    top3.push_back(dequeuedPacket.ttl);
+                    top3.push_back(dequeuedPacket.base.ttl);
                 }
             }
 
@@ -936,14 +936,14 @@ public:
 
             // Simulate slots 1, 2, 3 - each dequeues one message
             std::vector<uint8_t> forwardedTtls;
-            ble_discovery_packet_t forwardPacket;
+            ble_election_packet_t forwardPacket;
 
             for (int slot = 1; slot <= 3; ++slot)
             {
                 PrintState("Slot " + std::to_string(slot) + ": Dequeue and forward...");
                 if (ble_queue_dequeue(&queue, &forwardPacket))
                 {
-                    forwardedTtls.push_back(forwardPacket.ttl);
+                    forwardedTtls.push_back(forwardPacket.base.ttl);
                 }
             }
 
@@ -986,13 +986,13 @@ public:
             }
 
             std::vector<uint8_t> top3;
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
 
             for (int i = 0; i < 3; ++i)
             {
                 if (ble_queue_dequeue(&queue, &dequeuedPacket))
                 {
-                    top3.push_back(dequeuedPacket.ttl);
+                    top3.push_back(dequeuedPacket.base.ttl);
                 }
             }
 
@@ -1108,14 +1108,14 @@ public:
 
             PrintState("Queue: TTL=0 (sender 1), TTL=1 (sender 2), TTL=0 (sender 3)");
 
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
             ble_queue_dequeue(&queue, &dequeuedPacket);
 
-            PrintActual("first dequeued sender_id", std::to_string(dequeuedPacket.sender_id));
-            PrintActual("first dequeued TTL", std::to_string(dequeuedPacket.ttl));
+            PrintActual("first dequeued sender_id", std::to_string(dequeuedPacket.base.sender_id));
+            PrintActual("first dequeued TTL", std::to_string(dequeuedPacket.base.ttl));
             PrintExpected("first dequeued", "sender_id=2, TTL=1 (only non-expired)");
 
-            bool passed = (dequeuedPacket.sender_id == 2) && (dequeuedPacket.ttl == 1);
+            bool passed = (dequeuedPacket.base.sender_id == 2) && (dequeuedPacket.base.ttl == 1);
             PrintCheck("TTL=1 selected before any TTL=0 messages", passed);
 
             allPassed &= passed;
@@ -1191,13 +1191,13 @@ public:
 
             // Dequeue top 3 (should skip TTL=0)
             std::vector<uint8_t> top3Ttls;
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
 
             for (int i = 0; i < 3; ++i)
             {
                 if (ble_queue_dequeue(&queue, &dequeuedPacket))
                 {
-                    top3Ttls.push_back(dequeuedPacket.ttl);
+                    top3Ttls.push_back(dequeuedPacket.base.ttl);
                 }
             }
 
@@ -1239,13 +1239,13 @@ public:
             Vector currentLoc(0.0, 0.0, 0.0);
 
             uint32_t forwardableCount = 0;
-            ble_discovery_packet_t dequeuedPacket;
+            ble_election_packet_t dequeuedPacket;
 
             while (ble_queue_dequeue(&queue, &dequeuedPacket))
             {
                 BleDiscoveryHeaderWrapper header;
-                header.SetSenderId(dequeuedPacket.sender_id);
-                header.SetTtl(dequeuedPacket.ttl);
+                header.SetSenderId(dequeuedPacket.base.sender_id);
+                header.SetTtl(dequeuedPacket.base.ttl);
                 header.SetGpsLocation(Vector(100.0, 100.0, 0.0));
 
                 if (logic->ShouldForward(header, currentLoc, 0.0, 10.0))
@@ -1751,14 +1751,14 @@ public:
             }
 
             // Forward in next cycle (top message)
-            ble_discovery_packet_t forwardPacket;
+            ble_election_packet_t forwardPacket;
             ble_queue_dequeue(&queue, &forwardPacket);
 
-            PrintActual("first forwarded sender", std::to_string(forwardPacket.sender_id));
-            PrintActual("first forwarded TTL", std::to_string(forwardPacket.ttl));
+            PrintActual("first forwarded sender", std::to_string(forwardPacket.base.sender_id));
+            PrintActual("first forwarded TTL", std::to_string(forwardPacket.base.ttl));
             PrintExpected("first forwarded", "sender=3, TTL=12 (highest TTL = highest priority)");
 
-            bool passed = (forwardPacket.sender_id == 3) && (forwardPacket.ttl == 12);
+            bool passed = (forwardPacket.base.sender_id == 3) && (forwardPacket.base.ttl == 12);
             PrintCheck("Highest TTL message forwarded first", passed);
 
             allPassed &= passed;
@@ -1783,7 +1783,7 @@ public:
             }
 
             // Dequeue one (highest priority)
-            ble_discovery_packet_t first;
+            ble_election_packet_t first;
             ble_queue_dequeue(&queue, &first);
 
             // Add more messages
@@ -1798,22 +1798,22 @@ public:
 
             // Dequeue remaining
             std::vector<uint8_t> order;
-            ble_discovery_packet_t packet;
+            ble_election_packet_t packet;
             while (ble_queue_dequeue(&queue, &packet))
             {
-                order.push_back(packet.ttl);
+                order.push_back(packet.base.ttl);
             }
 
-            PrintActual("first dequeued TTL", std::to_string(first.ttl));
+            PrintActual("first dequeued TTL", std::to_string(first.base.ttl));
             PrintExpected("first dequeued TTL", "8 (highest from first batch)");
             PrintActual("remaining order", TtlVectorToString(order));
             PrintExpected("remaining order", "[15, 5, 3, 2]");
 
             bool newHighPriorityFirst = (order.size() >= 1) && (order[0] == 15);
-            PrintCheck("New high-TTL messages don't starve existing ones", first.ttl == 8);
+            PrintCheck("New high-TTL messages don't starve existing ones", first.base.ttl == 8);
             PrintCheck("Priority maintained with mixed arrival times", newHighPriorityFirst);
 
-            allPassed &= (first.ttl == 8) && newHighPriorityFirst;
+            allPassed &= (first.base.ttl == 8) && newHighPriorityFirst;
         }
 
         // Test 6.7: High TTL Messages Prioritized Over Low TTL
@@ -1846,12 +1846,12 @@ public:
 
             // Dequeue top 3
             std::vector<uint8_t> top3;
-            ble_discovery_packet_t packet;
+            ble_election_packet_t packet;
             for (int i = 0; i < 3; ++i)
             {
                 if (ble_queue_dequeue(&queue, &packet))
                 {
-                    top3.push_back(packet.ttl);
+                    top3.push_back(packet.base.ttl);
                 }
             }
 

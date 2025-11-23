@@ -923,7 +923,6 @@ public:
 
             // Should forward for crowding <= 0.95 (probability >= 0.05)
             bool forward90 = logic->ShouldForwardCrowding(0.9);  // prob = 0.1 > 0.05
-            bool forward95 = logic->ShouldForwardCrowding(0.95); // prob = 0.05, edge case
 
             // Multiple tests for 0.95 case
             uint32_t forwardCount95 = 0;

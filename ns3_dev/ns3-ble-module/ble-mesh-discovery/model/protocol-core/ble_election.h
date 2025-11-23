@@ -37,7 +37,7 @@ typedef struct {
     uint32_t message_count;              /**< Messages received from this neighbor */
     uint32_t last_seen_time_ms;          /**< Last time we heard from neighbor */
     bool is_direct;                      /**< True if heard during direct-neighbor phase */
-} ble_neighbor_info_t;
+} ble_election_neighbor_info_t;
 
 /**
  * @brief Connectivity metrics for candidacy determination
@@ -59,7 +59,7 @@ typedef struct {
  * @brief Clusterhead election state
  */
 typedef struct {
-    ble_neighbor_info_t neighbors[BLE_MAX_NEIGHBORS]; /**< Neighbor database */
+    ble_election_neighbor_info_t neighbors[BLE_MAX_NEIGHBORS]; /**< Neighbor database */
     uint32_t neighbor_count;             /**< Current number of neighbors */
 
     ble_connectivity_metrics_t metrics;  /**< Connectivity metrics */
@@ -217,7 +217,7 @@ void ble_election_set_thresholds(ble_election_state_t *state,
  * @param node_id Node ID to find
  * @return Pointer to neighbor info, or NULL if not found
  */
-const ble_neighbor_info_t* ble_election_get_neighbor(const ble_election_state_t *state,
+const ble_election_neighbor_info_t* ble_election_get_neighbor(const ble_election_state_t *state,
                                                        uint32_t node_id);
 
 /**

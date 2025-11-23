@@ -191,7 +191,7 @@ BleElection::GetNeighbors () const
 
   for (uint32_t i = 0; i < m_state.neighbor_count; i++)
     {
-      const ble_neighbor_info_t& c_neighbor = m_state.neighbors[i];
+      const ble_election_neighbor_info_t& c_neighbor = m_state.neighbors[i];
 
       NeighborInfo info;
       info.nodeId = c_neighbor.node_id;
@@ -212,7 +212,7 @@ BleElection::GetNeighbors () const
 bool
 BleElection::GetNeighbor (uint32_t nodeId, NeighborInfo& info) const
 {
-  const ble_neighbor_info_t* c_neighbor = ble_election_get_neighbor (&m_state, nodeId);
+  const ble_election_neighbor_info_t* c_neighbor = ble_election_get_neighbor (&m_state, nodeId);
 
   if (!c_neighbor)
     {

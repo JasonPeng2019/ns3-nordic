@@ -14,7 +14,9 @@ def build(bld):
     module = bld.create_ns3_module('ble-mesh-discovery', ['core', 'network',
                                                            'spectrum', 'mobility',
                                                            'energy', 'propagation',
-                                                           'ble'])
+                                                           'ble', 'csma',
+                                                           'applications', 'internet',
+                                                           'internet-apps'])
     module.includes = [
         '.',
         'model',
@@ -28,6 +30,7 @@ def build(bld):
         'model/protocol-core/ble_discovery_cycle.c',
         'model/protocol-core/ble_message_queue.c',
         'model/protocol-core/ble_forwarding_logic.c',
+        'model/protocol-core/ble_election.c',
         'model/protocol-core/ble_broadcast_timing.c',
         'model/engine-core/ble_discovery_engine.c',
 
@@ -68,6 +71,7 @@ def build(bld):
     headers.source = [
         # Pure C protocol headers (can be used standalone)
         'model/protocol-core/ble_discovery_packet.h',
+        'model/protocol-core/ble_election.h',
         'model/protocol-core/ble_mesh_node.h',
         'model/protocol-core/ble_discovery_cycle.h',
         'model/protocol-core/ble_message_queue.h',

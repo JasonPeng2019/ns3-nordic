@@ -47,7 +47,7 @@ ble_election_update_neighbor(ble_election_state_t *state,
     }
 
     /* Find existing neighbor or add new one */
-    ble_neighbor_info_t *neighbor = NULL;
+    ble_election_neighbor_info_t *neighbor = NULL;
     for (uint32_t i = 0; i < state->neighbor_count; i++) {
         if (state->neighbors[i].node_id == node_id) {
             neighbor = &state->neighbors[i];
@@ -349,7 +349,7 @@ ble_election_set_thresholds(ble_election_state_t *state,
     state->min_geographic_distribution = min_geo_dist;
 }
 
-const ble_neighbor_info_t*
+const ble_election_neighbor_info_t*
 ble_election_get_neighbor(const ble_election_state_t *state, uint32_t node_id)
 {
     if (!state) {
