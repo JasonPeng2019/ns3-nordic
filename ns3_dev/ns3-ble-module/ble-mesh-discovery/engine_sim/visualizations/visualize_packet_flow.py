@@ -2,7 +2,7 @@
 """
 Animated packet flow visualization for BLE mesh discovery traces.
 
-This utility replays the simulation events recorded in simulation_trace.csv,
+This utility replays the simulation events recorded in simulation_trace_random.csv,
 showing:
   * Network topology with numbered nodes
   * Time-synchronized playback that pauses whenever packets are exchanged
@@ -14,7 +14,7 @@ Run from the repository root:
 
     python3 ns3-nordic/ns3_dev/ns3-ble-module/ble-mesh-discovery/engine_sim/visualizations/visualize_packet_flow.py
 
-By default the script looks for ns3-nordic/ns3_dev/ns-3-dev/simulation_trace.csv.
+By default the script looks for ns3-nordic/ns3_dev/ns-3-dev/simulation_trace_random.csv.
 Provide a different file path if needed.
 """
 
@@ -483,14 +483,24 @@ class PacketFlowAnimator:
         self.arrow_artists.clear()
 
 
+DEFAULT_TRACE_CANDIDATES = [
+    "simulation_trace_random.csv",
+]
+
+
 def resolve_default_trace_path() -> Path:
     script_dir = Path(__file__).resolve()
     try:
         default_root = script_dir.parents[4]
     except IndexError:  # fallback if directory layout changes
         default_root = script_dir.parent
-    candidate = default_root / "ns-3-dev" / "simulation_trace.csv"
-    return candidate
+
+    project_root = default_root / "ns-3-dev"
+    for filename in DEFAULT_TRACE_CANDIDATES:
+        candidate = project_root / filename
+        if candidate.exists():
+            return candidate
+    return project_root / DEFAULT_TRACE_CANDIDATES[0]
 
 
 def parse_args() -> argparse.Namespace:
@@ -501,7 +511,7 @@ def parse_args() -> argparse.Namespace:
         "trace",
         nargs="?",
         default=None,
-        help="Path to simulation_trace.csv (defaults to ns-3-dev/simulation_trace.csv)",
+        help="Path to simulation trace CSV (defaults to ns-3-dev/simulation_trace_random.csv)",
     )
     parser.add_argument(
         "--pause-frames",
