@@ -22,6 +22,7 @@
 #include "ble-election.h"
 #include <map>
 #include <vector>
+#include <unordered_set>
 
 namespace ns3 {
 
@@ -220,6 +221,16 @@ private:
   uint32_t m_messagesReceived;                //!< Total messages received
   uint32_t m_messagesForwarded;               //!< Total messages forwarded
   uint32_t m_messagesDropped;                 //!< Total messages dropped
+
+  // Noise measurement bookkeeping
+  bool m_noiseWindowConsumed;                 //!< Whether the noisy-window snapshot was applied
+  double m_noiseLevel;                        //!< Crowding snapshot from noisy window
+  uint8_t m_electionRoundsRemaining;          //!< Remaining election announcement rounds to send
+  uint32_t m_bestClusterheadDirect;           //!< Best direct-neighbor count from heard clusterheads
+  bool m_sendRenouncement;                    //!< Whether to broadcast renouncement
+  uint8_t m_renouncementRounds;               //!< Remaining renouncement rounds
+  uint32_t m_clusterheadSlot;                 //!< Assigned FDMA/TDMA slot for chosen clusterhead
+  std::unordered_set<uint32_t> m_heardAnnouncements; //!< Track clusterhead announcements heard
 
   // Traced callbacks for monitoring
   TracedCallback<uint32_t, BleMeshNodeState> m_stateChangeTrace; //!< State change trace

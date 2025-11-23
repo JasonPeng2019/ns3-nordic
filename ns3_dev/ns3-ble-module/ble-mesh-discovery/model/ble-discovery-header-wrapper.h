@@ -192,6 +192,16 @@ public:
   void SetClassId (uint16_t classId);
 
   /**
+   * \brief Set direct connection count (for conflict resolution)
+   */
+  void SetDirectConnections (uint32_t directConnections);
+
+  /**
+   * \brief Get direct connection count
+   */
+  uint32_t GetDirectConnections (void) const;
+
+  /**
    * \brief Get class ID
    * \return the class ID
    */

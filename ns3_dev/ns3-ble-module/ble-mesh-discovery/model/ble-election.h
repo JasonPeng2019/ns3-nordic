@@ -93,6 +93,29 @@ public:
   void AddRssiSample (int8_t rssi);
 
   /**
+   * \brief Begin noisy-window RSSI measurement (default 2s)
+   * \param duration Length of window
+   */
+  void BeginNoiseWindow (Time duration = Seconds (2.0));
+
+  /**
+   * \brief End noisy-window measurement (captures snapshot)
+   */
+  void EndNoiseWindow ();
+
+  /**
+   * \brief Check if noisy window should auto-complete
+   */
+  void CheckNoiseWindow ();
+
+  /**
+   * \brief Query noisy window status / snapshot
+   */
+  bool IsNoiseWindowActive () const;
+  bool IsNoiseWindowComplete () const;
+  double GetCrowdingSnapshot () const;
+
+  /**
    * \brief Calculate crowding factor (Task 13)
    * \return Crowding factor (0.0 = not crowded, 1.0 = very crowded)
    */

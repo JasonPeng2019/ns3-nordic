@@ -77,7 +77,9 @@ void
 BleElection::AddRssiSample (int8_t rssi)
 {
   NS_LOG_FUNCTION (this << static_cast<int32_t> (rssi));
-  ble_election_add_rssi_sample (&m_state, rssi);
+  uint32_t now_ms = static_cast<uint32_t> (Simulator::Now ().GetMilliSeconds ());
+  ble_election_add_rssi_sample (&m_state, rssi, now_ms);
+  ble_election_check_noise_window (&m_state, now_ms);
 }
 
 double
@@ -102,6 +104,46 @@ BleElection::CalculateGeographicDistribution () const
   double distribution = ble_election_calculate_geographic_distribution (&m_state);
   NS_LOG_DEBUG ("Geographic distribution: " << distribution);
   return distribution;
+}
+
+void
+BleElection::BeginNoiseWindow (Time duration)
+{
+  uint32_t now_ms = static_cast<uint32_t> (Simulator::Now ().GetMilliSeconds ());
+  uint32_t window_ms = static_cast<uint32_t> (duration.GetMilliSeconds ());
+  ble_election_begin_noise_window (&m_state, now_ms, window_ms);
+}
+
+void
+BleElection::EndNoiseWindow ()
+{
+  uint32_t now_ms = static_cast<uint32_t> (Simulator::Now ().GetMilliSeconds ());
+  ble_election_end_noise_window (&m_state, now_ms);
+}
+
+void
+BleElection::CheckNoiseWindow ()
+{
+  uint32_t now_ms = static_cast<uint32_t> (Simulator::Now ().GetMilliSeconds ());
+  ble_election_check_noise_window (&m_state, now_ms);
+}
+
+bool
+BleElection::IsNoiseWindowActive () const
+{
+  return ble_election_is_noise_window_active (&m_state);
+}
+
+bool
+BleElection::IsNoiseWindowComplete () const
+{
+  return ble_election_is_noise_window_complete (&m_state);
+}
+
+double
+BleElection::GetCrowdingSnapshot () const
+{
+  return ble_election_get_last_crowding (&m_state);
 }
 
 void

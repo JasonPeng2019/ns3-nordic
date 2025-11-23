@@ -492,3 +492,12 @@ uint32_t ble_election_generate_hash(uint32_t node_id)
 
     return hash;
 }
+
+uint32_t
+ble_election_assign_slot(uint32_t hash, uint32_t total_slots)
+{
+    if (total_slots == 0) {
+        return 0;
+    }
+    return hash % total_slots;
+}

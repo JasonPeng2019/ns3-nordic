@@ -8,6 +8,10 @@
 
 #include <math.h>
 
+/* Normalization constants for candidacy scoring */
+#define BLE_SCORE_DIRECT_NORMALIZER 30.0
+#define BLE_SCORE_CN_RATIO_NORMALIZER 10.0
+
 /* RSSI threshold for considering a connection "direct" (1-hop) */
 #define DEFAULT_DIRECT_RSSI_THRESHOLD -70  /* dBm */
 
@@ -18,6 +22,11 @@
 
 /* Default maximum age for RSSI samples (10 seconds) */
 #define DEFAULT_RSSI_MAX_AGE_MS 10000
+/* Default noisy-window duration (2 seconds) */
+#define DEFAULT_RSSI_WINDOW_DURATION_MS 2000
+
+static void
+ble_election_finalize_noise_window(ble_election_state_t *state);
 
 void
 ble_election_init(ble_election_state_t *state)
@@ -40,6 +49,11 @@ ble_election_init(ble_election_state_t *state)
     state->rssi_tail = 0;
     state->rssi_count = 0;
     state->rssi_max_age_ms = DEFAULT_RSSI_MAX_AGE_MS;
+    state->rssi_window_start_ms = 0;
+    state->rssi_window_duration_ms = DEFAULT_RSSI_WINDOW_DURATION_MS;
+    state->rssi_window_active = false;
+    state->rssi_window_complete = false;
+    state->last_crowding_factor = 0.0;
 }
 
 void
@@ -84,10 +98,91 @@ ble_election_update_neighbor(ble_election_state_t *state,
 }
 
 void
+ble_election_begin_noise_window(ble_election_state_t *state,
+                                  uint32_t start_time_ms,
+                                  uint32_t duration_ms)
+{
+    if (!state) {
+        return;
+    }
+
+    /* Reset buffer and flags */
+    state->rssi_head = 0;
+    state->rssi_tail = 0;
+    state->rssi_count = 0;
+    state->rssi_window_start_ms = start_time_ms;
+    state->rssi_window_duration_ms = (duration_ms == 0) ? DEFAULT_RSSI_WINDOW_DURATION_MS
+                                                        : duration_ms;
+    state->rssi_window_active = true;
+    state->rssi_window_complete = false;
+    state->last_crowding_factor = 0.0;
+}
+
+void
+ble_election_end_noise_window(ble_election_state_t *state, uint32_t end_time_ms)
+{
+    (void)end_time_ms; /* currently unused, retained for future logging */
+    ble_election_finalize_noise_window(state);
+}
+
+void
+ble_election_check_noise_window(ble_election_state_t *state, uint32_t now_ms)
+{
+    if (!state || !state->rssi_window_active) {
+        return;
+    }
+
+    uint32_t elapsed = now_ms - state->rssi_window_start_ms;
+    if (elapsed >= state->rssi_window_duration_ms) {
+        ble_election_finalize_noise_window(state);
+    }
+}
+
+bool
+ble_election_is_noise_window_active(const ble_election_state_t *state)
+{
+    return state ? state->rssi_window_active : false;
+}
+
+bool
+ble_election_is_noise_window_complete(const ble_election_state_t *state)
+{
+    return state ? state->rssi_window_complete : false;
+}
+
+double
+ble_election_get_last_crowding(const ble_election_state_t *state)
+{
+    return state ? state->last_crowding_factor : 0.0;
+}
+
+static void
+ble_election_finalize_noise_window(ble_election_state_t *state)
+{
+    if (!state) {
+        return;
+    }
+
+    state->rssi_window_active = false;
+    state->rssi_window_complete = true;
+    state->last_crowding_factor = ble_election_calculate_crowding(state);
+}
+
+void
 ble_election_add_rssi_sample(ble_election_state_t *state, int8_t rssi, uint32_t current_time_ms)
 {
     if (!state) {
         return;
+    }
+
+    /* If window already completed and not restarted, ignore further samples */
+    if (state->rssi_window_complete) {
+        return;
+    }
+
+    /* If window not started, start it now using default duration */
+    if (!state->rssi_window_active) {
+        ble_election_begin_noise_window(state, current_time_ms, state->rssi_window_duration_ms);
     }
 
     /* Add new sample to tail */
@@ -119,6 +214,9 @@ ble_election_add_rssi_sample(ble_election_state_t *state, int8_t rssi, uint32_t 
             break;
         }
     }
+
+    /* Auto-complete window if duration elapsed */
+    ble_election_check_noise_window(state, current_time_ms);
 }
 
 double
@@ -282,9 +380,27 @@ ble_election_calculate_candidacy_score(const ble_election_state_t *state)
         return 0.0;
     }
 
-    /* Calculate score using simplified formula */
-    return ble_election_calculate_score(state->metrics.direct_connections,
-                                        state->metrics.crowding_factor);
+    /* Weighted, normalized scoring across all metrics */
+    double direct_norm = state->metrics.direct_connections / BLE_SCORE_DIRECT_NORMALIZER;
+    double cn_norm = state->metrics.connection_noise_ratio / BLE_SCORE_CN_RATIO_NORMALIZER;
+    double geo_norm = state->metrics.geographic_distribution; /* already 0-1 */
+    double fwd_norm = state->metrics.forwarding_success_rate; /* already 0-1 */
+
+    double score =
+        state->score_weights.direct_weight * direct_norm +
+        state->score_weights.connection_noise_weight * cn_norm +
+        state->score_weights.geographic_weight * geo_norm +
+        state->score_weights.forwarding_weight * fwd_norm;
+
+    /* Clamp to 0-1 */
+    if (score < 0.0) {
+        score = 0.0;
+    }
+    if (score > 1.0) {
+        score = 1.0;
+    }
+
+    return score;
 }
 
 bool

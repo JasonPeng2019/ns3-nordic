@@ -281,6 +281,14 @@ uint32_t ble_election_update_pdsf(ble_election_packet_t *packet,
  */
 uint32_t ble_election_generate_hash(uint32_t node_id);
 
+/**
+ * @brief Map hash value to a slot index (time/frequency)
+ * @param hash Hash value (e.g., from ble_election_generate_hash)
+ * @param total_slots Number of available slots (must be >0)
+ * @return Slot index in range [0, total_slots-1]
+ */
+uint32_t ble_election_assign_slot(uint32_t hash, uint32_t total_slots);
+
 #ifdef __cplusplus
 }
 #endif

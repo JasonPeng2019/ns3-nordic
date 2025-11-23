@@ -321,6 +321,19 @@ BleDiscoveryHeaderWrapper::SetClassId (uint16_t classId)
   m_election.election.class_id = classId;
 }
 
+void
+BleDiscoveryHeaderWrapper::SetDirectConnections (uint32_t directConnections)
+{
+  if (!m_isElection) SetAsElectionMessage ();
+  m_election.election.direct_connections = directConnections;
+}
+
+uint32_t
+BleDiscoveryHeaderWrapper::GetDirectConnections (void) const
+{
+  return m_isElection ? m_election.election.direct_connections : 0;
+}
+
 uint16_t
 BleDiscoveryHeaderWrapper::GetClassId (void) const
 {

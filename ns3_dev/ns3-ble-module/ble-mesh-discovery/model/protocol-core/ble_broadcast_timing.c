@@ -99,6 +99,8 @@ void ble_broadcast_timing_init(ble_broadcast_timing_t *state,
 
     memset(state, 0, sizeof(ble_broadcast_timing_t));
 
+    bool slots_auto = (num_slots == BLE_BROADCAST_AUTO_SLOTS);
+    bool ratio_auto = (listen_ratio == BLE_BROADCAST_AUTO_RATIO);
     double resolved_ratio = listen_ratio;
     uint32_t resolved_slots = num_slots;
 
@@ -129,9 +131,21 @@ void ble_broadcast_timing_init(ble_broadcast_timing_t *state,
     state->crowding_factor = 0.5;
 
     if (schedule_type == BLE_BROADCAST_SCHEDULE_STOCHASTIC) {
-        ble_broadcast_apply_neighbor_profile(state);
-    } else {
-        state->max_broadcast_slots = BLE_BROADCAST_MAX_SLOTS;
+        /* Only apply neighbor profile when caller requested auto defaults */
+        if (slots_auto || ratio_auto) {
+            ble_broadcast_apply_neighbor_profile(state);
+        } else {
+            /* Respect caller-provided slots/ratio */
+            double tx_ratio = 1.0 - state->listen_ratio;
+            uint32_t tx_slots = (uint32_t)ceil(tx_ratio * (double)state->num_slots);
+            if (tx_slots < BLE_BROADCAST_NEIGHBOR_MIN_TX_SLOTS) {
+                tx_slots = BLE_BROADCAST_NEIGHBOR_MIN_TX_SLOTS;
+            }
+            if (tx_slots > state->num_slots) {
+                tx_slots = state->num_slots;
+            }
+            state->max_broadcast_slots = tx_slots;
+        }
     }
 
     state->seed = 12345;  /* Default seed */

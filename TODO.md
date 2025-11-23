@@ -1188,51 +1188,52 @@ PASS: TestSuite ble-broadcast-timing
 - Added unit tests validating the weighted formula, custom weight emphasis, normalized output, and ranking improvements when connectivity or forwarding stats improve
 
 ### Task 22: Implement FDMA/TDMA Hash Function Generation
-- [ ] Design hash function h(ID) for cluster communication
-- [ ] Ensure hash uniqueness for each clusterhead
-- [ ] Implement time/frequency slot assignment from hash
-- [ ] Add hash to election announcement messages
-- [ ] Plan for future FDMA/TDMA implementation
-- [ ] Document hash function specification
+- [x] Design hash function h(ID) for cluster communication
+- [x] Ensure hash uniqueness for each clusterhead
+- [x] Implement time/frequency slot assignment from hash
+- [x] Add hash to election announcement messages
+- [x] Plan for future FDMA/TDMA implementation
+- [x] Document hash function specification
 
 ### Task 23: Implement 3-Round Election Announcement Flooding
-- [ ] Implement election announcement transmission
-- [ ] Create 3-round announcement schedule
-- [ ] Implement message retransmission/flooding logic
-- [ ] Add announcement receipt tracking
-- [ ] Ensure stochastic probability of reaching all devices
-- [ ] Test announcement coverage across 3 rounds
+- [x] Implement election announcement transmission
+- [x] Create 3-round announcement schedule
+- [x] Implement message retransmission/flooding logic
+- [x] Add announcement receipt tracking
+- [x] Carry direct-neighbor-count payload in each announcement so nearby clusterhead candidates can pre-empt lower-count nodes (matches spec's "broadcast direct device count" step)
+- [x] Ensure stochastic probability of reaching all devices
+- [x] Test announcement coverage across 3 rounds
 
 ### Task 24: Implement PDSF-Based Cluster Capacity Limiting
-- [ ] Check PDSF against cluster capacity threshold (150 devices)
-- [ ] Stop retransmitting announcements when capacity reached
-- [ ] Prevent new devices from joining full clusters
-- [ ] Implement capacity check before forwarding election announcements
-- [ ] Test cluster size distribution
-- [ ] Validate 150-device cluster limit enforcement
+- [x] Check PDSF against cluster capacity threshold (150 devices)
+- [x] Stop retransmitting announcements when capacity reached
+- [x] Prevent new devices from joining full clusters
+- [x] Implement capacity check before forwarding election announcements
+- [x] Test cluster size distribution
+- [x] Validate 150-device cluster limit enforcement
 
 ### Task 25: Implement Conflict Resolution Between Clusterheads
-- [ ] Compare direct connection counts of competing clusterheads
-- [ ] Implement higher-connection-count wins logic
-- [ ] Handle overlapping cluster coverage
-- [ ] Update node state when conflict detected
-- [ ] Test with multiple simultaneous clusterhead candidates
-- [ ] Validate conflict resolution convergence
+- [x] Compare direct connection counts of competing clusterheads
+- [x] Implement higher-connection-count wins logic
+- [x] Handle overlapping cluster coverage
+- [x] Update node state when conflict detected
+- [x] Test with multiple simultaneous clusterhead candidates
+- [x] Validate conflict resolution convergence
 
 ### Task 26: Implement Tie-Breaking Using Device ID
-- [ ] Detect equal connection count ties
-- [ ] Compare device IDs (lower ID takes precedence)
-- [ ] Implement deterministic tie-breaking
-- [ ] Test tie-breaking with multiple nodes
-- [ ] Validate consistent tie resolution
+- [x] Detect equal connection count ties
+- [x] Compare device IDs (lower ID takes precedence)
+- [x] Implement deterministic tie-breaking
+- [x] Test tie-breaking with multiple nodes
+- [x] Validate consistent tie resolution
 
 ### Task 27: Implement Candidacy Renouncement Mechanism
-- [ ] Detect when higher-ranked clusterhead announcement received
-- [ ] Implement candidacy withdrawal logic
-- [ ] Broadcast renouncement in subsequent cycles
-- [ ] Update node state from CLUSTERHEAD_CANDIDATE to EDGE
-- [ ] Test renouncement propagation
-- [ ] Validate final clusterhead stability
+- [x] Detect when higher-ranked clusterhead announcement received
+- [x] Implement candidacy withdrawal logic
+- [x] Broadcast renouncement in subsequent cycles
+- [x] Update node state from CLUSTERHEAD_CANDIDATE to EDGE
+- [x] Test renouncement propagation
+- [x] Validate final clusterhead stability
 
 ---
 

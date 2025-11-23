@@ -75,6 +75,11 @@ typedef struct {
     uint32_t rssi_tail;                  /**< Index where next sample goes */
     uint32_t rssi_count;                 /**< Current number of samples (0-100) */
     uint32_t rssi_max_age_ms;            /**< Maximum age for samples (default 10000ms) */
+    uint32_t rssi_window_start_ms;       /**< Start time of noisy-measurement window */
+    uint32_t rssi_window_duration_ms;    /**< Duration of noisy-measurement window (ms) */
+    bool rssi_window_active;             /**< True while collecting noisy RSSI samples */
+    bool rssi_window_complete;           /**< True once noisy window finished */
+    double last_crowding_factor;         /**< Snapshot crowding value from last noisy window */
 
     bool is_candidate;                   /**< Whether node is candidate */
     double candidacy_score;              /**< Candidacy score */
@@ -106,6 +111,37 @@ void ble_election_update_neighbor(ble_election_state_t *state,
                                     const ble_gps_location_t *location,
                                     int8_t rssi,
                                     uint32_t current_time_ms);
+
+/**
+ * @brief Begin a noisy-measurement window for RSSI sampling
+ * @param state Election state
+ * @param start_time_ms Start time in milliseconds
+ * @param duration_ms Duration of window (ms). If 0, default is used.
+ */
+void ble_election_begin_noise_window(ble_election_state_t *state,
+                                       uint32_t start_time_ms,
+                                       uint32_t duration_ms);
+
+/**
+ * @brief Manually end the noisy-measurement window (captures snapshot)
+ * @param state Election state
+ * @param end_time_ms Current time (ms)
+ */
+void ble_election_end_noise_window(ble_election_state_t *state, uint32_t end_time_ms);
+
+/**
+ * @brief Check if noisy window should auto-complete (based on time)
+ * @param state Election state
+ * @param now_ms Current time (ms)
+ */
+void ble_election_check_noise_window(ble_election_state_t *state, uint32_t now_ms);
+
+/**
+ * @brief Query noisy window status
+ */
+bool ble_election_is_noise_window_active(const ble_election_state_t *state);
+bool ble_election_is_noise_window_complete(const ble_election_state_t *state);
+double ble_election_get_last_crowding(const ble_election_state_t *state);
 
 /**
  * @brief Add RSSI sample for crowding factor calculation

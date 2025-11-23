@@ -12,11 +12,14 @@
 #include "ns3/simulator.h"
 #include "ns3/uinteger.h"
 #include "ns3/double.h"
+#include "ns3/ble_discovery_packet.h"
 
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE ("BleMeshNode");
 NS_OBJECT_ENSURE_REGISTERED (BleMeshNode);
+
+static const uint32_t FDMA_TOTAL_SLOTS = 64;
 
 TypeId
 BleMeshNode::GetTypeId (void)
@@ -54,11 +57,18 @@ BleMeshNode::BleMeshNode ()
     m_clusterheadId (0),
     m_initialTtl (10),
     m_proximityThreshold (10.0),
-    m_candidacyThreshold (10),
-    m_messagesSent (0),
-    m_messagesReceived (0),
-    m_messagesForwarded (0),
-    m_messagesDropped (0)
+  m_candidacyThreshold (10),
+  m_messagesSent (0),
+  m_messagesReceived (0),
+  m_messagesForwarded (0),
+  m_messagesDropped (0),
+  m_noiseWindowConsumed (false),
+  m_noiseLevel (0.0),
+  m_electionRoundsRemaining (0),
+  m_bestClusterheadDirect (0),
+  m_sendRenouncement (false),
+  m_renouncementRounds (0),
+  m_clusterheadSlot (0)
 {
   NS_LOG_FUNCTION (this);
 
@@ -115,6 +125,11 @@ BleMeshNode::Start ()
 
   NS_LOG_INFO ("Node " << m_nodeId << " starting discovery protocol");
 
+  // Begin noisy-window RSSI measurement (2 seconds as per spec)
+  m_noiseWindowConsumed = false;
+  m_noiseLevel = 0.0;
+  m_election->BeginNoiseWindow ();
+
   // Start discovery cycle
   m_cycle->Start ();
 }
@@ -155,6 +170,21 @@ BleMeshNode::SetState (BleMeshNodeState state)
       BleMeshNodeState oldState = m_state;
       m_state = state;
 
+      if (m_state == BLE_STATE_CLUSTERHEAD_CANDIDATE)
+        {
+          m_electionRoundsRemaining = 3; // 3-round announcement flooding
+          m_bestClusterheadDirect = m_election->CountDirectConnections ();
+          m_sendRenouncement = false;
+          m_renouncementRounds = 0;
+          m_clusterheadSlot = ble_election_assign_slot (m_election->GetElectionHash (),
+                                                        FDMA_TOTAL_SLOTS);
+        }
+      else if (m_state == BLE_STATE_EDGE)
+        {
+          // Reset candidate-specific transmissions
+          m_electionRoundsRemaining = 0;
+        }
+
       NS_LOG_INFO ("Node " << m_nodeId << " state changed: "
                    << oldState << " -> " << state);
 
@@ -183,6 +213,15 @@ BleMeshNode::ReceiveMessage (Ptr<Packet> packet, int8_t rssi)
   // Store RSSI for crowding factor calculation (Phase 3)
   m_election->AddRssiSample (rssi);
   m_election->RecordMessageReceived ();
+  m_election->CheckNoiseWindow ();
+
+  if (!m_noiseWindowConsumed && m_election->IsNoiseWindowComplete ())
+    {
+      m_noiseLevel = m_election->GetCrowdingSnapshot ();
+      m_noiseWindowConsumed = true;
+      NS_LOG_DEBUG ("Node " << m_nodeId << " captured noisy-window crowding="
+                            << m_noiseLevel);
+    }
 
   // Parse header
   BleDiscoveryHeaderWrapper header;
@@ -195,6 +234,15 @@ BleMeshNode::ReceiveMessage (Ptr<Packet> packet, int8_t rssi)
 
   // Process the message
   ProcessDiscoveryMessage (header, rssi);
+
+  // Capacity limiting: do not enqueue election announcements past cluster capacity
+  if (header.IsElectionMessage () && header.GetPdsf () >= BLE_DISCOVERY_MAX_CLUSTER_SIZE)
+    {
+      NS_LOG_DEBUG ("Dropping election announcement (cluster full, PDSF="
+                    << header.GetPdsf () << ")");
+      m_messagesDropped++;
+      return;
+    }
 
   // Try to enqueue for forwarding (queue handles deduplication and loop detection)
   bool enqueued = m_queue->Enqueue (packet, header, m_nodeId);
@@ -219,6 +267,10 @@ BleMeshNode::GetDirectNeighborCount () const
 double
 BleMeshNode::GetCrowdingFactor () const
 {
+  if (m_noiseWindowConsumed)
+    {
+      return m_noiseLevel;
+    }
   return m_election->CalculateCrowding ();
 }
 
@@ -299,6 +351,39 @@ BleMeshNode::SendDiscoveryMessage ()
   header.SetTtl (m_initialTtl);
   header.AddToPath (m_nodeId);
 
+  bool sendRenouncement = (m_sendRenouncement && m_renouncementRounds > 0);
+  bool sendElection = (!sendRenouncement &&
+                       m_state == BLE_STATE_CLUSTERHEAD_CANDIDATE &&
+                       m_electionRoundsRemaining > 0);
+
+  if (sendElection)
+    {
+      header.SetAsElectionMessage ();
+      header.SetClassId (m_clusterheadId ? m_clusterheadId : m_nodeId);
+      uint32_t direct = m_election->CountDirectConnections ();
+      header.SetDirectConnections (direct);
+      header.SetScore (m_election->CalculateCandidacyScore ());
+      header.SetHash (m_election->GetElectionHash ());
+      // PDSF carries predicted reach if available (fallback to direct connections)
+      header.SetPdsf (m_bestClusterheadDirect ? m_bestClusterheadDirect : direct);
+      // Track rounds left (3-round flooding)
+      m_electionRoundsRemaining--;
+    }
+  else if (sendRenouncement)
+    {
+      header.SetAsElectionMessage ();
+      header.SetClassId (0);
+      header.SetDirectConnections (0);
+      header.SetScore (0.0);
+      header.SetHash (m_election->GetElectionHash ());
+      header.SetPdsf (0);
+      m_renouncementRounds--;
+      if (m_renouncementRounds == 0)
+        {
+          m_sendRenouncement = false;
+        }
+    }
+
   // Add GPS if available
   if (m_mobility)
     {
@@ -313,8 +398,9 @@ BleMeshNode::SendDiscoveryMessage ()
 
   m_messagesSent++;
 
-  NS_LOG_INFO ("Node " << m_nodeId << " sending discovery message (TTL="
-               << static_cast<uint32_t> (m_initialTtl) << ")");
+  NS_LOG_INFO ("Node " << m_nodeId << " sending "
+               << (sendElection ? "election " : (sendRenouncement ? "renouncement " : "discovery "))
+               << "message (TTL=" << static_cast<uint32_t> (m_initialTtl) << ")");
 
   // Transmit via callback to lower layer
   if (!m_transmitCallback.IsNull ())
@@ -363,6 +449,18 @@ BleMeshNode::ForwardQueuedMessage ()
       NS_LOG_DEBUG ("Forwarding decision: DROP (failed forwarding criteria)");
       m_messagesDropped++;
       // Remove from queue
+      BleDiscoveryHeaderWrapper discardedHeader;
+      m_queue->Dequeue (discardedHeader);
+      return;
+    }
+
+  // Capacity limiting for election announcements
+  if (header.IsElectionMessage () &&
+      header.GetPdsf () >= BLE_DISCOVERY_MAX_CLUSTER_SIZE)
+    {
+      NS_LOG_DEBUG ("Forwarding decision: DROP (cluster full, PDSF="
+                    << header.GetPdsf () << ")");
+      m_messagesDropped++;
       BleDiscoveryHeaderWrapper discardedHeader;
       m_queue->Dequeue (discardedHeader);
       return;
@@ -426,7 +524,68 @@ BleMeshNode::ProcessDiscoveryMessage (const BleDiscoveryHeaderWrapper& header, i
   if (header.IsElectionMessage ())
     {
       NS_LOG_DEBUG ("Received election announcement from " << senderId);
-      // TODO: Process clusterhead election (Phase 3)
+      m_election->MarkCandidateHeard ();
+
+      // Track receipt for coverage accounting
+      m_heardAnnouncements.insert (senderId);
+
+      // Renouncement handling: direct=0 and score=0 signals withdrawal
+      if (header.GetDirectConnections () == 0 && header.GetScore () == 0.0)
+        {
+          if (m_clusterheadId == senderId)
+            {
+              m_clusterheadId = 0;
+              m_bestClusterheadDirect = 0;
+            }
+          return;
+        }
+
+      uint32_t senderDirect = header.GetDirectConnections ();
+      uint32_t myDirect = m_election->CountDirectConnections ();
+
+      // Conflict resolution: higher direct count wins; tie -> lower ID
+      bool stronger =
+        (senderDirect > myDirect) ||
+        (senderDirect == myDirect && senderId < m_nodeId);
+
+      if (m_state == BLE_STATE_CLUSTERHEAD_CANDIDATE && stronger)
+        {
+          // Renouncement: heard a better candidate
+          SetState (BLE_STATE_EDGE);
+          m_electionRoundsRemaining = 0;
+          m_clusterheadId = senderId;
+          m_bestClusterheadDirect = senderDirect;
+          m_sendRenouncement = true;
+          m_renouncementRounds = 3;
+        }
+
+      // Update selected clusterhead based on direct count/tie-break if better than current best
+      bool betterThanCurrent =
+        (senderDirect > m_bestClusterheadDirect) ||
+        (senderDirect == m_bestClusterheadDirect && senderId < m_clusterheadId);
+
+      if (betterThanCurrent)
+        {
+          if (header.GetPdsf () < BLE_DISCOVERY_MAX_CLUSTER_SIZE)
+            {
+              m_clusterheadId = senderId;
+              m_bestClusterheadDirect = senderDirect;
+              m_clusterheadSlot = ble_election_assign_slot (header.GetHash (), FDMA_TOTAL_SLOTS);
+            }
+          else
+            {
+              NS_LOG_DEBUG ("Clusterhead " << senderId << " at capacity (PDSF="
+                            << header.GetPdsf () << ")");
+            }
+        }
+      else
+        {
+          if (header.GetPdsf () >= BLE_DISCOVERY_MAX_CLUSTER_SIZE)
+            {
+              NS_LOG_DEBUG ("Clusterhead " << senderId << " at capacity (PDSF="
+                            << header.GetPdsf () << ")");
+            }
+        }
     }
 
   // TODO: Extract connectivity information from path
