@@ -111,6 +111,8 @@ typedef struct {
     uint32_t last_election_cycle_sent;
     uint8_t renouncement_rounds_remaining;
     uint32_t last_renouncement_cycle_sent;
+    uint16_t selected_clusterhead_hops;
+    uint32_t selected_clusterhead_direct_connections;
 } ble_engine_t;
 
 /**

@@ -12,6 +12,7 @@
 #include "ns3/packet.h"
 #include "ns3/vector.h"
 #include "ns3/nstime.h"
+#include "ns3/traced-callback.h"
 #include "ble-discovery-header-wrapper.h"
 
 extern "C" {
@@ -27,6 +28,7 @@ class BleDiscoveryEngineWrapper : public Object
 {
 public:
   typedef Callback<void, Ptr<Packet> > TxCallback;
+  typedef TracedCallback<const ble_connectivity_metrics_t &> MetricsTraceCallback;
 
   static TypeId GetTypeId (void);
 
@@ -96,12 +98,19 @@ private:
   void RunTick (void);
   static void EngineSendHook (const ble_discovery_packet_t *packet, void *context);
   static void EngineLogHook (const char *level, const char *message, void *context);
+  static void EngineMetricsHook (const ble_connectivity_metrics_t *metrics, void *context);
   void HandleEngineSend (const ble_discovery_packet_t *packet);
+  void HandleMetricsUpdate (const ble_connectivity_metrics_t *metrics);
 
   Time m_slotDuration;
   uint8_t m_initialTtl;
   double m_proximityThreshold;
   uint32_t m_nodeId;
+  uint32_t m_noiseSlotCount;
+  Time m_noiseSlotDuration;
+  uint32_t m_neighborSlotCount;
+  Time m_neighborSlotDuration;
+  uint32_t m_neighborTimeoutCycles;
 
   bool m_initialized;
   bool m_running;
@@ -110,6 +119,7 @@ private:
   ble_engine_config_t m_config;
   ble_engine_t m_engine;
   TxCallback m_txCallback;
+  MetricsTraceCallback m_metricsTrace;
 };
 
 } // namespace ns3

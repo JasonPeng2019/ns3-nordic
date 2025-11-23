@@ -37,11 +37,40 @@ BleDiscoveryEngineWrapper::GetTypeId (void)
                    DoubleValue (10.0),
                    MakeDoubleAccessor (&BleDiscoveryEngineWrapper::m_proximityThreshold),
                    MakeDoubleChecker<double> (0.0))
+    .AddAttribute ("NoiseSlotCount",
+                   "Number of micro-slots in the noisy measurement phase",
+                   UintegerValue (BLE_ENGINE_DEFAULT_NOISE_SLOTS),
+                   MakeUintegerAccessor (&BleDiscoveryEngineWrapper::m_noiseSlotCount),
+                   MakeUintegerChecker<uint32_t> (1))
+    .AddAttribute ("NoiseSlotDuration",
+                   "Duration of each noisy micro-slot",
+                   TimeValue (MilliSeconds (BLE_ENGINE_DEFAULT_NOISE_SLOT_DURATION_MS)),
+                   MakeTimeAccessor (&BleDiscoveryEngineWrapper::m_noiseSlotDuration),
+                   MakeTimeChecker ())
+    .AddAttribute ("NeighborSlotCount",
+                   "Number of micro-slots in the neighbor-discovery phase",
+                   UintegerValue (BLE_ENGINE_DEFAULT_NEIGHBOR_SLOTS),
+                   MakeUintegerAccessor (&BleDiscoveryEngineWrapper::m_neighborSlotCount),
+                   MakeUintegerChecker<uint32_t> (1))
+    .AddAttribute ("NeighborSlotDuration",
+                   "Duration of each neighbor micro-slot",
+                   TimeValue (MilliSeconds (BLE_ENGINE_DEFAULT_NEIGHBOR_SLOT_DURATION_MS)),
+                   MakeTimeAccessor (&BleDiscoveryEngineWrapper::m_neighborSlotDuration),
+                   MakeTimeChecker ())
+    .AddAttribute ("NeighborTimeoutCycles",
+                   "Discovery cycles before neighbors are considered stale",
+                   UintegerValue (BLE_ENGINE_DEFAULT_NEIGHBOR_TIMEOUT_CYCLES),
+                   MakeUintegerAccessor (&BleDiscoveryEngineWrapper::m_neighborTimeoutCycles),
+                   MakeUintegerChecker<uint32_t> (1))
     .AddAttribute ("NodeId",
                    "Unique node identifier",
                    UintegerValue (0),
                    MakeUintegerAccessor (&BleDiscoveryEngineWrapper::m_nodeId),
                    MakeUintegerChecker<uint32_t> (1))
+    .AddTraceSource ("MetricsUpdate",
+                     "Fires when the engine publishes connectivity metrics",
+                     MakeTraceSourceAccessor (&BleDiscoveryEngineWrapper::m_metricsTrace),
+                     "ns3::BleDiscoveryEngineWrapper::MetricsTraceCallback")
   ;
   return tid;
 }
@@ -51,6 +80,11 @@ BleDiscoveryEngineWrapper::BleDiscoveryEngineWrapper ()
     m_initialTtl (BLE_DISCOVERY_DEFAULT_TTL),
     m_proximityThreshold (10.0),
     m_nodeId (0),
+    m_noiseSlotCount (BLE_ENGINE_DEFAULT_NOISE_SLOTS),
+    m_noiseSlotDuration (MilliSeconds (BLE_ENGINE_DEFAULT_NOISE_SLOT_DURATION_MS)),
+    m_neighborSlotCount (BLE_ENGINE_DEFAULT_NEIGHBOR_SLOTS),
+    m_neighborSlotDuration (MilliSeconds (BLE_ENGINE_DEFAULT_NEIGHBOR_SLOT_DURATION_MS)),
+    m_neighborTimeoutCycles (BLE_ENGINE_DEFAULT_NEIGHBOR_TIMEOUT_CYCLES),
     m_initialized (false),
     m_running (false)
 {
@@ -85,8 +119,14 @@ BleDiscoveryEngineWrapper::Initialize (void)
   m_config.slot_duration_ms = static_cast<uint32_t> (m_slotDuration.GetMilliSeconds ());
   m_config.initial_ttl = m_initialTtl;
   m_config.proximity_threshold = m_proximityThreshold;
+  m_config.noise_slot_count = m_noiseSlotCount;
+  m_config.noise_slot_duration_ms = static_cast<uint32_t> (m_noiseSlotDuration.GetMilliSeconds ());
+  m_config.neighbor_slot_count = m_neighborSlotCount;
+  m_config.neighbor_slot_duration_ms = static_cast<uint32_t> (m_neighborSlotDuration.GetMilliSeconds ());
+  m_config.neighbor_timeout_cycles = m_neighborTimeoutCycles;
   m_config.send_cb = &BleDiscoveryEngineWrapper::EngineSendHook;
   m_config.log_cb = &BleDiscoveryEngineWrapper::EngineLogHook;
+  m_config.metrics_cb = &BleDiscoveryEngineWrapper::EngineMetricsHook;
   m_config.user_context = this;
 
   if (!ble_engine_init (&m_engine, &m_config))
@@ -246,6 +286,17 @@ BleDiscoveryEngineWrapper::EngineLogHook (const char *level, const char *message
 }
 
 void
+BleDiscoveryEngineWrapper::EngineMetricsHook (const ble_connectivity_metrics_t *metrics,
+                                              void *context)
+{
+  BleDiscoveryEngineWrapper *self = static_cast<BleDiscoveryEngineWrapper *> (context);
+  if (self)
+    {
+      self->HandleMetricsUpdate (metrics);
+    }
+}
+
+void
 BleDiscoveryEngineWrapper::HandleEngineSend (const ble_discovery_packet_t *packet)
 {
   if (!packet)
@@ -278,6 +329,17 @@ BleDiscoveryEngineWrapper::HandleEngineSend (const ble_discovery_packet_t *packe
   Ptr<Packet> pkt = Create<Packet> ();
   pkt->AddHeader (header);
   m_txCallback (pkt);
+}
+
+void
+BleDiscoveryEngineWrapper::HandleMetricsUpdate (const ble_connectivity_metrics_t *metrics)
+{
+  if (!metrics)
+    {
+      return;
+    }
+
+  m_metricsTrace (*metrics);
 }
 
 } // namespace ns3

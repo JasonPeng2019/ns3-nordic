@@ -78,6 +78,24 @@ ble_engine_start_renouncement_rounds(ble_engine_t *engine);
 static void
 ble_engine_cancel_renouncement_rounds(ble_engine_t *engine);
 
+static void
+ble_engine_clear_selected_clusterhead(ble_engine_t *engine);
+
+static void
+ble_engine_try_promote_clusterhead(ble_engine_t *engine);
+
+static void
+ble_engine_update_clusterhead_selection(ble_engine_t *engine,
+                                        const ble_election_packet_t *packet);
+
+static void
+ble_engine_handle_clusterhead_renouncement(ble_engine_t *engine,
+                                            const ble_election_packet_t *packet);
+
+static uint32_t
+ble_engine_count_already_reached(ble_engine_t *engine,
+                                 const ble_discovery_packet_t *packet);
+
 void
 ble_engine_config_init(ble_engine_config_t *config)
 {
@@ -164,6 +182,8 @@ ble_engine_init(ble_engine_t *engine, const ble_engine_config_t *config)
     engine->last_election_cycle_sent = UINT32_MAX;
     engine->renouncement_rounds_remaining = 0;
     engine->last_renouncement_cycle_sent = UINT32_MAX;
+    engine->selected_clusterhead_hops = UINT16_MAX;
+    engine->selected_clusterhead_direct_connections = 0;
     ble_engine_enter_phase(engine, BLE_ENGINE_PHASE_NOISY, 0);
     return true;
 }
@@ -199,6 +219,8 @@ ble_engine_reset(ble_engine_t *engine)
     engine->last_election_cycle_sent = UINT32_MAX;
     engine->renouncement_rounds_remaining = 0;
     engine->last_renouncement_cycle_sent = UINT32_MAX;
+    engine->selected_clusterhead_hops = UINT16_MAX;
+    engine->selected_clusterhead_direct_connections = 0;
     ble_engine_enter_phase(engine, BLE_ENGINE_PHASE_NOISY, 0);
 }
 
@@ -471,7 +493,9 @@ ble_engine_forward_next_message(ble_engine_t *engine)
     }
 
     if (is_election && !is_renouncement) {
-        ble_election_update_pdsf(&packet_to_process, direct_neighbors, 0);
+        uint32_t already_reached =
+            ble_engine_count_already_reached(engine, &packet_to_process.base);
+        ble_election_update_pdsf(&packet_to_process, direct_neighbors, already_reached);
         if (packet_to_process.election.pdsf >= BLE_DISCOVERY_MAX_CLUSTER_SIZE) {
             ble_mesh_node_inc_dropped(&engine->node);
             return;
@@ -623,15 +647,18 @@ ble_engine_evaluate_state(ble_engine_t *engine)
                                                                   engine->node.noise_level);
             engine->node.candidacy_score = score;
             ble_engine_log(engine, "INFO", "Node transitioned to CLUSTERHEAD_CANDIDATE state");
+            ble_engine_clear_selected_clusterhead(engine);
             ble_engine_start_election_rounds(engine);
         }
+        current_state = ble_mesh_node_get_state(&engine->node);
+    }
+
+    if (ble_mesh_node_get_state(&engine->node) == BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE) {
+        ble_engine_try_promote_clusterhead(engine);
         return;
     }
 
-    /* No active candidacy; ensure announcement rounds are idle */
-    if (current_state != BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE) {
-        ble_engine_cancel_election_rounds(engine);
-    }
+    ble_engine_cancel_election_rounds(engine);
 }
 
 static void
@@ -703,7 +730,9 @@ ble_engine_prepare_election_packet(ble_engine_t *engine)
     ble_election_pdsf_history_reset(&engine->election_packet.election.pdsf_history);
     engine->election_packet.election.pdsf = 0;
     engine->election_packet.election.last_pi = 1;
-    ble_election_update_pdsf(&engine->election_packet, direct_connections, 0);
+    uint32_t already_reached =
+        ble_engine_count_already_reached(engine, &engine->election_packet.base);
+    ble_election_update_pdsf(&engine->election_packet, direct_connections, already_reached);
     engine->node.pdsf = engine->election_packet.election.pdsf;
 }
 
@@ -813,6 +842,128 @@ ble_engine_cancel_renouncement_rounds(ble_engine_t *engine)
 }
 
 static void
+ble_engine_clear_selected_clusterhead(ble_engine_t *engine)
+{
+    if (!engine) {
+        return;
+    }
+    engine->node.clusterhead_id = BLE_MESH_INVALID_NODE_ID;
+    engine->node.cluster_class = 0;
+    engine->selected_clusterhead_direct_connections = 0;
+    engine->selected_clusterhead_hops = UINT16_MAX;
+}
+
+static void
+ble_engine_try_promote_clusterhead(ble_engine_t *engine)
+{
+    if (!engine) {
+        return;
+    }
+    if (ble_mesh_node_get_state(&engine->node) != BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE) {
+        return;
+    }
+    if (engine->election_rounds_remaining > 0) {
+        return;
+    }
+    if (engine->node.current_cycle <= engine->last_election_cycle_sent) {
+        return;
+    }
+    if (ble_mesh_node_set_state(&engine->node, BLE_NODE_STATE_CLUSTERHEAD)) {
+        ble_engine_log(engine, "INFO", "Node promoted to CLUSTERHEAD state");
+    }
+}
+
+static void
+ble_engine_update_clusterhead_selection(ble_engine_t *engine,
+                                        const ble_election_packet_t *packet)
+{
+    if (!engine || !packet || packet->election.is_renouncement) {
+        return;
+    }
+
+    ble_node_state_t state = ble_mesh_node_get_state(&engine->node);
+    if (state == BLE_NODE_STATE_CLUSTERHEAD || state == BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE) {
+        return;
+    }
+
+    uint16_t incoming_hops = packet->base.path_length;
+    if (incoming_hops == 0) {
+        incoming_hops = 1;
+    }
+
+    bool accept = false;
+    if (engine->node.clusterhead_id == BLE_MESH_INVALID_NODE_ID) {
+        accept = true;
+    } else if (incoming_hops < engine->selected_clusterhead_hops) {
+        accept = true;
+    } else if (incoming_hops == engine->selected_clusterhead_hops) {
+        if (packet->election.direct_connections >
+            engine->selected_clusterhead_direct_connections) {
+            accept = true;
+        } else if (packet->election.direct_connections ==
+                   engine->selected_clusterhead_direct_connections &&
+                   packet->base.sender_id < engine->node.clusterhead_id) {
+            accept = true;
+        }
+    }
+
+    if (accept) {
+        engine->node.clusterhead_id = packet->base.sender_id;
+        engine->node.cluster_class = packet->election.class_id;
+        engine->selected_clusterhead_direct_connections = packet->election.direct_connections;
+        engine->selected_clusterhead_hops = incoming_hops;
+        engine->node.pdsf = packet->election.pdsf;
+        ble_engine_log(engine, "INFO", "Adopted new clusterhead candidate");
+    }
+}
+
+static void
+ble_engine_handle_clusterhead_renouncement(ble_engine_t *engine,
+                                            const ble_election_packet_t *packet)
+{
+    if (!engine || !packet) {
+        return;
+    }
+    if (!packet->election.is_renouncement) {
+        return;
+    }
+
+    if (engine->node.clusterhead_id == packet->base.sender_id) {
+        ble_engine_log(engine, "INFO", "Selected clusterhead renounced; clearing alignment");
+        ble_engine_clear_selected_clusterhead(engine);
+        if (ble_mesh_node_get_state(&engine->node) == BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE) {
+            return;
+        }
+        /* Re-enter discovery so the node can search for a new clusterhead */
+        ble_mesh_node_set_state(&engine->node, BLE_NODE_STATE_DISCOVERY);
+    }
+}
+
+static uint32_t
+ble_engine_count_already_reached(ble_engine_t *engine,
+                                 const ble_discovery_packet_t *packet)
+{
+    if (!engine || !packet || packet->path_length == 0) {
+        return 0;
+    }
+
+    uint32_t count = 0;
+    for (uint16_t i = 0; i < packet->path_length; i++) {
+        ble_neighbor_info_t *neighbor =
+            ble_mesh_node_find_neighbor(&engine->node, packet->path[i]);
+        if (neighbor && neighbor->hop_count == 1) {
+            count++;
+        }
+    }
+
+    uint32_t direct_neighbors = ble_mesh_node_count_direct_neighbors(&engine->node);
+    if (count > direct_neighbors) {
+        count = direct_neighbors;
+    }
+    return count;
+}
+
+static void
 ble_engine_handle_election_packet(ble_engine_t *engine,
                                   const ble_election_packet_t *packet,
                                   int8_t rssi,
@@ -828,31 +979,35 @@ ble_engine_handle_election_packet(ble_engine_t *engine,
     ble_mesh_node_mark_candidate_heard(&engine->node);
 
     if (packet->election.is_renouncement) {
+        ble_engine_handle_clusterhead_renouncement(engine, packet);
         return;
     }
 
-    if (ble_mesh_node_get_state(&engine->node) != BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE) {
-        return;
-    }
+    if (ble_mesh_node_get_state(&engine->node) == BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE) {
+        uint32_t local_direct = ble_mesh_node_count_direct_neighbors(&engine->node);
+        uint32_t remote_direct = packet->election.direct_connections;
+        bool remote_better = false;
 
-    uint32_t local_direct = ble_mesh_node_count_direct_neighbors(&engine->node);
-    uint32_t remote_direct = packet->election.direct_connections;
-    bool remote_better = false;
-
-    if (remote_direct > local_direct) {
-        remote_better = true;
-    } else if (remote_direct == local_direct &&
-               packet->base.sender_id < engine->node.node_id) {
-        remote_better = true;
-    }
-
-    if (remote_better) {
-        if (ble_mesh_node_set_state(&engine->node, BLE_NODE_STATE_EDGE)) {
-            ble_engine_log(engine,
-                           "INFO",
-                           "Heard stronger candidate; reverting to EDGE state");
+        if (remote_direct > local_direct) {
+            remote_better = true;
+        } else if (remote_direct == local_direct &&
+                   packet->base.sender_id < engine->node.node_id) {
+            remote_better = true;
         }
-        ble_engine_cancel_election_rounds(engine);
-        ble_engine_start_renouncement_rounds(engine);
+
+        if (remote_better) {
+            if (ble_mesh_node_set_state(&engine->node, BLE_NODE_STATE_EDGE)) {
+                ble_engine_log(engine,
+                               "INFO",
+                               "Heard stronger candidate; reverting to EDGE state");
+            }
+            ble_engine_cancel_election_rounds(engine);
+            ble_engine_start_renouncement_rounds(engine);
+            ble_engine_clear_selected_clusterhead(engine);
+            ble_engine_update_clusterhead_selection(engine, packet);
+        }
+        return;
     }
+
+    ble_engine_update_clusterhead_selection(engine, packet);
 }
