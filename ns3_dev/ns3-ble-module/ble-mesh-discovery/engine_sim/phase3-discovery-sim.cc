@@ -14,6 +14,7 @@
 #include "ns3/random-variable-stream.h"
 #include "ns3/ble-discovery-engine-wrapper.h"
 #include "ns3/ble-discovery-header-wrapper.h"
+#include <fstream>
 
 #include <map>
 #include <vector>
@@ -61,15 +62,26 @@ public:
   void StartPhaseTraffic (Time noiseDuration,
                           Time neighborDuration,
                           Time sampleInterval) const;
+  void EnableTrace (const std::string &path);
+  void LogFinalStates (const std::vector<Ptr<EngineSimNode>> &nodes) const;
 
 private:
   void Deliver (uint32_t receiverId,
                 uint32_t senderId,
-                Ptr<Packet> packet) const;
+                Ptr<Packet> packet,
+                int8_t rssi) const;
   void BootstrapLink (uint32_t a, uint32_t b) const;
+  int8_t ComputeRssi (uint32_t senderId, uint32_t receiverId) const;
+  void LogEvent (double nowMs,
+                 uint32_t senderId,
+                 uint32_t receiverId,
+                 const BleDiscoveryHeaderWrapper &header,
+                 int8_t rssi) const;
 
   std::map<uint32_t, Ptr<EngineSimNode>> m_nodes;
   std::map<uint32_t, std::vector<uint32_t>> m_adjacency;
+  bool m_traceEnabled{false};
+  mutable std::ofstream m_trace;
 };
 
 /**
@@ -127,6 +139,11 @@ SimpleVirtualChannel::AddNode (Ptr<EngineSimNode> node)
   NS_ABORT_MSG_IF (id == 0, "Nodes must be configured before linking");
   m_nodes[id] = node;
   m_adjacency[id]; // ensure entry exists
+  if (m_traceEnabled && m_trace.is_open ())
+    {
+      Vector pos = node->GetPosition ();
+      m_trace << "P," << id << "," << pos.x << "," << pos.y << "\n";
+    }
 }
 
 void
@@ -159,23 +176,28 @@ SimpleVirtualChannel::Transmit (uint32_t senderId, Ptr<Packet> packet) const
   headerCopy->RemoveHeader (header);
   NS_LOG_INFO ("Tx node " << senderId << " TTL=" << (uint32_t)header.GetTtl ()
                           << " pathLen=" << header.GetPath ().size ());
+  double nowMs = Simulator::Now ().GetMilliSeconds ();
 
   for (uint32_t neighbor : it->second)
     {
       Ptr<Packet> copy = packet->Copy ();
+      int8_t rssi = ComputeRssi (senderId, neighbor);
+      LogEvent (nowMs, senderId, neighbor, header, rssi);
       Simulator::Schedule (MilliSeconds (1),
                            &SimpleVirtualChannel::Deliver,
                            this,
                            neighbor,
                            senderId,
-                           copy);
+                           copy,
+                           rssi);
     }
 }
 
 void
 SimpleVirtualChannel::Deliver (uint32_t receiverId,
                                uint32_t senderId,
-                               Ptr<Packet> packet) const
+                               Ptr<Packet> packet,
+                               int8_t rssi) const
 {
   auto dstIt = m_nodes.find (receiverId);
   auto srcIt = m_nodes.find (senderId);
@@ -183,13 +205,6 @@ SimpleVirtualChannel::Deliver (uint32_t receiverId,
     {
       return;
     }
-
-  Vector dst = dstIt->second->GetPosition ();
-  Vector src = srcIt->second->GetPosition ();
-  double dx = dst.x - src.x;
-  double dy = dst.y - src.y;
-  double distance = std::sqrt (dx * dx + dy * dy);
-  int8_t rssi = static_cast<int8_t> (-40.0 - (distance / 5.0));
 
   dstIt->second->ReceivePacket (packet, rssi);
 }
@@ -254,6 +269,73 @@ SimpleVirtualChannel::StartPhaseTraffic (Time noiseDuration,
             }
         }
     }
+}
+
+void
+SimpleVirtualChannel::EnableTrace (const std::string &path)
+{
+  if (path.empty ())
+    {
+      return;
+    }
+  m_trace.open (path.c_str (), std::ios::out | std::ios::trunc);
+  if (m_trace.is_open ())
+    {
+      m_traceEnabled = true;
+      m_trace << "#type,time_ms,src,dst,rssi,ttl,path,election,clusterflag\n";
+    }
+}
+
+int8_t
+SimpleVirtualChannel::ComputeRssi (uint32_t senderId, uint32_t receiverId) const
+{
+  auto dstIt = m_nodes.find (receiverId);
+  auto srcIt = m_nodes.find (senderId);
+  if (dstIt == m_nodes.end () || srcIt == m_nodes.end ())
+    {
+      return -90;
+    }
+
+  Vector dst = dstIt->second->GetPosition ();
+  Vector src = srcIt->second->GetPosition ();
+  double dx = dst.x - src.x;
+  double dy = dst.y - src.y;
+  double distance = std::sqrt (dx * dx + dy * dy);
+  return static_cast<int8_t> (-40.0 - (distance / 5.0));
+}
+
+void
+SimpleVirtualChannel::LogEvent (double nowMs,
+                                uint32_t senderId,
+                                uint32_t receiverId,
+                                const BleDiscoveryHeaderWrapper &header,
+                                int8_t rssi) const
+{
+  if (!m_traceEnabled || !m_trace.is_open ())
+    {
+      return;
+    }
+  m_trace << "T," << nowMs << "," << senderId << "," << receiverId << ","
+          << static_cast<int32_t> (rssi) << "," << static_cast<uint32_t> (header.GetTtl ()) << ","
+          << header.GetPath ().size () << "," << (header.IsElectionMessage () ? 1 : 0) << ","
+          << (header.HasClusterheadFlag () ? 1 : 0) << "\n";
+}
+
+void
+SimpleVirtualChannel::LogFinalStates (const std::vector<Ptr<EngineSimNode>> &nodes) const
+{
+  if (!m_traceEnabled || !m_trace.is_open ())
+    {
+      return;
+    }
+  for (const auto &node : nodes)
+    {
+      const ble_mesh_node_t *state = node->GetNodeState ();
+      m_trace << "S," << node->GetNodeId () << ","
+              << static_cast<uint32_t> (state->state) << ","
+              << state->clusterhead_id << "\n";
+    }
+  m_trace.flush ();
 }
 
 /* ---------------- EngineSimNode ---------------- */
@@ -461,6 +543,7 @@ main (int argc, char *argv[])
   double areaSize = 200.0;
   double maxRange = 120.0;
   uint32_t seed = 1;
+  std::string traceFile;
 
   CommandLine cmd;
   cmd.AddValue ("nodes", "Number of simulated nodes", nodeCount);
@@ -469,6 +552,7 @@ main (int argc, char *argv[])
   cmd.AddValue ("area", "Square area size in meters", areaSize);
   cmd.AddValue ("range", "Maximum neighbour range (meters)", maxRange);
   cmd.AddValue ("seed", "Seed for random placement", seed);
+  cmd.AddValue ("trace", "CSV trace output for visualization", traceFile);
   cmd.Parse (argc, argv);
 
   LogComponentEnable ("Phase3DiscoveryEngineSim", LOG_LEVEL_INFO);
@@ -479,6 +563,7 @@ main (int argc, char *argv[])
   rv->SetAttribute ("Max", DoubleValue (1.0));
 
   Ptr<SimpleVirtualChannel> channel = CreateObject<SimpleVirtualChannel> ();
+  channel->EnableTrace (traceFile);
   std::vector<Ptr<EngineSimNode>> nodes;
   nodes.reserve (nodeCount);
 
@@ -610,7 +695,9 @@ main (int argc, char *argv[])
   NS_LOG_INFO ("Phase 3 discovery simulation: "
                << clusterheads << " clusterheads, "
                << alignedEdges << " edges aligned, "
-               << totalForwarders << " forwarders observed.");
+              << totalForwarders << " forwarders observed.");
+
+  channel->LogFinalStates (nodes);
 
   Simulator::Destroy ();
   return 0;
