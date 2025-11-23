@@ -34,7 +34,7 @@ extern "C" {
  * @brief Queued message entry
  */
 typedef struct {
-    ble_discovery_packet_t packet;       /**< Discovery packet data */
+    ble_election_packet_t packet;        /**< Packet data (discovery or election) */
     uint32_t received_time_ms;           /**< When message was received (ms) */
     uint8_t priority;                    /**< Priority for forwarding (lower = higher priority) */
     bool valid;                          /**< Whether this slot is occupied */
@@ -93,7 +93,7 @@ bool ble_queue_enqueue(ble_message_queue_t *queue,
  * @param packet Pointer to store dequeued packet
  * @return true if message was dequeued, false if queue empty
  */
-bool ble_queue_dequeue(ble_message_queue_t *queue, ble_discovery_packet_t *packet);
+bool ble_queue_dequeue(ble_message_queue_t *queue, ble_election_packet_t *packet);
 
 /**
  * @brief Peek at the highest-priority message without removing it
@@ -101,7 +101,7 @@ bool ble_queue_dequeue(ble_message_queue_t *queue, ble_discovery_packet_t *packe
  * @param packet Pointer to store peeked packet
  * @return true if message exists, false if queue empty
  */
-bool ble_queue_peek(const ble_message_queue_t *queue, ble_discovery_packet_t *packet);
+bool ble_queue_peek(const ble_message_queue_t *queue, ble_election_packet_t *packet);
 
 /**
  * @brief Check if queue is empty

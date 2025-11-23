@@ -35,11 +35,6 @@ BleElection::GetTypeId (void)
                    DoubleValue (5.0),
                    MakeDoubleAccessor (&BleElection::m_state.min_connection_noise_ratio),
                    MakeDoubleChecker<double> ())
-    .AddAttribute ("MinGeographicDistribution",
-                   "Minimum geographic distribution score for candidacy",
-                   DoubleValue (0.3),
-                   MakeDoubleAccessor (&BleElection::m_state.min_geographic_distribution),
-                   MakeDoubleChecker<double> (0.0, 1.0))
   ;
   return tid;
 }
@@ -77,7 +72,29 @@ void
 BleElection::AddRssiSample (int8_t rssi)
 {
   NS_LOG_FUNCTION (this << static_cast<int32_t> (rssi));
-  ble_election_add_rssi_sample (&m_state, rssi);
+  uint32_t current_time_ms = static_cast<uint32_t> (Simulator::Now ().GetMilliSeconds ());
+  ble_election_add_rssi_sample (&m_state, rssi, current_time_ms);
+}
+
+void
+BleElection::BeginCrowdingMeasurement (Time duration)
+{
+  NS_LOG_FUNCTION (this << duration);
+  uint32_t window_ms = static_cast<uint32_t> (duration.GetMilliSeconds ());
+  ble_election_begin_crowding_measurement (&m_state, window_ms);
+}
+
+double
+BleElection::EndCrowdingMeasurement ()
+{
+  NS_LOG_FUNCTION (this);
+  return ble_election_end_crowding_measurement (&m_state);
+}
+
+bool
+BleElection::IsCrowdingMeasurementActive () const
+{
+  return ble_election_is_crowding_measurement_active (&m_state);
 }
 
 double
@@ -237,28 +254,6 @@ BleElection::SetThresholds (uint32_t minNeighbors, double minCnRatio, double min
 {
   NS_LOG_FUNCTION (this << minNeighbors << minCnRatio << minGeoDist);
   ble_election_set_thresholds (&m_state, minNeighbors, minCnRatio, minGeoDist);
-}
-
-void
-BleElection::SetDirectRssiThreshold (int8_t threshold)
-{
-  NS_LOG_FUNCTION (this << static_cast<int32_t> (threshold));
-  m_state.direct_connection_rssi_threshold = threshold;
-}
-
-void
-BleElection::SetScoreWeights (double directWeight,
-                              double ratioWeight,
-                              double geoWeight,
-                              double forwardingWeight)
-{
-  NS_LOG_FUNCTION (this << directWeight << ratioWeight << geoWeight << forwardingWeight);
-  ble_score_weights_t weights;
-  weights.direct_weight = directWeight;
-  weights.connection_noise_weight = ratioWeight;
-  weights.geographic_weight = geoWeight;
-  weights.forwarding_weight = forwardingWeight;
-  ble_election_set_score_weights (&m_state, &weights);
 }
 
 void

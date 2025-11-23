@@ -66,9 +66,17 @@ ble_queue_enqueue(ble_message_queue_t *queue,
     }
 
     /* Add message to queue */
-    memcpy(&queue->messages[slot].packet, packet, sizeof(ble_discovery_packet_t));
+    ble_election_packet_t *dst = &queue->messages[slot].packet;
+    memset(dst, 0, sizeof(*dst));
+    if (packet->message_type == BLE_MSG_ELECTION_ANNOUNCEMENT) {
+        const ble_election_packet_t *election_packet =
+            (const ble_election_packet_t *)packet;
+        memcpy(dst, election_packet, sizeof(ble_election_packet_t));
+    } else {
+        memcpy(&dst->base, packet, sizeof(ble_discovery_packet_t));
+    }
     queue->messages[slot].received_time_ms = current_time_ms;
-    queue->messages[slot].priority = ble_queue_calculate_priority(packet);
+    queue->messages[slot].priority = ble_queue_calculate_priority(&dst->base);
     queue->messages[slot].valid = true;
     queue->size++;
 
@@ -92,7 +100,7 @@ ble_queue_enqueue(ble_message_queue_t *queue,
 }
 
 bool
-ble_queue_dequeue(ble_message_queue_t *queue, ble_discovery_packet_t *packet)
+ble_queue_dequeue(ble_message_queue_t *queue, ble_election_packet_t *packet)
 {
     if (!queue || !packet || queue->size == 0) {
         return false;
@@ -118,7 +126,7 @@ ble_queue_dequeue(ble_message_queue_t *queue, ble_discovery_packet_t *packet)
     }
 
     /* Copy message and mark slot as free */
-    memcpy(packet, &queue->messages[best_slot].packet, sizeof(ble_discovery_packet_t));
+    memcpy(packet, &queue->messages[best_slot].packet, sizeof(ble_election_packet_t));
     queue->messages[best_slot].valid = false;
     queue->size--;
     queue->total_dequeued++;
@@ -127,7 +135,7 @@ ble_queue_dequeue(ble_message_queue_t *queue, ble_discovery_packet_t *packet)
 }
 
 bool
-ble_queue_peek(const ble_message_queue_t *queue, ble_discovery_packet_t *packet)
+ble_queue_peek(const ble_message_queue_t *queue, ble_election_packet_t *packet)
 {
     if (!queue || !packet || queue->size == 0) {
         return false;
@@ -153,7 +161,7 @@ ble_queue_peek(const ble_message_queue_t *queue, ble_discovery_packet_t *packet)
     }
 
     /* Copy message without removing from queue */
-    memcpy(packet, &queue->messages[best_slot].packet, sizeof(ble_discovery_packet_t));
+    memcpy(packet, &queue->messages[best_slot].packet, sizeof(ble_election_packet_t));
     return true;
 }
 

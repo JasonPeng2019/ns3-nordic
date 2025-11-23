@@ -365,13 +365,10 @@ bool ble_mesh_node_should_become_edge(const ble_mesh_node_t *node)
 {
     if (!node) return false;
 
-    // Node becomes edge if:
-    // 1. Very few direct neighbors (< 3)
-    // 2. OR average RSSI is very weak
+    // Node becomes edge if very few direct neighbors (< 3)
     uint16_t direct_neighbors = ble_mesh_node_count_direct_neighbors(node);
-    int8_t avg_rssi = ble_mesh_node_calculate_avg_rssi(node);
 
-    return (direct_neighbors < 3 || avg_rssi < BLE_MESH_EDGE_RSSI_THRESHOLD);
+    return (direct_neighbors < 3);
 }
 
 bool ble_mesh_node_should_become_candidate(const ble_mesh_node_t *node)
@@ -379,11 +376,6 @@ bool ble_mesh_node_should_become_candidate(const ble_mesh_node_t *node)
     if (!node) return false;
 
     if (node->neighbors.count >= BLE_MESH_MAX_NEIGHBORS) {
-        return false;
-    }
-
-    int8_t avg_rssi = ble_mesh_node_calculate_avg_rssi(node);
-    if (avg_rssi < BLE_MESH_EDGE_RSSI_THRESHOLD) {
         return false;
     }
 

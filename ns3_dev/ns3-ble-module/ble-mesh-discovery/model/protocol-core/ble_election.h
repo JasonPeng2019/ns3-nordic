@@ -36,7 +36,7 @@ typedef struct {
     int8_t rssi;                         /**< Last RSSI measurement (dBm) */
     uint32_t message_count;              /**< Messages received from this neighbor */
     uint32_t last_seen_time_ms;          /**< Last time we heard from neighbor */
-    bool is_direct;                      /**< True if 1-hop neighbor (strong signal) */
+    bool is_direct;                      /**< True if heard during direct-neighbor phase */
 } ble_neighbor_info_t;
 
 /**
@@ -53,13 +53,7 @@ typedef struct {
     double forwarding_success_rate;      /**< Forwarding success ratio */
 } ble_connectivity_metrics_t;
 
-/**
- * @brief RSSI sample with timestamp for temporal filtering
- */
-typedef struct {
-    int8_t rssi;                         /**< RSSI measurement (dBm) */
-    uint32_t timestamp_ms;               /**< When sample was collected */
-} ble_rssi_sample_t;
+#define BLE_RSSI_BUFFER_SIZE 100         /**< Max RSSI samples stored per measurement */
 
 /**
  * @brief Clusterhead election state
@@ -70,21 +64,20 @@ typedef struct {
 
     ble_connectivity_metrics_t metrics;  /**< Connectivity metrics */
 
-    ble_rssi_sample_t rssi_samples[100]; /**< Circular buffer of RSSI samples */
+    int8_t rssi_samples[BLE_RSSI_BUFFER_SIZE]; /**< Circular buffer of RSSI samples */
     uint32_t rssi_head;                  /**< Index of oldest sample */
     uint32_t rssi_tail;                  /**< Index where next sample goes */
-    uint32_t rssi_count;                 /**< Current number of samples (0-100) */
-    uint32_t rssi_max_age_ms;            /**< Maximum age for samples (default 10000ms) */
+    uint32_t rssi_count;                 /**< Current number of samples */
+    bool crowding_measurement_active;    /**< True while noisy window is active */
+    double last_crowding_factor;         /**< Most recent finalized crowding value */
 
     bool is_candidate;                   /**< Whether node is candidate */
     double candidacy_score;              /**< Candidacy score */
-    ble_score_weights_t score_weights;   /**< Configurable score weights */
 
     /* Thresholds (configurable) */
     uint32_t min_neighbors_for_candidacy; /**< Minimum direct neighbors */
     double min_connection_noise_ratio;   /**< Minimum ratio for candidacy */
-    double min_geographic_distribution;  /**< Minimum distribution score */
-    int8_t direct_connection_rssi_threshold; /**< RSSI threshold for direct connection (dBm) */
+    double min_geographic_distribution;  /**< Reserved for future use (distribution stored but not gated) */
 } ble_election_state_t;
 
 /**
@@ -123,6 +116,33 @@ void ble_election_add_rssi_sample(ble_election_state_t *state, int8_t rssi, uint
 double ble_election_calculate_crowding(const ble_election_state_t *state);
 
 /**
+ * @brief Reset RSSI sample buffer (clears current measurements)
+ * @param state Election state
+ */
+void ble_election_reset_rssi_samples(ble_election_state_t *state);
+
+/**
+ * @brief Begin a noisy broadcast crowding measurement window
+ * @param state Election state
+ * @param window_ms Measurement duration (ms); sets max-age for samples
+ */
+void ble_election_begin_crowding_measurement(ble_election_state_t *state, uint32_t window_ms);
+
+/**
+ * @brief Finalize current crowding measurement and cache the result
+ * @param state Election state
+ * @return Final crowding factor (0.0-1.0)
+ */
+double ble_election_end_crowding_measurement(ble_election_state_t *state);
+
+/**
+ * @brief Check whether a crowding measurement window is active
+ * @param state Election state
+ * @return true if actively collecting RSSI samples
+ */
+bool ble_election_is_crowding_measurement_active(const ble_election_state_t *state);
+
+/**
  * @brief Count direct connections (1-hop neighbors with strong signal)
  * @param state Election state
  * @return Number of direct connections
@@ -151,9 +171,6 @@ void ble_election_update_metrics(ble_election_state_t *state);
  * @param state Election state
  * @param weights Optional weights (NULL resets to defaults)
  */
-void ble_election_set_score_weights(ble_election_state_t *state,
-                                      const ble_score_weights_t *weights);
-
 /**
  * @brief Calculate candidacy score
  *

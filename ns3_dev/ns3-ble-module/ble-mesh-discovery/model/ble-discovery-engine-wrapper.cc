@@ -143,11 +143,20 @@ BleDiscoveryEngineWrapper::Receive (const BleDiscoveryHeaderWrapper& header, int
       return;
     }
 
-  const ble_discovery_packet_t& cPacket = header.GetCPacket ();
-  ble_engine_receive_packet (&m_engine,
-                             &cPacket,
-                             rssi,
-                             static_cast<uint32_t> (Simulator::Now ().GetMilliSeconds ()));
+  uint32_t now_ms = static_cast<uint32_t> (Simulator::Now ().GetMilliSeconds ());
+
+  if (header.IsElectionMessage ())
+    {
+      const ble_election_packet_t& cElection = header.GetCElectionPacket ();
+      const ble_discovery_packet_t *basePtr =
+        reinterpret_cast<const ble_discovery_packet_t *> (&cElection);
+      ble_engine_receive_packet (&m_engine, basePtr, rssi, now_ms);
+    }
+  else
+    {
+      const ble_discovery_packet_t& cPacket = header.GetCPacket ();
+      ble_engine_receive_packet (&m_engine, &cPacket, rssi, now_ms);
+    }
 }
 
 void
@@ -251,18 +260,19 @@ BleDiscoveryEngineWrapper::HandleEngineSend (const ble_discovery_packet_t *packe
     }
 
   BleDiscoveryHeaderWrapper header;
-  header.SetSenderId (packet->sender_id);
-  header.SetTtl (packet->ttl);
-  for (uint16_t i = 0; i < packet->path_length; ++i)
+
+  if (packet->message_type == BLE_MSG_ELECTION_ANNOUNCEMENT)
     {
-      header.AddToPath (packet->path[i]);
+      header.SetAsElectionMessage ();
+      const ble_election_packet_t *src =
+        reinterpret_cast<const ble_election_packet_t *> (packet);
+      ble_election_packet_t &dst = header.GetCElectionPacketMutable ();
+      dst = *src;
+      header.GetCPacketMutable () = dst.base;
     }
-  header.SetGpsAvailable (packet->gps_available);
-  if (packet->gps_available)
+  else
     {
-      header.SetGpsLocation (Vector (packet->gps_location.x,
-                                     packet->gps_location.y,
-                                     packet->gps_location.z));
+      header.GetCPacketMutable () = *packet;
     }
 
   Ptr<Packet> pkt = Create<Packet> ();

@@ -547,7 +547,7 @@ Following the established C core + C++ wrapper architecture pattern:
     - Messages sent/received/forwarded/dropped
     - Discovery cycles, average RSSI, direct connections
   - Main node structure: `ble_mesh_node_t`
-  - Constants: `BLE_MESH_MAX_NEIGHBORS=150`, `BLE_MESH_EDGE_RSSI_THRESHOLD=-70dBm`
+  - Constants: `BLE_MESH_MAX_NEIGHBORS=150`
 
 - `model/protocol-core/ble_mesh_node.c` (370+ lines)
   - Node initialization: `ble_mesh_node_init()`
@@ -563,8 +563,8 @@ Following the established C core + C++ wrapper architecture pattern:
     - `ble_mesh_node_calculate_avg_rssi()` - Average RSSI across all neighbors
     - `ble_mesh_node_prune_stale_neighbors()` - Remove old neighbors by age
   - Election decision logic:
-    - `ble_mesh_node_should_become_edge()` - True if <3 direct neighbors OR RSSI < -70dBm
-    - `ble_mesh_node_should_become_candidate()` - True if ≥5 direct neighbors AND <150 total AND RSSI ≥ -70dBm
+- `ble_mesh_node_should_become_edge()` - True if <3 direct neighbors
+- `ble_mesh_node_should_become_candidate()` - True if ≥5 direct neighbors AND <150 total (relying on the connection:noise ratio)
     - `ble_mesh_node_calculate_candidacy_score()` - Delegates to election calculation
   - Statistics: `ble_mesh_node_update_statistics()`, message counter increments
 
@@ -672,7 +672,6 @@ Build Time:          <1 second incremental
 
 **Key Design Decisions**:
 1. **Max 150 neighbors** - Matches protocol spec cluster capacity limit
-2. **RSSI threshold -70dBm** - Edge node detection threshold
 3. **State transition validation** - Prevents invalid state changes
 4. **Age-based neighbor pruning** - Removes stale neighbors by cycle count
 5. **Election hash generation** - FNV-1a hash of node ID for FDMA/TDMA slots
@@ -869,6 +868,11 @@ PASS: TestSuite ble-message-queue (includes TTL priority tests)
 
 ## Phase 3: Clusterhead Election - Discovery Phase
 
+### Engine Integration Status (Updated 2025-XX-XX)
+- [x] Noisy + direct-neighbor micro-phases are orchestrated directly in `engine-core/ble_discovery_engine.c` (Tasks 12–14 wiring).
+- [x] Per-cycle metrics evaluation now drives automatic transitions into EDGE/CANDIDATE states and triggers three-round election announcements (Tasks 15–17).
+- [x] Election announcements (including renouncement floods) are enqueued/forwarded with live ΣΠ (PDSF/Last Π) updates; forwarding halts once predicted cluster capacity is reached (Tasks 17–18).
+
 ### Task 12: Implement Noisy Broadcast Phase ✅ COMPLETED
 - [x] Implement "noisy broadcast" message transmission
 - [x] Create base-level noise message format
@@ -927,6 +931,7 @@ PASS: TestSuite ble-broadcast-timing
 **C Core Files (ble_election.c):**
 - `ble_election_calculate_crowding()` - RSSI to crowding factor conversion
 - `ble_election_add_rssi_sample()` - Stores RSSI samples (circular buffer, 100 samples)
+- `ble_election_begin/end_crowding_measurement()` - Explicit noisy-window lifecycle (samples ignored outside 2 s measurement phase)
 
 **Algorithm:**
 - Formula: (mean_rssi - RSSI_MIN) / (RSSI_MAX - RSSI_MIN)
@@ -937,6 +942,7 @@ PASS: TestSuite ble-broadcast-timing
 **Configurable Parameters:**
 - DEFAULT_RSSI_MIN = -90.0 dBm
 - DEFAULT_RSSI_MAX = -40.0 dBm
+- `CrowdingMeasurementDuration` attribute on `BleMeshNode` (NS-3) defaults to 2 seconds and automatically starts/stops the noisy broadcast sampling phase each time discovery begins.
 
 **Integration:** Used in connection:noise ratio calculation for candidacy determination
 
@@ -1017,21 +1023,22 @@ PASS: TestSuite ble-broadcast-timing
 - [x] Track successfully parsed messages (strong signal)
 - [x] Store list of direct neighbors (1-hop neighbors)
 - [x] Handle collision impact on connection count
+- [x] Prune stale neighbor entries so the direct-connection table reflects only recently heard nodes
 - [x] Test connection count accuracy vs actual topology
 
 **Implementation Summary (Completed 2025-11-21):**
 
 **C Core Files:** `ble_election.c`
-- Direct connection tracking with RSSI threshold (-70 dBm)
+- Direct connection tracking tied to the dedicated direct neighbor broadcast window (0-hop receptions)
 - `is_direct` flag in `ble_neighbor_info_t` structure
+- `ble_election_clean_old_neighbors()` removes neighbors that have not been heard within the configured timeout
 
 **Key Functions:**
 - `ble_election_update_neighbor()` - Updates neighbor info with is_direct flag
 - `ble_election_count_direct_connections()` - Counts neighbors where `is_direct == true`
+- `ble_election_clean_old_neighbors()` - Compacts the neighbor table by evicting silent entries
 
-**Algorithm:** `is_direct = (rssi >= DEFAULT_DIRECT_RSSI_THRESHOLD)`
-- Threshold: -70 dBm
-- Only successfully received messages counted (failed parses ignored)
+**Algorithm:** Any neighbor heard during the direct neighbor broadcast window is recorded as `is_direct = true`. Because that phase is never forwarded, every entry represents a 1-hop peer. Failed decodes never reach this function.
 
 **Integration:** Used in candidacy determination and connectivity metrics
 
@@ -1064,7 +1071,7 @@ PASS: TestSuite ble-broadcast-timing
 - `ble_election_update_metrics()` - Updates all metrics before candidacy check
 - `ble_election_calculate_geographic_distribution()` - Centroid + variance algorithm
 
-**Integration:** Metrics updated during discovery phase, used in candidacy scoring
+**Integration:** Metrics updated during discovery phase. `geographic_distribution` is stored and logged for analytics but not currently used to gate candidacy or forwarding decisions.
 
 **Tests:** All metrics calculation tested and validated
 
@@ -1073,7 +1080,7 @@ PASS: TestSuite ble-broadcast-timing
 - [ ] Track when other clusterhead candidates were last heard and dynamically relax the threshold (n = 6 → 3 → 1 cycles) when no announcements are received
 - [ ] Invoke `ble_mesh_node_should_become_edge()` / `_should_become_candidate()` inside the discovery engine each cycle and update node state via `ble_mesh_node_set_state()`
 - [ ] Trigger election-announcement generation when entering `BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE`
-- [ ] Add geographic distribution check (neighbors not all clustered)
+- [x] (Rescoped) Geographic distribution is captured in `ble_connectivity_metrics_t` but not part of candidacy gating per discovery protocol v1; retained for future analytics.
 - [ ] Implement successful forwarding requirement check
 - [ ] Create candidacy decision logic combining all criteria and reset when a better candidate is heard
 - [ ] Test candidacy election in various network topologies
@@ -1170,22 +1177,17 @@ PASS: TestSuite ble-broadcast-timing
   - Geographic distribution quality
   - Successful forwarding rate
 - [x] Implement score calculation function
-- [x] Add configurable weights for different metrics
 - [x] Test score correlation with node quality
 - [x] Validate score-based ranking
 
 **Implementation Summary (Completed 2025-11-23):**
 
 **C Core Files:** `model/protocol-core/ble_discovery_packet.{h,c}`, `model/protocol-core/ble_election.{h,c}`, `model/protocol-core/ble_mesh_node.{h,c}`
-- Added `ble_score_weights_t`, default weights, and `ble_election_set_score_weights()` so Phase 3 state can tune direct/ratio/geo/forwarding influence
-- Reworked `ble_election_calculate_score()` and `ble_election_calculate_candidacy_score()` to normalize each metric, apply weights, and return a 0-1 score
+- `ble_election_calculate_score()` now uses the simplified `(direct neighbors) + (direct/max)/(noise+1)` ratio defined in discovery_protocol.txt; weighting infrastructure removed to avoid confusion.
 - `ble_mesh_node_calculate_candidacy_score()` now feeds connection:noise ratio and forwarding success into the shared helper
 
-**C++ Wrappers:** `model/ble-election.{h,cc}`
-- Exposed `SetScoreWeights()` for NS-3 scenarios that want to rebalance the metrics
-
 **Tests:** `test/ble-discovery-packet-c-test.c`, `test/ble-mesh-node-c-test.c`
-- Added unit tests validating the weighted formula, custom weight emphasis, normalized output, and ranking improvements when connectivity or forwarding stats improve
+- Added unit tests validating the simplified formula and ensuring scores track direct connections under varying noise levels
 
 ### Task 22: Implement FDMA/TDMA Hash Function Generation
 - [ ] Design hash function h(ID) for cluster communication

@@ -162,13 +162,12 @@ Phase 3 implements the **Clusterhead Election - Discovery Phase** of the BLE Mes
 
 | Function | Description |
 |----------|-------------|
-| `ble_election_update_neighbor()` | Updates neighbor info with `is_direct` flag |
+| `ble_election_update_neighbor()` | Updates neighbor info; neighbors heard during the direct-discovery window are flagged `is_direct = true` |
 | `ble_election_count_direct_connections()` | Counts neighbors where `is_direct == true` |
 
 ### Algorithm
-- `is_direct = (rssi >= DEFAULT_DIRECT_RSSI_THRESHOLD)`
-- Threshold: -70 dBm
-- Only successfully received messages counted
+- `is_direct = true` for any neighbor heard during the stochastic direct-discovery phase (0-hop broadcast); no RSSI threshold required.
+- Only successfully decoded broadcasts counted
 
 ### Test Files
 
@@ -216,6 +215,8 @@ Phase 3 implements the **Clusterhead Election - Discovery Phase** of the BLE Mes
 | `messages_received` | Total received count |
 | `forwarding_success_rate` | Ratio of forwarded/received |
 
+**Notes:** `geographic_distribution` is captured for analytics and logging but is not presently used to gate candidacy decisions; the direct neighbor and connection:noise metrics drive the discovery behavior.
+
 ### Test Files
 
 | Test Type | Path |
@@ -248,7 +249,7 @@ Phase 3 implements the **Clusterhead Election - Discovery Phase** of the BLE Mes
 | Function | Description |
 |----------|-------------|
 | `ble_election_should_become_candidate()` | Complete candidacy logic |
-| `ble_election_calculate_candidacy_score()` | Weighted scoring formula |
+| `ble_election_calculate_candidacy_score()` | Protocol scoring formula (direct connections + connection:noise ratio) |
 | `ble_election_set_thresholds()` | Configure candidacy thresholds |
 
 ### Candidacy Thresholds (configurable)
@@ -257,19 +258,16 @@ Phase 3 implements the **Clusterhead Election - Discovery Phase** of the BLE Mes
 |-----------|---------------|
 | `min_neighbors_for_candidacy` | 10 |
 | `min_connection_noise_ratio` | 5.0 |
-| `min_geographic_distribution` | 0.3 |
 
 ### Decision Logic
 1. Check `direct_connections >= min_neighbors`
 2. Check `connection_noise_ratio >= min_ratio`
-3. Check `geographic_distribution >= min_distribution` (if ≥2 neighbors with GPS)
-4. If all pass → set `is_candidate = true`, calculate score
+3. If both pass → set `is_candidate = true`, calculate score
 
-### Candidacy Scoring (weighted sum)
-- w1=1.0 × direct_connections
-- w2=2.0 × connection_noise_ratio (most important)
-- w3=1.5 × geographic_distribution × 10
-- w4=1.0 × forwarding_success_rate × 10
+### Candidacy Scoring (per protocol)
+Score = `direct_connections + (direct_connections / BLE_DISCOVERY_MAX_CLUSTER_SIZE) / (noise + 1)`
+- Emphasizes high connectivity while penalizing noisy environments
+- No weighting knobs; mirrors discovery_protocol.txt
 
 ### Test Files
 
@@ -313,7 +311,7 @@ Phase 3 implements the **Clusterhead Election - Discovery Phase** of the BLE Mes
 
 ### GPS Unavailable Handling
 - Returns 0.0 if < 2 neighbors have valid GPS
-- Skips GPS check in candidacy logic when insufficient data
+- Metric stored for analytics; candidacy logic currently ignores geographic distribution regardless of GPS availability
 - Gracefully handles zero-location (0, 0, 0) entries
 
 ### Test Files

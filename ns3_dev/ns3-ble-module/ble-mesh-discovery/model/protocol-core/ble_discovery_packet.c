@@ -8,12 +8,6 @@
 #include "ble_discovery_packet.h"
 #include <stdlib.h>
 
-const ble_score_weights_t BLE_DEFAULT_SCORE_WEIGHTS = {
-    0.35,
-    0.30,
-    0.20,
-    0.15
-};
 #include <limits.h>
 
 /* ===== Helper Functions for Serialization ===== */
@@ -219,8 +213,8 @@ uint32_t ble_election_get_size(const ble_election_packet_t *packet)
     // Base discovery size + election fields
     uint32_t size = ble_discovery_get_size(&packet->base);
 
-    // Class ID (2) + Direct Connections (4) + PDSF (4) + Last Π (4) + Score (8) + Hash (4)
-    size += 2 + 4 + 4 + 4 + 8 + 4;
+    // Flags (1) + Class ID (2) + Direct Connections (4) + PDSF (4) + Last Π (4) + Score (8) + Hash (4)
+    size += 1 + 2 + 4 + 4 + 4 + 8 + 4;
     // PDSF history: hop count (2) + per-hop counts (4 bytes each)
     size += 2 + (packet->election.pdsf_history.hop_count * 4);
 
@@ -326,6 +320,8 @@ uint32_t ble_election_serialize(const ble_election_packet_t *packet,
     uint8_t *ptr = buffer + bytes_written;
 
     // Write election-specific fields
+    uint8_t flags = packet->election.is_renouncement ? 0x1 : 0x0;
+    write_u8(&ptr, flags);
     write_u16(&ptr, packet->election.class_id);
     write_u32(&ptr, packet->election.direct_connections);
     write_u32(&ptr, packet->election.pdsf);
@@ -354,6 +350,8 @@ uint32_t ble_election_deserialize(ble_election_packet_t *packet,
     ble_election_pdsf_history_reset(&packet->election.pdsf_history);
 
     // Read election-specific fields
+    uint8_t flags = read_u8(&ptr);
+    packet->election.is_renouncement = (flags & 0x1) != 0;
     packet->election.class_id = read_u16(&ptr);
     packet->election.direct_connections = read_u32(&ptr);
     packet->election.pdsf = read_u32(&ptr);

@@ -12,6 +12,7 @@
 #include "ns3/simulator.h"
 #include "ns3/uinteger.h"
 #include "ns3/double.h"
+#include "ns3/time.h"
 
 namespace ns3 {
 
@@ -40,6 +41,11 @@ BleMeshNode::GetTypeId (void)
                    UintegerValue (10),
                    MakeUintegerAccessor (&BleMeshNode::m_candidacyThreshold),
                    MakeUintegerChecker<uint32_t> ())
+    .AddAttribute ("CrowdingMeasurementDuration",
+                   "Duration of the initial noisy broadcast RSSI measurement window",
+                   TimeValue (Seconds (2.0)),
+                   MakeTimeAccessor (&BleMeshNode::m_crowdingMeasurementDuration),
+                   MakeTimeChecker ())
     .AddTraceSource ("StateChange",
                      "Node state changed",
                      MakeTraceSourceAccessor (&BleMeshNode::m_stateChangeTrace),
@@ -55,6 +61,9 @@ BleMeshNode::BleMeshNode ()
     m_initialTtl (10),
     m_proximityThreshold (10.0),
     m_candidacyThreshold (10),
+    m_crowdingMeasurementDuration (Seconds (2.0)),
+    m_crowdingMeasurementActive (false),
+    m_lastCrowdingFactor (0.0),
     m_messagesSent (0),
     m_messagesReceived (0),
     m_messagesForwarded (0),
@@ -116,6 +125,7 @@ BleMeshNode::Start ()
   NS_LOG_INFO ("Node " << m_nodeId << " starting discovery protocol");
 
   // Start discovery cycle
+  BeginCrowdingMeasurement ();
   m_cycle->Start ();
 }
 
@@ -131,6 +141,12 @@ BleMeshNode::Stop ()
 
   // Clear queue
   m_queue->Clear ();
+
+  if (m_crowdingMeasurementEvent.IsRunning ())
+    {
+      Simulator::Cancel (m_crowdingMeasurementEvent);
+    }
+  m_crowdingMeasurementActive = false;
 }
 
 uint32_t
@@ -181,7 +197,10 @@ BleMeshNode::ReceiveMessage (Ptr<Packet> packet, int8_t rssi)
   m_messagesReceived++;
 
   // Store RSSI for crowding factor calculation (Phase 3)
-  m_election->AddRssiSample (rssi);
+  if (m_crowdingMeasurementActive || m_election->IsCrowdingMeasurementActive ())
+    {
+      m_election->AddRssiSample (rssi);
+    }
   m_election->RecordMessageReceived ();
 
   // Parse header
@@ -219,6 +238,10 @@ BleMeshNode::GetDirectNeighborCount () const
 double
 BleMeshNode::GetCrowdingFactor () const
 {
+  if (!m_crowdingMeasurementActive)
+    {
+      return m_lastCrowdingFactor;
+    }
   return m_election->CalculateCrowding ();
 }
 
@@ -461,6 +484,51 @@ BleMeshNode::CalculateConnectivityScore ()
 
   // Phase 3: Use election module for score calculation
   return m_election->CalculateCandidacyScore ();
+}
+
+void
+BleMeshNode::BeginCrowdingMeasurement ()
+{
+  NS_LOG_FUNCTION (this);
+
+  if (m_crowdingMeasurementDuration.IsZero ())
+    {
+      m_lastCrowdingFactor = 0.0;
+      m_crowdingMeasurementActive = false;
+      return;
+    }
+
+  if (m_crowdingMeasurementEvent.IsRunning ())
+    {
+      Simulator::Cancel (m_crowdingMeasurementEvent);
+    }
+
+  m_election->BeginCrowdingMeasurement (m_crowdingMeasurementDuration);
+  m_crowdingMeasurementActive = true;
+  m_lastCrowdingFactor = 0.0;
+  m_crowdingMeasurementEvent = Simulator::Schedule (m_crowdingMeasurementDuration,
+                                                    &BleMeshNode::EndCrowdingMeasurement,
+                                                    this);
+
+  NS_LOG_INFO ("Node " << m_nodeId << " starting crowding measurement window ("
+                       << m_crowdingMeasurementDuration.GetMilliSeconds () << " ms)");
+}
+
+void
+BleMeshNode::EndCrowdingMeasurement ()
+{
+  NS_LOG_FUNCTION (this);
+
+  if (!m_crowdingMeasurementActive)
+    {
+      return;
+    }
+
+  double factor = m_election->EndCrowdingMeasurement ();
+  m_lastCrowdingFactor = factor;
+  m_crowdingMeasurementActive = false;
+
+  NS_LOG_INFO ("Node " << m_nodeId << " finalized crowding factor = " << factor);
 }
 
 } // namespace ns3

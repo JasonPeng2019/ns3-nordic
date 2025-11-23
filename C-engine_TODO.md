@@ -3,62 +3,28 @@
 
 Portable C event loop driving the discovery cycle, message handling, and node state logic. Build it incrementally alongside the phases outlined in `TODO.md`.
 
-## Phase 2 Scope (Helpers should already exist)
+## Phase 2 Scope (Completed)
+- Context struct, public API, slot scheduler, tick entry point, and basic forwarding logic exist today. Remaining work focuses on Phase 3/4 features below.
 
-1. **Define Engine Context Struct**
-   - Aggregate node state, discovery cycle, message queue, forwarding logic, timers.
-   - Include callback pointers for platform services (radio TX/RX, RNG, logging).
+## Phase 3 Integration Tasks
 
-2. **Public API & Configuration**
-   - `ble_engine_init(ctx, config)` to zero state, wire callbacks, load defaults.
-   - Setters for runtime parameters (slot duration, GPS mode, proximity threshold).
+1. **Phase Scheduler & RSSI Window** ✅
+   - `ble_discovery_engine.c` now orchestrates noisy/neighbor sub-phases through `ble_broadcast_timing`, gates RSSI sampling to the noisy window, and limits neighbor adds to the direct-discovery window. Stale neighbors are pruned each cycle via `ble_election_clean_old_neighbors()`.
 
-3. **Slot Scheduler Integration**
-   - Embed `ble_discovery_cycle_t` inside the engine.
-   - Register internal handlers for slot 0 (own transmit) and slots 1–3 (forwarding).
+2. **Cycle-End State Transitions** ✅
+   - `ble_engine_cycle_complete()` advances statistics, snapshots metrics, and runs the 6→3→1 requirement before transitioning into EDGE/CANDIDATE states.
 
-4. **Engine Tick Entry Point**
-   - Implement `ble_engine_tick(ctx, current_time_ms)`:
-     - Execute the current slot’s handler.
-     - Process RX/TX queues, timers, and pending state transitions.
-     - Advance to the next slot and prepare follow-up work.
+3. **Election Announcement Generation** ✅
+   - Candidate transitions schedule three announcement rounds, build `ble_election_packet_t` (class ID, direct connections, score, hash, ΣΠ history), and emit one packet per discovery cycle until the rounds complete or another candidate wins.
 
-5. **Platform Abstraction Layer (Phase 2 minimum)**
-   - Define function pointers for radio send/receive, RNG, logging, time source.
-   - Allow NS-3 wrapper or embedded firmware to supply implementations at init.
+4. **Election Reception & Conflict Resolution** ✅
+   - `ble_engine_receive_packet()` detects election packets, skips neighbor tracking, bumps the candidate-heard cycle, and demotes the node to EDGE if a higher-ranked candidate (direct count tie-broken by sender ID) is heard.
 
-## Phase 3–4 Extensions (Tasks 12–27 as helpers land)
+5. **Forwarding Queue Enhancements** ✅
+   - The queue stores full `ble_election_packet_t` entries; election forwarding refreshes PDSF/Last Π and enforces the cluster capacity limit before re-broadcasting.
 
-6. **Message Handling Glue**
-   - Integrate noisy broadcast results, queue operations, forwarding decisions, TTL/PDSF updates in one place.
-   - Ensure dedupe, proximity checks, and capacity limits are enforced before TX.
+6. **Metrics Snapshot & Logging** ✅
+   - Metrics are updated once per cycle and optionally surfaced through the new `metrics_cb` hook; `ble_mesh_node_update_statistics()` keeps forwarding stats in sync.
 
-7. **Node State Machine Hooks**
-   - Invoke `ble_mesh_node_*` transitions based on metrics gathered each cycle (edge vs. candidate states).
-   - Update candidacy scores, neighbor stats, GPS cache, and noise level inputs within the engine.
-   - Track when other clusterhead candidates were last heard and apply the dynamic (6→3→1) candidacy threshold logic; trigger election-announcement preparation when becoming candidate.
-
-8. **Election Flooding & Capacity Controls**
-   - Handle multi-round election announcements, PDSF thresholds, renouncement logic once those helpers are implemented.
-
-## Phase 5+ (Routing & Advanced Features)
-
-9. **Routing / Path Management**
-   - Integrate multi-path tracking, Dijkstra shortest-path helpers, and routing tree construction when those modules are ready.
-
-## Cross-Cutting Work (Phases 6–8 as infrastructure matures)
-
-10. **Full Platform Abstraction**
-    - Expand callback surface for mobility updates, logging/tracing, topology generators, etc.
-
-11. **NS-3 Wrapper**
-    - Build `BleEventEngineWrapper` that owns the C context and schedules `Tick()` via `Simulator::Schedule`.
-    - Map NS-3 services (SendPacket, GetPosition, RNG streams) into the core callbacks.
-
-12. **Testing**
-    - Pure C unit tests simulating multiple ticks/cycles to verify callback ordering and state updates.
-    - NS-3 integration tests ensuring the wrapper drives the engine deterministically.
-
-13. **Documentation & Examples**
-    - Document the engine API (init, tick, callback contracts) in the C-core docs.
-    - Add an NS-3 example program demonstrating the event engine in action.
+7. **Renouncement Broadcasts & Documentation** ✅
+   - The engine now floods three renouncement announcements (reusing `ble_election_packet_t` with `is_renouncement=true`) whenever it yields, and all Phase‑3 docs have been brought up to date.

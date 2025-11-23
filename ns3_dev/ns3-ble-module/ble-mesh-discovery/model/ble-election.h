@@ -91,6 +91,21 @@ public:
    * \param rssi RSSI sample (dBm)
    */
   void AddRssiSample (int8_t rssi);
+  /**
+   * \brief Begin noisy broadcast crowding measurement
+   * \param duration Duration of measurement window
+   */
+  void BeginCrowdingMeasurement (Time duration);
+  /**
+   * \brief Finalize crowding measurement and return latest factor
+   * \return Crowding factor (0.0-1.0)
+   */
+  double EndCrowdingMeasurement ();
+  /**
+   * \brief Check if crowding measurement window is active
+   * \return true if RSSI samples are being collected
+   */
+  bool IsCrowdingMeasurementActive () const;
 
   /**
    * \brief Calculate crowding factor (Task 13)
@@ -158,27 +173,9 @@ public:
    * \brief Set candidacy thresholds
    * \param minNeighbors Minimum direct neighbors
    * \param minCnRatio Minimum connection:noise ratio
-   * \param minGeoDist Minimum geographic distribution
+   * \param minGeoDist Reserved for future use (stored but not applied to candidacy decisions)
    */
   void SetThresholds (uint32_t minNeighbors, double minCnRatio, double minGeoDist);
-
-  /**
-   * \brief Set direct connection RSSI threshold
-   * \param threshold RSSI threshold in dBm
-   */
-  void SetDirectRssiThreshold (int8_t threshold);
-
-  /**
-   * \brief Configure score weights used in candidacy calculation
-   * \param directWeight Weight for direct connections
-   * \param ratioWeight Weight for connection:noise ratio
-   * \param geoWeight Weight for geographic distribution
-   * \param forwardingWeight Weight for forwarding success
-   */
-  void SetScoreWeights (double directWeight,
-                        double ratioWeight,
-                        double geoWeight,
-                        double forwardingWeight);
 
   /**
    * \brief Record a message was forwarded (for success rate)

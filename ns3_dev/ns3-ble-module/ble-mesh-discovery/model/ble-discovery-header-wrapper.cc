@@ -69,6 +69,7 @@ BleDiscoveryHeaderWrapper::Print (std::ostream &os) const
       os << ", PDSF=" << m_election.election.pdsf;
       os << ", LastPi=" << m_election.election.last_pi;
       os << ", Score=" << m_election.election.score;
+      os << ", Renouncement=" << (m_election.election.is_renouncement ? "true" : "false");
     }
 }
 
@@ -312,6 +313,19 @@ BleDiscoveryHeaderWrapper::SetAsElectionMessage (void)
   // Sync m_packet with election base
   m_packet = m_election.base;
   m_packet.is_clusterhead_message = true;
+}
+
+void
+BleDiscoveryHeaderWrapper::SetRenouncement (bool renounce)
+{
+  if (!m_isElection) SetAsElectionMessage ();
+  m_election.election.is_renouncement = renounce;
+}
+
+bool
+BleDiscoveryHeaderWrapper::IsRenouncement (void) const
+{
+  return m_isElection ? m_election.election.is_renouncement : false;
 }
 
 void

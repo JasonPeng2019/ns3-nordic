@@ -13,8 +13,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "ble_broadcast_timing.h"
 #include "ble_discovery_cycle.h"
 #include "ble_discovery_packet.h"
+#include "ble_election.h"
 #include "ble_forwarding_logic.h"
 #include "ble_message_queue.h"
 #include "ble_mesh_node.h"
@@ -42,6 +44,21 @@ typedef void (*ble_engine_log_callback)(const char *level,
                                         void *user_context);
 
 /**
+ * @brief Optional callback when connectivity metrics are updated
+ * @param metrics Latest snapshot
+ * @param user_context User context pointer
+ */
+typedef void (*ble_engine_metrics_callback)(const ble_connectivity_metrics_t *metrics,
+                                            void *user_context);
+
+#define BLE_ENGINE_DEFAULT_NOISE_SLOTS 10U
+#define BLE_ENGINE_DEFAULT_NOISE_SLOT_DURATION_MS 200U
+#define BLE_ENGINE_DEFAULT_NEIGHBOR_SLOTS 200U
+#define BLE_ENGINE_DEFAULT_NEIGHBOR_SLOT_DURATION_MS 10U
+#define BLE_ENGINE_DEFAULT_NEIGHBOR_TIMEOUT_CYCLES 3U
+#define BLE_ENGINE_MAX_ELECTION_ROUNDS 3U
+
+/**
  * @brief Engine configuration (static parameters + callbacks)
  */
 typedef struct {
@@ -49,10 +66,22 @@ typedef struct {
     uint32_t slot_duration_ms;         /**< Duration of each discovery slot */
     uint8_t initial_ttl;               /**< TTL for locally-originated messages */
     double proximity_threshold;        /**< GPS proximity threshold (meters) */
+    uint32_t noise_slot_count;         /**< Micro-slots in noisy RSSI phase */
+    uint32_t noise_slot_duration_ms;   /**< Duration of each noisy micro-slot */
+    uint32_t neighbor_slot_count;      /**< Micro-slots in direct neighbor phase */
+    uint32_t neighbor_slot_duration_ms;/**< Duration of each neighbor micro-slot */
+    uint32_t neighbor_timeout_cycles;  /**< Discovery cycles before a neighbor is stale */
     ble_engine_send_callback send_cb;  /**< Packet transmission callback */
     ble_engine_log_callback log_cb;    /**< Optional logging callback */
+    ble_engine_metrics_callback metrics_cb; /**< Optional metrics callback */
     void *user_context;                /**< Passed to callbacks */
 } ble_engine_config_t;
+
+typedef enum {
+    BLE_ENGINE_PHASE_NOISY = 0,
+    BLE_ENGINE_PHASE_NEIGHBOR = 1,
+    BLE_ENGINE_PHASE_DISCOVERY = 2
+} ble_engine_phase_t;
 
 /**
  * @brief Discovery engine context
@@ -64,9 +93,24 @@ typedef struct {
     ble_message_queue_t forward_queue;
     ble_mesh_node_t node;
     ble_discovery_packet_t tx_buffer;
+    ble_election_state_t election;
+    ble_election_packet_t election_packet;
+    ble_election_packet_t renouncement_packet;
+    ble_broadcast_timing_t noisy_timing;
+    ble_broadcast_timing_t neighbor_timing;
+    ble_engine_phase_t phase;
+    uint32_t noisy_slots_completed;
+    uint32_t neighbor_slots_completed;
+    bool phase_listen_active;
     double crowding_factor;
     double proximity_threshold;
+    uint32_t neighbor_timeout_cycles;
     uint32_t last_tick_time_ms;
+    ble_connectivity_metrics_t last_metrics;
+    uint8_t election_rounds_remaining;
+    uint32_t last_election_cycle_sent;
+    uint8_t renouncement_rounds_remaining;
+    uint32_t last_renouncement_cycle_sent;
 } ble_engine_t;
 
 /**

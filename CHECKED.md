@@ -375,15 +375,15 @@ if (!transmit_succeeded) {
 **Design Choices**:
 - **Zero-initialization with memset**: Fast, safe initialization of entire 150-neighbor database
 - **Conservative candidacy defaults**:
-  - Direct RSSI threshold: -70 dBm (typical strong signal boundary)
+  - Neighbor phase: nodes heard during the direct broadcast window are treated as 1-hop neighbors
   - Min neighbors: 10 (prevents premature candidacy in sparse networks)
   - Min connection:noise ratio: 5.0 (ensures significant connectivity advantage)
-  - Min geographic distribution: 0.3 (requires moderate spatial spread, not clustered)
-- **Equal score weights**: Default 0.25 for all four factors (direct connections, cn_ratio, geo distribution, forwarding rate) - neutral baseline
+  - Geographic distribution metric recorded for analytics (no gating)
+- **Simplified scoring baseline**: Score derives from direct neighbor count plus the connection:noise ratio term mandated by the protocol—no extra weighting complexity.
 - **Explicit critical field initialization**: Despite memset, key fields explicitly set for code clarity
 - **No dynamic allocation**: Fixed-size arrays for embedded compatibility
 
-**Key Insight**: The high default thresholds (10 neighbors, 5.0 ratio, 0.3 distribution) create a "prove it" system - nodes must demonstrate significant connectivity before attempting clusterhead candidacy.
+**Key Insight**: The high default thresholds (10 neighbors, 5.0 ratio) create a "prove it" system - nodes must demonstrate significant connectivity before attempting clusterhead candidacy. Geographic distribution is merely logged for visibility.
 
 **Status**: ✅ **PASSED** - Well-balanced defaults prevent premature or weak candidacy
 
@@ -396,9 +396,7 @@ if (!transmit_succeeded) {
 **Design Choices**:
 - **Update-or-insert pattern**: Linear search first, append if not found
 - **Message count tracking**: Increments on every update, measures neighbor reliability
-- **Direct connection classification**:
-  - RSSI ≥ threshold (default -70 dBm) → `is_direct = true` (1-hop neighbor)
-  - RSSI < threshold → `is_direct = false` (multi-hop or weak signal)
+- **Direct neighbor flag**: Every neighbor heard during the dedicated direct-discovery broadcast window is a 1-hop peer, so `is_direct` is set to true whenever an entry is updated.
 - **GPS location optional**: Accepts `NULL` location pointer, only updates when provided
 - **Timestamp always updated**: `last_seen_time_ms` refreshed on every message
 - **Overflow protection**: Silently ignores new neighbors at capacity (150 max)
@@ -414,36 +412,30 @@ if (!transmit_succeeded) {
 
 **Location**: [ble_election.c:78-113](ns3_dev/ns3-ble-module/ble-mesh-discovery/model/protocol-core/ble_election.c#L78-L113)
 
-**Purpose**: Add RSSI sample to circular buffer with timestamp for temporal filtering and automatic stale sample eviction.
+**Purpose**: Add RSSI sample to the dedicated measurement window’s circular buffer (O(1) insert, bounded to the noisy-broadcast phase).
 
 **Design Choices**:
 - **Proper circular buffer**: Head/tail pointers with O(1) insertion (improved from O(n) shift-based)
-- **Timestamp storage**: Each sample stored with `ble_rssi_sample_t` struct (rssi + timestamp_ms)
-- **Dual eviction strategy**:
-  1. **Count-based**: Max 100 samples (memory bounded)
-  2. **Time-based**: Samples older than `rssi_max_age_ms` (default 10 seconds) automatically evicted
-- **Modulo arithmetic**: `(index + 1) % 100` for wraparound
-- **Temporal order assumption**: Newer samples assumed to have later timestamps (enables early-exit in eviction loop)
-- **Memory footprint**: 500 bytes (100 × 5-byte struct) - increased from 100 bytes
+- **Count-based eviction only**: Buffer holds 100 samples; if full, newest sample overwrites oldest
+- **Measurement gating**: Samples are recorded only when `ble_election_begin_crowding_measurement()` has been called; `ble_election_end_crowding_measurement()` finalizes the noisy broadcast window and clears the buffer before normal discovery resumes.
+- **Modulo arithmetic**: `(index + 1) % BLE_RSSI_BUFFER_SIZE` for wraparound
+- **Memory footprint**: 100 bytes (int8_t array) – same as original storage
 
 **Algorithm**:
 ```c
-1. Store sample at tail: rssi_samples[tail] = {rssi, timestamp}
+1. Store sample at tail: rssi_samples[tail] = rssi
 2. Advance tail: tail = (tail + 1) % 100
 3. If buffer full: advance head to evict oldest
-4. Age-based eviction:
-   while oldest_sample.age > max_age_ms:
-       evict by advancing head
 ```
 
-**Key Insight**: **Mobile-node optimized** - ensures crowding measurements reflect only recent network conditions (≤10 seconds). For nodes moving between sparse and dense areas, this eliminates the 50-100 sample lag of the old shift-based approach, providing ~1-2 second adaptation time.
+**Key Insight**: **Mobile-node optimized** - the buffer is active only during the 2 s noisy broadcast window, so the crowing reading always reflects the most recent measurement period. For nodes moving between sparse and dense areas, this eliminates the 50-100 sample lag of the old shift-based approach, providing ~1-2 second adaptation time.
 
 **Breaking Change**: Function signature changed from `(state, rssi)` to `(state, rssi, current_time_ms)` - all callers must be updated.
 
 **Performance**:
 - Insertion: O(n) → O(1) ✅ **Improved**
-- Eviction: O(1) + O(k) where k = stale samples (typically 0-5)
-- Memory: 100 bytes → 500 bytes (+400 bytes)
+- Eviction: O(1)
+- Memory: 100 bytes → 100 bytes (no growth)
 
 **Status**: ✅ **PASSED** - Superior design for mobile deployments with explicit temporal control
 
@@ -525,6 +517,8 @@ distribution = min(1.0, sqrt(variance / 1000.0))
 
 **Status**: ✅ **PASSED** - Sophisticated spatial analysis with appropriate normalization
 
+**Note**: The resulting score is stored in `ble_connectivity_metrics_t` for analytics/monitoring but is not currently used to gate candidacy decisions.
+
 ---
 
 ### ✅ `ble_election_update_metrics(state)`
@@ -555,51 +549,32 @@ distribution = min(1.0, sqrt(variance / 1000.0))
 
 ---
 
-### ✅ `ble_election_set_score_weights(state, weights)`
-
-**Location**: [ble_election.c:254-262](ns3_dev/ns3-ble-module/ble-mesh-discovery/model/protocol-core/ble_election.c#L254-L262)
-
-**Design Choices**:
-- **Optional parameter**: `NULL` weights resets to defaults (0.25 each)
-- **Struct copy**: Copies entire `ble_score_weights_t` (4 doubles)
-- **No validation**: Accepts any weights, allows experimentation
-- **Default weights**: Equal (0.25) for all four factors
-- **Tuning flexibility**: Enables scenario-specific optimization without recompilation
-
-**Four Factors**:
-1. `direct_connections` - Neighbor count weight
-2. `connection_noise_ratio` - Connectivity vs crowding weight
-3. `geographic_distribution` - Spatial spread weight
-4. `forwarding_success_rate` - Reliability weight
-
-**Key Insight**: Provides **runtime tuning** for different deployment scenarios (e.g., high-traffic networks might prioritize forwarding success, sparse networks might prioritize geographic distribution).
-
-**Status**: ✅ **PASSED** - Flexible configuration mechanism enabling scenario-specific optimization
-
----
-
 ### ✅ `ble_election_calculate_candidacy_score(state)`
 
 **Location**: [ble_election.c:264-281](ns3_dev/ns3-ble-module/ble-mesh-discovery/model/protocol-core/ble_election.c#L264-L281)
 
 **Design Choices**:
-- **Normalized inputs**: All metrics pre-normalized to [0.0, 1.0] range
-- **Direct connections normalization**: Divides by 30.0 (expected max neighbors)
-- **Connection:noise normalization**: Divides by 10.0 (expected max ratio)
-- **Weighted sum formula**:
+- **Protocol-aligned formula**:
   ```c
-  score = w₁·(direct/30) + w₂·(cn_ratio/10) + w₃·geo_dist + w₄·fwd_rate
+  double base        = (double)direct_connections;
+  double neighborPct = 0.0;
+  if (BLE_DISCOVERY_MAX_CLUSTER_SIZE > 0)
+  {
+      neighborPct = (double)direct_connections /
+                    (double)BLE_DISCOVERY_MAX_CLUSTER_SIZE;
+  }
+  double noisePenalty = 1.0 / (noise_level + 1.0);
+  double ratioBonus   = neighborPct * noisePenalty;
+  return base + ratioBonus;
   ```
-- **Clamped output**: Final score clamped to [0.0, 1.0]
-- **No threshold enforcement**: Pure scoring function, separate from candidacy decision
+  - More direct neighbors always increase the score.
+  - High noise shrinks the bonus term, reflecting diminished marginal value.
+- **No artificial normalization or weighting**: Mirrors the discovery_protocol.txt description directly.
+- **No clamping**: Allows highly connected nodes to dominate as intended.
 
-**Normalization Constants**:
-- **30 connections**: Empirically tuned for typical BLE mesh density (150 max neighbors, ~20% direct)
-- **10.0 cn_ratio**: Expected max ratio in realistic scenarios
+**Key Insight**: Keeps scoring transparent—edges with richer local connectivity automatically rank higher without extra tuning knobs.
 
-**Key Insight**: Normalization constants are **empirically tuned** based on expected network densities. They ensure no single factor dominates regardless of absolute magnitudes.
-
-**Status**: ✅ **PASSED** - Well-balanced multi-factor scoring with appropriate normalization
+**Status**: ✅ **PASSED** - Deterministic, protocol-compliant scoring
 
 ---
 
@@ -631,7 +606,7 @@ distribution = min(1.0, sqrt(variance / 1000.0))
 **Location**: [ble_election.c:309-319](ns3_dev/ns3-ble-module/ble-mesh-discovery/model/protocol-core/ble_election.c#L309-L319)
 
 **Design Choices**:
-- **Three configurable thresholds**: Direct neighbors, cn_ratio, geographic distribution
+- **Two active thresholds**: Direct neighbors + connection:noise ratio (geographic parameter retained for logging only)
 - **No validation**: Accepts any values (enables extreme scenarios for testing)
 - **Immediate effect**: Next `should_become_candidate()` call uses new thresholds
 - **No state invalidation**: Doesn't force re-evaluation, waits for next check
@@ -719,15 +694,14 @@ for i = neighbor_count-1 down to 0:
 **Functions Reviewed**:
 1. `ble_election_init()`
 2. `ble_election_update_neighbor()`
-3. `ble_election_add_rssi_sample()` ⚠️ **UPGRADED** - Circular buffer with timestamp eviction
+3. `ble_election_add_rssi_sample()` ⚠️ **UPGRADED** - Circular buffer gated by noisy broadcast window
 4. `ble_election_calculate_crowding()`
 5. `ble_election_count_direct_connections()`
 6. `ble_election_calculate_geographic_distribution()`
 7. `ble_election_update_metrics()`
-8. `ble_election_set_score_weights()`
-9. `ble_election_calculate_candidacy_score()`
-10. `ble_election_should_become_candidate()`
-11. `ble_election_set_thresholds()`
+8. `ble_election_calculate_candidacy_score()`
+9. `ble_election_should_become_candidate()`
+10. `ble_election_set_thresholds()`
 12. `ble_election_get_neighbor()`
 13. `ble_election_clean_old_neighbors()`
 
@@ -739,10 +713,10 @@ for i = neighbor_count-1 down to 0:
 **Status**: ⏭️ **SKIPPED** - Listed as enhancements rather than discrete functions
 
 **Changes**:
-- Added `ble_score_weights_t` struct + `BLE_DEFAULT_SCORE_WEIGHTS`
+- Simplified scoring to direct connections + connection:noise; removed unused weighting struct
 - Expanded `ble_discovery_packet_t` with `is_clusterhead_message` flag
 - New `ble_pdsf_history_t` structures for PDSF prediction tracking
-- Enhanced score calculation with weighted metrics
+- Simplified score calculation now matches the direct-neighbor + connection:noise ratio formula
 - Last Π storage/serialization for rebroadcast continuity
 
 **Rationale**: These are structural enhancements and data structure additions rather than standalone functions requiring design analysis. The scoring functionality was already reviewed in section 3.2 (`ble_election_calculate_candidacy_score`).
@@ -785,7 +759,7 @@ Wraps the C election module reviewed in section 3.2. Provides:
 - Metrics and score calculation: `CalculateGeographicDistribution`, `UpdateMetrics`, `CalculateCandidacyScore`
 - Candidacy decision: `ShouldBecomeCandidate`
 - Database access: `GetMetrics`, `GetNeighbors`, `GetNeighbor`, `CleanOldNeighbors`
-- Configuration: `SetThresholds`, `SetDirectRssiThreshold`, `SetScoreWeights`
+  - Configuration: `SetThresholds`
 - Forwarding hooks: `RecordMessageForwarded`, `RecordMessageReceived`
 - Type conversion: NS-3 `Vector` ↔ `ble_gps_location_t`, `Time` ↔ milliseconds
 
@@ -927,23 +901,4 @@ But this is unrealistic for BLE mesh:
 Nodes don't teleport
 Network density changes gradually (nodes move, join, leave over seconds/minutes)
 Even a node moving at 10 m/s takes seconds to traverse sparse → dense transition
-Optimal Compromise: Configurable Window
-The current implementation actually allows tuning: From RSSI_CIRCULAR_BUFFER_UPGRADE.md:189-192:
-// Default is 10 seconds, but can be changed:
-state.rssi_max_age_ms = 5000;  // 5 second window
-state.rssi_max_age_ms = 30000; // 30 second window
-For different scenarios:
-High mobility: Use 5-second window (faster adaptation)
-Stable network: Use 30-second window (more stable crowding)
-Cycle-based: Set rssi_max_age_ms = cycle_duration_ms (effectively cycle-reset)
-Summary: Why Time-Based Wins
-Criterion	Time-Based (10s)	Cycle-Reset (400ms)
-Statistical stability	✅ 100+ samples	❌ 1-50 samples (variable)
-Mobile node adaptation	✅ Predictable 10s lag	⚠️ Fast but oscillates
-Burst resistance	✅ Smoothed over time	❌ Single-cycle spikes
-Candidacy stability	✅ Consistent decisions	❌ Flickering candidacy
-Protocol independence	✅ Decoupled from cycles	❌ Tightly coupled
-Sparse area handling	✅ Accumulates samples	❌ Insufficient data
-Implementation complexity	⚠️ Timestamp tracking	✅ Simple reset
-The time-based approach trades slightly more complexity (timestamp tracking) for significantly more robust crowding estimation that works across diverse network conditions.
-ok, my code is not supposed to work this wayu. the rssi measurement is supposed to measure the noise floor by getting all the devices in a certain 2 second period to talk, and then you listen for the minority of this period to determine how "crowded" the area around you is for this cycle. the rssi measurement ONLY measures for these 2 seconds, and then actual communication is implemented and rssi is never revisited. does my current code do this, or are the problems you described actually relevant?
+**Current behavior**: Because `ble_election_begin_crowding_measurement()` / `end_crowding_measurement()` gate the buffer, RSSI collection already matches the 2-second noisy broadcast window defined in `discovery_protocol.txt`. Outside that window nothing is recorded, so the measurement captures only the intended noise-floor phase.

@@ -352,18 +352,6 @@ void test_should_become_edge(void)
 
     result = ble_mesh_node_should_become_edge(&node);
     TEST_ASSERT(result == false, "Node with 4 direct neighbors should not become edge");
-
-    // Test weak RSSI case
-    ble_mesh_node_t node2;
-    ble_mesh_node_init(&node2, 41);
-
-    // Add 5 neighbors but with very weak RSSI
-    for (int i = 0; i < 5; i++) {
-        ble_mesh_node_add_neighbor(&node2, 100 + i, -80, 1); // Below threshold
-    }
-
-    result = ble_mesh_node_should_become_edge(&node2);
-    TEST_ASSERT(result == true, "Node with weak RSSI should become edge");
 }
 
 void test_should_become_candidate(void)

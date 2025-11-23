@@ -186,6 +186,18 @@ public:
   void SetAsElectionMessage (void);
 
   /**
+   * \brief Mark packet as renouncement
+   * \param renounce true if announcing renouncement
+   */
+  void SetRenouncement (bool renounce);
+
+  /**
+   * \brief Check if packet is a renouncement
+   * \return true if renouncement announcement
+   */
+  bool IsRenouncement (void) const;
+
+  /**
    * \brief Set class ID
    * \param classId the class ID
    */
@@ -277,6 +289,18 @@ public:
    * \return reference to election packet
    */
   const ble_election_packet_t& GetCElectionPacket (void) const { return m_election; }
+
+  /**
+   * \brief Mutable access to discovery packet (for internal bridging)
+   * \return reference to discovery packet
+   */
+  ble_discovery_packet_t& GetCPacketMutable (void) { return m_packet; }
+
+  /**
+   * \brief Mutable access to election packet (for internal bridging)
+   * \return reference to election packet
+   */
+  ble_election_packet_t& GetCElectionPacketMutable (void) { return m_election; }
 
 private:
   bool m_isElection;                  //!< Track if this is election message

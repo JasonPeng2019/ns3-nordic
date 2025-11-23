@@ -15,6 +15,7 @@
 #include "ns3/vector.h"
 #include "ns3/traced-callback.h"
 #include "ns3/mobility-model.h"
+#include "ns3/event-id.h"
 #include "ble-discovery-cycle.h"
 #include "ble-message-queue.h"
 #include "ble-forwarding-logic.h"
@@ -191,6 +192,16 @@ private:
    */
   double CalculateConnectivityScore ();
 
+  /**
+   * \brief Begin noisy broadcast crowding measurement window
+   */
+  void BeginCrowdingMeasurement ();
+
+  /**
+   * \brief Finish crowding measurement and cache results
+   */
+  void EndCrowdingMeasurement ();
+
   // Node identity and state
   uint32_t m_nodeId;                          //!< This node's ID
   Ptr<Node> m_node;                           //!< NS-3 Node object
@@ -209,6 +220,10 @@ private:
 
   // Transmission callback
   TransmitCallback m_transmitCallback;        //!< Callback to lower layer
+  Time m_crowdingMeasurementDuration;         //!< Duration of RSSI measurement window
+  EventId m_crowdingMeasurementEvent;         //!< Scheduled end of measurement
+  bool m_crowdingMeasurementActive;           //!< True if collecting RSSI samples
+  double m_lastCrowdingFactor;                //!< Cached crowding factor
 
   // Configuration parameters
   uint8_t m_initialTtl;                       //!< Initial TTL for discovery messages

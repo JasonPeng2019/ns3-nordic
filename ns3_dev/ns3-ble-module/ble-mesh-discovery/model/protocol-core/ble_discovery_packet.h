@@ -29,20 +29,6 @@ extern "C" {
 #define BLE_DISCOVERY_MAX_CLUSTER_SIZE 150  /**< Maximum devices per cluster */
 #define BLE_PDSF_MAX_HOPS BLE_DISCOVERY_MAX_PATH_LENGTH /**< Maximum hops tracked for PDSF */
 
-/* ===== Score Calculation Constants ===== */
-
-/**
- * @brief Weights for clusterhead score calculation
- */
-typedef struct {
-    double direct_weight;            /**< Weight for direct connections */
-    double connection_noise_weight;  /**< Weight for connection:noise ratio */
-    double geographic_weight;        /**< Weight for geographic distribution */
-    double forwarding_weight;        /**< Weight for forwarding success */
-} ble_score_weights_t;
-
-extern const ble_score_weights_t BLE_DEFAULT_SCORE_WEIGHTS;
-
 /* ===== Message Types ===== */
 
 /**
@@ -112,6 +98,7 @@ typedef struct {
     double score;                /**< Clusterhead candidacy score (0.0-1.0) */
     uint32_t hash;               /**< FDMA/TDMA hash function value */
     ble_pdsf_history_t pdsf_history; /**< Hop-by-hop direct connection history */
+    bool is_renouncement;        /**< True if this packet announces renouncement */
 } ble_election_data_t;
 
 /**

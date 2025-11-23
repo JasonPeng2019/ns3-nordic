@@ -49,19 +49,30 @@ BleMessageQueue::Enqueue (Ptr<Packet> packet, const BleDiscoveryHeaderWrapper& h
 {
   NS_LOG_FUNCTION (this << packet << nodeId);
 
-  // Get C packet structure from wrapper (const reference)
-  const ble_discovery_packet_t& c_packet = header.GetCPacket ();
+  const ble_discovery_packet_t *cPacketPtr = nullptr;
+  ble_discovery_packet_t temp_packet;
+
+  if (header.IsElectionMessage ())
+    {
+      const ble_election_packet_t& election = header.GetCElectionPacket ();
+      cPacketPtr = reinterpret_cast<const ble_discovery_packet_t *> (&election);
+    }
+  else
+    {
+      temp_packet = header.GetCPacket ();
+      cPacketPtr = &temp_packet;
+    }
 
   // Get current time in milliseconds
   uint32_t current_time_ms = static_cast<uint32_t> (Simulator::Now ().GetMilliSeconds ());
 
   // Call C core function
-  bool result = ble_queue_enqueue (&m_queue, &c_packet, nodeId, current_time_ms);
+  bool result = ble_queue_enqueue (&m_queue, cPacketPtr, nodeId, current_time_ms);
 
   if (result)
     {
-      NS_LOG_DEBUG ("Message enqueued (sender=" << c_packet.sender_id
-                    << ", TTL=" << static_cast<uint32_t> (c_packet.ttl)
+      NS_LOG_DEBUG ("Message enqueued (sender=" << cPacketPtr->sender_id
+                    << ", TTL=" << static_cast<uint32_t> (cPacketPtr->ttl)
                     << ", queueSize=" << m_queue.size << ")");
     }
   else
@@ -77,7 +88,7 @@ BleMessageQueue::Dequeue (BleDiscoveryHeaderWrapper& header)
 {
   NS_LOG_FUNCTION (this);
 
-  ble_discovery_packet_t c_packet;
+  ble_election_packet_t c_packet;
 
   // Call C core function
   if (!ble_queue_dequeue (&m_queue, &c_packet))
@@ -89,25 +100,24 @@ BleMessageQueue::Dequeue (BleDiscoveryHeaderWrapper& header)
   // Create new wrapper with C packet data
   // We need to manually set all fields since there's no SetFromCPacket method
   BleDiscoveryHeaderWrapper newHeader;
-  newHeader.SetSenderId (c_packet.sender_id);
-  newHeader.SetTtl (c_packet.ttl);
-  for (uint16_t i = 0; i < c_packet.path_length; ++i)
+  if (c_packet.base.message_type == BLE_MSG_ELECTION_ANNOUNCEMENT)
     {
-      newHeader.AddToPath (c_packet.path[i]);
+      newHeader.SetAsElectionMessage ();
+      ble_election_packet_t &dst = newHeader.GetCElectionPacketMutable ();
+      dst = c_packet;
+      newHeader.GetCPacketMutable () = dst.base;
     }
-  if (c_packet.gps_available)
+  else
     {
-      newHeader.SetGpsLocation (Vector (c_packet.gps_location.x,
-                                         c_packet.gps_location.y,
-                                         c_packet.gps_location.z));
+      newHeader.GetCPacketMutable () = c_packet.base;
     }
   header = newHeader;
 
   // Create packet
   Ptr<Packet> packet = Create<Packet> ();
 
-  NS_LOG_DEBUG ("Message dequeued (sender=" << c_packet.sender_id
-                << ", TTL=" << static_cast<uint32_t> (c_packet.ttl)
+  NS_LOG_DEBUG ("Message dequeued (sender=" << c_packet.base.sender_id
+                << ", TTL=" << static_cast<uint32_t> (c_packet.base.ttl)
                 << ", queueSize=" << m_queue.size << ")");
 
   return packet;
@@ -118,7 +128,7 @@ BleMessageQueue::Peek (BleDiscoveryHeaderWrapper& header) const
 {
   NS_LOG_FUNCTION (this);
 
-  ble_discovery_packet_t c_packet;
+  ble_election_packet_t c_packet;
 
   // Call C core function
   if (!ble_queue_peek (&m_queue, &c_packet))
@@ -128,17 +138,16 @@ BleMessageQueue::Peek (BleDiscoveryHeaderWrapper& header) const
 
   // Create new wrapper with C packet data
   BleDiscoveryHeaderWrapper newHeader;
-  newHeader.SetSenderId (c_packet.sender_id);
-  newHeader.SetTtl (c_packet.ttl);
-  for (uint16_t i = 0; i < c_packet.path_length; ++i)
+  if (c_packet.base.message_type == BLE_MSG_ELECTION_ANNOUNCEMENT)
     {
-      newHeader.AddToPath (c_packet.path[i]);
+      newHeader.SetAsElectionMessage ();
+      ble_election_packet_t &dst = newHeader.GetCElectionPacketMutable ();
+      dst = c_packet;
+      newHeader.GetCPacketMutable () = dst.base;
     }
-  if (c_packet.gps_available)
+  else
     {
-      newHeader.SetGpsLocation (Vector (c_packet.gps_location.x,
-                                         c_packet.gps_location.y,
-                                         c_packet.gps_location.z));
+      newHeader.GetCPacketMutable () = c_packet.base;
     }
   header = newHeader;
 

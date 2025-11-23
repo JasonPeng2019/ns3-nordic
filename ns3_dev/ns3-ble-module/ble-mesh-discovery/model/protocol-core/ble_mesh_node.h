@@ -26,8 +26,6 @@ extern "C" {
 #define BLE_MESH_MAX_NEIGHBORS 150      /**< Maximum neighbors per node */
 #define BLE_MESH_INVALID_NODE_ID 0      /**< Invalid/unassigned node ID */
 #define BLE_MESH_DISCOVERY_TIMEOUT 90   /**< Discovery phase timeout in cycles */
-#define BLE_MESH_EDGE_RSSI_THRESHOLD -70 /**< RSSI threshold for edge detection (dBm) */
-
 /* ===== Node State Enumeration ===== */
 
 /**

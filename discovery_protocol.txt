@@ -79,7 +79,11 @@ randomly take a few broadcast slots so nearby nodes can decode them.
 The number of transmit slots is crowding-aware: as low as 3 slots in very
 dense deployments (to avoid collisions) up to 15 slots in sparse deployments
 (to increase robustness). Each decoded broadcast counts toward the direct
-connection total.
+connection total. After every discovery cycle, each device compares the
+`last_heard_cycle` for every neighbor against a tunable timeout (default:
+3 cycles) and evicts any entries older than that threshold. This keeps
+the neighbor table bounded and ensures direct-connection counts reflect
+only currently reachable peers.
 •Clusterhead Candidacy: Each bluetooth node will elect itself a clus-
 terhead or edge, determined by a function of the ratio between direct
 connection count and noise heard. The motivation for using ratio lies
@@ -156,7 +160,8 @@ ping coverage:
 6. Election Re-announcement Nodes that initially qualified for candidacy
 but heard a clusterhead candidate that had a higher direct connection
 count will re-announce upon the follwing cycles that they have renounced
-their candidacy.
+their candidacy. The implementation marks these as `is_renouncement` election
+packets and floods three rounds just like the initial candidacy announcement.
 7. Cluster Formation: Once Clusterheads are established, Edge nodes
 align themselves with the Clusterhead from which they received the lower
 length path or the highest ”direct count” message. Devices will ”memo-
