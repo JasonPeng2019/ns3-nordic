@@ -237,6 +237,7 @@ BleMeshNodeElectionTestCase::DoRun (void)
   // Test candidate node decision (many neighbors)
   Ptr<BleMeshNodeWrapper> candidateNode = CreateObject<BleMeshNodeWrapper> ();
   candidateNode->Initialize (301);
+  candidateNode->SetNoiseLevel (0.0);
   for (uint32_t i = 0; i < 10; i++)
     {
       candidateNode->AddNeighbor (1000 + i, -50, 1);
@@ -245,11 +246,27 @@ BleMeshNodeElectionTestCase::DoRun (void)
   shouldBeEdge = candidateNode->ShouldBecomeEdge ();
   NS_TEST_ASSERT_MSG_EQ (shouldBeEdge, false, "Node with 10 neighbors should not become edge");
 
+  // Initial cycle should still fail (threshold n=6)
   shouldBeCandidate = candidateNode->ShouldBecomeCandidate ();
-  NS_TEST_ASSERT_MSG_EQ (shouldBeCandidate, true, "Node with 10 neighbors should be candidate");
+  NS_TEST_ASSERT_MSG_EQ (shouldBeCandidate, false, "Initial threshold should block candidacy");
+
+  candidateNode->AdvanceCycle ();
+  shouldBeCandidate = candidateNode->ShouldBecomeCandidate ();
+  NS_TEST_ASSERT_MSG_EQ (shouldBeCandidate, false, "Second cycle (n=3) should still block candidacy");
+
+  candidateNode->AdvanceCycle ();
+  shouldBeCandidate = candidateNode->ShouldBecomeCandidate ();
+  NS_TEST_ASSERT_MSG_EQ (shouldBeCandidate, true, "Third cycle with no candidates heard should allow candidacy");
+
+  candidateNode->MarkCandidateHeard ();
+  candidateNode->SetNoiseLevel (50.0);
+  candidateNode->AdvanceCycle ();
+  candidateNode->AdvanceCycle ();
+  shouldBeCandidate = candidateNode->ShouldBecomeCandidate ();
+  NS_TEST_ASSERT_MSG_EQ (shouldBeCandidate, false, "Hearing candidates and high noise should block candidacy");
 
   // Test candidacy score
-  double score = candidateNode->CalculateCandidacyScore (0.5, 0.8);
+  double score = candidateNode->CalculateCandidacyScore (0.5);
   NS_TEST_ASSERT_MSG_GT (score, 0.0, "Candidacy score should be positive");
 
   candidateNode->SetCandidacyScore (42.5);

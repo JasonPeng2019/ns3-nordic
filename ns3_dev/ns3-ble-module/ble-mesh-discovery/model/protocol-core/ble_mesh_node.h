@@ -25,7 +25,7 @@ extern "C" {
 
 #define BLE_MESH_MAX_NEIGHBORS 150      /**< Maximum neighbors per node */
 #define BLE_MESH_INVALID_NODE_ID 0      /**< Invalid/unassigned node ID */
-#define BLE_MESH_DISCOVERY_TIMEOUT 30   /**< Discovery phase timeout in cycles */
+#define BLE_MESH_DISCOVERY_TIMEOUT 90   /**< Discovery phase timeout in cycles */
 #define BLE_MESH_EDGE_RSSI_THRESHOLD -70 /**< RSSI threshold for edge detection (dBm) */
 
 /* ===== Node State Enumeration ===== */
@@ -115,6 +115,8 @@ typedef struct {
     uint32_t pdsf;                  /**< Predicted Devices So Far */
     double candidacy_score;         /**< Clusterhead candidacy score (0.0-1.0) */
     uint32_t election_hash;         /**< FDMA/TDMA hash value */
+    double noise_level;             /**< Last measured noise/crowding level */
+    uint32_t last_candidate_heard_cycle; /**< Discovery cycle when another candidate was last heard */
 
     /* Timing */
     uint32_t current_cycle;         /**< Current discovery cycle number */
@@ -270,12 +272,10 @@ uint16_t ble_mesh_node_prune_stale_neighbors(ble_mesh_node_t *node, uint32_t max
  * @brief Calculate candidacy score for clusterhead election
  * @param node Pointer to node structure
  * @param noise_level Measured noise level
- * @param geographic_distribution Geographic distribution metric (0.0-1.0)
- * @return Candidacy score (0.0-1.0)
+ * @return Candidacy score (higher = better)
  */
 double ble_mesh_node_calculate_candidacy_score(const ble_mesh_node_t *node,
-                                                 double noise_level,
-                                                 double geographic_distribution);
+                                                 double noise_level);
 
 /**
  * @brief Update node statistics
@@ -296,6 +296,19 @@ bool ble_mesh_node_should_become_edge(const ble_mesh_node_t *node);
  * @return true if node should become candidate
  */
 bool ble_mesh_node_should_become_candidate(const ble_mesh_node_t *node);
+
+/**
+ * @brief Set the last measured noise/crowding level
+ * @param node Pointer to node structure
+ * @param noise_level Noise level value (>= 0)
+ */
+void ble_mesh_node_set_noise_level(ble_mesh_node_t *node, double noise_level);
+
+/**
+ * @brief Mark that another clusterhead candidate was heard
+ * @param node Pointer to node structure
+ */
+void ble_mesh_node_mark_candidate_heard(ble_mesh_node_t *node);
 
 /**
  * @brief Increment message sent counter

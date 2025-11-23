@@ -214,10 +214,9 @@ public:
   /**
    * \brief Calculate candidacy score
    * \param noiseLevel Measured noise level
-   * \param geographicDistribution Geographic distribution metric (0.0-1.0)
-   * \return Candidacy score (0.0-1.0)
+   * \return Candidacy score (higher = better)
    */
-  double CalculateCandidacyScore (double noiseLevel, double geographicDistribution);
+  double CalculateCandidacyScore (double noiseLevel);
 
   /**
    * \brief Get candidacy score
@@ -242,6 +241,17 @@ public:
    * \param pdsf PDSF value
    */
   void SetPdsf (uint32_t pdsf);
+
+  /**
+   * \brief Set the most recent noise level measurement
+   * \param noiseLevel Noise value (>=0)
+   */
+  void SetNoiseLevel (double noiseLevel);
+
+  /**
+   * \brief Mark that another clusterhead candidate was heard
+   */
+  void MarkCandidateHeard (void);
 
   /**
    * \brief Get election hash

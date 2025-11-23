@@ -23,9 +23,25 @@ extern "C" {
 
 /* ===== Constants ===== */
 
+//JASON - change TTL and path length as needed
 #define BLE_DISCOVERY_MAX_PATH_LENGTH 50    /**< Maximum nodes in path */
 #define BLE_DISCOVERY_DEFAULT_TTL 10        /**< Default Time To Live */
 #define BLE_DISCOVERY_MAX_CLUSTER_SIZE 150  /**< Maximum devices per cluster */
+#define BLE_PDSF_MAX_HOPS BLE_DISCOVERY_MAX_PATH_LENGTH /**< Maximum hops tracked for PDSF */
+
+/* ===== Score Calculation Constants ===== */
+
+/**
+ * @brief Weights for clusterhead score calculation
+ */
+typedef struct {
+    double direct_weight;            /**< Weight for direct connections */
+    double connection_noise_weight;  /**< Weight for connection:noise ratio */
+    double geographic_weight;        /**< Weight for geographic distribution */
+    double forwarding_weight;        /**< Weight for forwarding success */
+} ble_score_weights_t;
+
+extern const ble_score_weights_t BLE_DEFAULT_SCORE_WEIGHTS;
 
 /* ===== Message Types ===== */
 
@@ -55,6 +71,7 @@ typedef struct {
  */
 typedef struct {
     ble_message_type_t message_type;  /**< Message type */
+    bool is_clusterhead_message;      /**< Clusterhead flag (true for election announcements) */
     uint32_t sender_id;               /**< Unique identifier of sender */
     uint8_t ttl;                      /**< Time To Live (hops remaining) */
 
@@ -70,13 +87,30 @@ typedef struct {
 /* ===== Election Announcement Extension ===== */
 
 /**
- * @brief Election announcement specific fields
+ * @brief Tracks direct connection counts per hop for PDSF calculation
  */
 typedef struct {
-    uint16_t class_id;   /**< Clusterhead class identifier */
-    uint32_t pdsf;       /**< Predicted Devices So Far */
-    double score;        /**< Clusterhead candidacy score (0.0-1.0) */
-    uint32_t hash;       /**< FDMA/TDMA hash function value */
+    uint16_t hop_count;                              /**< Number of hops recorded */
+    uint32_t direct_counts[BLE_PDSF_MAX_HOPS];       /**< Direct connection counts per hop */
+} ble_pdsf_history_t;
+
+/**
+ * @brief Election announcement specific fields
+ *
+ * Fields required for Phase 4 election:
+ * - class_id: Identifies the clusterhead's class/group
+ * - direct_connections: Number of 1-hop neighbors (used for conflict resolution)
+ * - pdsf: Predicted Devices So Far (for cluster capacity limiting)
+ * - score: Candidacy score (weighted metric combination)
+ * - hash: FDMA/TDMA slot assignment hash
+ */
+typedef struct {
+    uint16_t class_id;           /**< Clusterhead class identifier */
+    uint32_t direct_connections; /**< Number of direct (1-hop) neighbors - for conflict resolution */
+    uint32_t pdsf;               /**< Predicted Devices So Far */
+    double score;                /**< Clusterhead candidacy score (0.0-1.0) */
+    uint32_t hash;               /**< FDMA/TDMA hash function value */
+    ble_pdsf_history_t pdsf_history; /**< Hop-by-hop direct connection history */
 } ble_election_data_t;
 
 /**
@@ -192,23 +226,47 @@ uint32_t ble_election_deserialize(ble_election_packet_t *packet,
                                     uint32_t buffer_size);
 
 /**
- * @brief Calculate PDSF (Predicted Devices So Far)
- * @param direct_counts Array of direct connection counts at each hop
- * @param hop_count Number of hops
- * @return PDSF value
+ * @brief Update PDSF (Predicted Devices So Far) based on local neighbors
+ * @param previous_pdsf PDSF value carried with the incoming packet (use 1 for first hop)
+ * @param direct_neighbors Number of direct neighbors observed during the crowding measurement
+ * @return Updated PDSF including this hop's predicted reach
  */
-uint32_t ble_election_calculate_pdsf(const uint32_t *direct_counts, uint16_t hop_count);
+uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf, uint32_t direct_neighbors);
 
 /**
  * @brief Calculate clusterhead candidacy score
  * @param direct_connections Number of direct connections
  * @param noise_level Measured noise level (RSSI-based)
- * @param geographic_distribution Geographic distribution metric (0.0-1.0)
- * @return Candidacy score (0.0-1.0)
+ * @return Candidacy score (higher = better)
  */
 double ble_election_calculate_score(uint32_t direct_connections,
-                                      double noise_level,
-                                      double geographic_distribution);
+                                      double noise_level);
+
+/**
+ * @brief Reset PDSF history accumulator
+ * @param history History structure to reset
+ */
+void ble_election_pdsf_history_reset(ble_pdsf_history_t *history);
+
+/**
+ * @brief Append a direct-connection count to the PDSF history
+ * @param history History structure
+ * @param direct_connections Count recorded at this hop
+ * @return true if appended successfully
+ */
+bool ble_election_pdsf_history_add(ble_pdsf_history_t *history,
+                                   uint32_t direct_connections);
+
+/**
+ * @brief Recalculate running PDSF after observing new neighbors
+ * @param packet Election packet being updated (history consumed)
+ * @param direct_connections New neighbor count at this hop
+ * @param already_reached Nodes already covered by previous hops
+ * @return Updated PDSF value
+ */
+uint32_t ble_election_update_pdsf(ble_election_packet_t *packet,
+                                  uint32_t direct_connections,
+                                  uint32_t already_reached);
 
 /**
  * @brief Generate FDMA/TDMA hash from node ID

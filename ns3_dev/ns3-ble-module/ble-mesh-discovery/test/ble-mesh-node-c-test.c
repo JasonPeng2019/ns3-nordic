@@ -372,6 +372,7 @@ void test_should_become_candidate(void)
 
     ble_mesh_node_t node;
     ble_mesh_node_init(&node, 50);
+    ble_mesh_node_set_noise_level(&node, 0.0);
 
     // Node with few neighbors should not be candidate
     ble_mesh_node_add_neighbor(&node, 100, -50, 1);
@@ -385,8 +386,34 @@ void test_should_become_candidate(void)
     ble_mesh_node_add_neighbor(&node, 103, -60, 1);
     ble_mesh_node_add_neighbor(&node, 104, -60, 1);
 
+    // Initial cycle (n=6) should still fail
     result = ble_mesh_node_should_become_candidate(&node);
-    TEST_ASSERT(result == true, "Node with 5 direct neighbors and good RSSI should be candidate");
+    TEST_ASSERT(result == false, "High threshold should block candidacy initially");
+
+    // After one cycle with no candidates heard (n=3)
+    node.current_cycle = 1;
+    result = ble_mesh_node_should_become_candidate(&node);
+    TEST_ASSERT(result == false, "Threshold of 3 should still block candidacy");
+
+    // After two silent cycles (n=1) candidacy should pass
+    node.current_cycle = 2;
+    result = ble_mesh_node_should_become_candidate(&node);
+    TEST_ASSERT(result == true, "Node should become candidate once requirement drops to 1");
+
+    // Hearing another candidate should reset the threshold
+    ble_mesh_node_mark_candidate_heard(&node);
+    result = ble_mesh_node_should_become_candidate(&node);
+    TEST_ASSERT(result == false, "Hearing another candidate should reset requirement");
+
+    // Noise reduces the ratio further
+    node.current_cycle = 4;
+    ble_mesh_node_set_noise_level(&node, 50.0);
+    result = ble_mesh_node_should_become_candidate(&node);
+    TEST_ASSERT(result == false, "High noise level should block candidacy even when requirement is minimal");
+
+    ble_mesh_node_set_noise_level(&node, 0.0);
+    result = ble_mesh_node_should_become_candidate(&node);
+    TEST_ASSERT(result == true, "Removing noise after cooldown should allow candidacy again");
 }
 
 void test_candidacy_score_calculation(void)
@@ -400,9 +427,12 @@ void test_candidacy_score_calculation(void)
     for (int i = 0; i < 5; i++) {
         ble_mesh_node_add_neighbor(&node, 100 + i, -50, 1);
     }
+    node.stats.messages_received = 10;
+    node.stats.messages_forwarded = 6;
 
-    double score = ble_mesh_node_calculate_candidacy_score(&node, 10.0, 0.2);
+    double score = ble_mesh_node_calculate_candidacy_score(&node, 10.0);
     TEST_ASSERT(score > 0.0, "Candidacy score should be positive");
+    TEST_ASSERT(score <= 1.0, "Score should be normalized to <= 1.0");
 
     // Higher connectivity should give higher score
     ble_mesh_node_t node2;
@@ -410,9 +440,37 @@ void test_candidacy_score_calculation(void)
     for (int i = 0; i < 10; i++) {
         ble_mesh_node_add_neighbor(&node2, 100 + i, -50, 1);
     }
+    node2.stats.messages_received = 10;
+    node2.stats.messages_forwarded = 6;
 
-    double score2 = ble_mesh_node_calculate_candidacy_score(&node2, 10.0, 0.2);
+    double score2 = ble_mesh_node_calculate_candidacy_score(&node2, 10.0);
     TEST_ASSERT(score2 > score, "More connected node should have higher score");
+}
+
+void test_candidacy_score_forwarding_bias(void)
+{
+    printf("Running test_candidacy_score_forwarding_bias...\n");
+
+    ble_mesh_node_t reliableNode;
+    ble_mesh_node_init(&reliableNode, 80);
+    ble_mesh_node_t unreliableNode;
+    ble_mesh_node_init(&unreliableNode, 81);
+
+    for (int i = 0; i < 6; i++) {
+        ble_mesh_node_add_neighbor(&reliableNode, 200 + i, -55, 1);
+        ble_mesh_node_add_neighbor(&unreliableNode, 300 + i, -55, 1);
+    }
+
+    reliableNode.stats.messages_received = 20;
+    reliableNode.stats.messages_forwarded = 18;
+    unreliableNode.stats.messages_received = 20;
+    unreliableNode.stats.messages_forwarded = 5;
+
+    double reliableScore = ble_mesh_node_calculate_candidacy_score(&reliableNode, 5.0, 0.5);
+    double unreliableScore = ble_mesh_node_calculate_candidacy_score(&unreliableNode, 5.0, 0.5);
+
+    TEST_ASSERT(reliableScore > unreliableScore,
+                "Higher forwarding success should improve candidacy score");
 }
 
 /* ===== Test: Statistics ===== */
@@ -508,6 +566,7 @@ int main(void)
     test_should_become_edge();
     test_should_become_candidate();
     test_candidacy_score_calculation();
+    test_candidacy_score_forwarding_bias();
     test_statistics_updates();
     test_message_counters();
     test_max_neighbors_limit();
