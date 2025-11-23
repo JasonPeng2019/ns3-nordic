@@ -670,6 +670,10 @@ ble_engine_start_election_rounds(ble_engine_t *engine)
     engine->election_rounds_remaining = BLE_ENGINE_MAX_ELECTION_ROUNDS;
     engine->last_election_cycle_sent = UINT32_MAX;
     ble_engine_cancel_renouncement_rounds(engine);
+    /* Kick off the first election immediately so candidates announce without
+     * waiting for the next discovery slot.
+     */
+    ble_engine_send_election_packet(engine);
 }
 
 static void
@@ -862,7 +866,7 @@ ble_engine_try_promote_clusterhead(ble_engine_t *engine)
     if (ble_mesh_node_get_state(&engine->node) != BLE_NODE_STATE_CLUSTERHEAD_CANDIDATE) {
         return;
     }
-    if (engine->election_rounds_remaining > 0) {
+    if (engine->last_election_cycle_sent == UINT32_MAX) {
         return;
     }
     if (engine->node.current_cycle <= engine->last_election_cycle_sent) {

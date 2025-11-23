@@ -28,12 +28,16 @@ extern "C" {
 
 using namespace ns3;
 
-static const uint32_t NOISE_BURST_COUNT = 8;
-static const uint32_t NEIGHBOR_BURST_COUNT = 8;
+// Speed up simulation while keeping the original phase proportions (noise vs neighbour).
+static const double PHASE_DURATION_SCALE = 0.25; // 4x faster than default windows
 static const Time NOISE_PHASE_DURATION =
-  MilliSeconds (BLE_ENGINE_DEFAULT_NOISE_SLOTS * BLE_ENGINE_DEFAULT_NOISE_SLOT_DURATION_MS);
+  MilliSeconds (PHASE_DURATION_SCALE *
+                BLE_ENGINE_DEFAULT_NOISE_SLOTS *
+                BLE_ENGINE_DEFAULT_NOISE_SLOT_DURATION_MS);
 static const Time NEIGHBOR_PHASE_DURATION =
-  MilliSeconds (BLE_ENGINE_DEFAULT_NEIGHBOR_SLOTS * BLE_ENGINE_DEFAULT_NEIGHBOR_SLOT_DURATION_MS);
+  MilliSeconds (PHASE_DURATION_SCALE *
+                BLE_ENGINE_DEFAULT_NEIGHBOR_SLOTS *
+                BLE_ENGINE_DEFAULT_NEIGHBOR_SLOT_DURATION_MS);
 static const Time NEIGHBOR_PHASE_START = NOISE_PHASE_DURATION + MilliSeconds (20);
 
 NS_LOG_COMPONENT_DEFINE ("Phase3DiscoveryEngineSim");
@@ -289,6 +293,19 @@ EngineSimNode::Configure (uint32_t nodeId,
   m_engine->SetAttribute ("SlotDuration", TimeValue (slotDuration));
   m_engine->SetAttribute ("InitialTtl", UintegerValue (initialTtl));
   m_engine->SetAttribute ("ProximityThreshold", DoubleValue (proximityThreshold));
+  m_engine->SetAttribute ("NeighborTimeoutCycles", UintegerValue (50));
+  uint32_t slotMs = static_cast<uint32_t> (slotDuration.GetMilliSeconds ());
+  slotMs = std::max (1u, slotMs);
+  uint32_t noiseSlots = static_cast<uint32_t> (
+    std::ceil (static_cast<double> (NOISE_PHASE_DURATION.GetMilliSeconds ()) /
+               static_cast<double> (slotMs)));
+  uint32_t neighborSlots = static_cast<uint32_t> (
+    std::ceil (static_cast<double> (NEIGHBOR_PHASE_DURATION.GetMilliSeconds ()) /
+               static_cast<double> (slotMs)));
+  noiseSlots = std::max (1u, noiseSlots);
+  neighborSlots = std::max (1u, neighborSlots);
+  m_engine->SetAttribute ("NoiseSlotCount", UintegerValue (noiseSlots));
+  m_engine->SetAttribute ("NeighborSlotCount", UintegerValue (neighborSlots));
   m_engine->SetSendCallback (MakeCallback (&EngineSimNode::HandleEngineSend, this));
 
   NS_ABORT_MSG_IF (!m_engine->Initialize (), "Failed to initialize engine for node " << nodeId);
@@ -516,7 +533,7 @@ main (int argc, char *argv[])
 
   channel->StartPhaseTraffic (NOISE_PHASE_DURATION,
                               NEIGHBOR_PHASE_DURATION,
-                              MilliSeconds (50));
+                              slotDuration);
 
   Simulator::Stop (Seconds (simDuration));
   Simulator::Run ();
@@ -533,7 +550,8 @@ main (int argc, char *argv[])
                                ? static_cast<double> (directNeighbors) /
                                  static_cast<double> (BLE_DISCOVERY_MAX_CLUSTER_SIZE)
                                : 0.0;
-      double ratio = neighborRatio / (state->noise_level + 1.0);
+      double effectiveNoise = std::max (0.1, state->noise_level);
+      double ratio = neighborRatio / effectiveNoise;
       uint32_t cyclesSinceHeard = 0;
       if (state->current_cycle >= state->last_candidate_heard_cycle)
         {

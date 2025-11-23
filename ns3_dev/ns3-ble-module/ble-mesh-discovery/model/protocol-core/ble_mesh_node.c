@@ -387,11 +387,11 @@ bool ble_mesh_node_should_become_candidate(const ble_mesh_node_t *node)
     }
 
     double noise = node->noise_level;
-    if (noise < 0.0) {
-        noise = 0.0;
+    if (noise < 0.1) {
+        noise = 0.1;
     }
 
-    double ratio = neighbor_ratio / (noise + 1.0);
+    double ratio = neighbor_ratio / noise;
 
     uint32_t requirement = ble_mesh_node_get_candidate_requirement(node);
     double threshold = 0.0;
