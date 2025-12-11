@@ -50,6 +50,17 @@ class Transmission:
     originator_id: int
 
 
+@dataclass
+class PacketLoss:
+    """Represents a dropped packet."""
+
+    time_ms: float
+    sender_id: int
+    receiver_id: int
+    originator_id: int
+    rssi: float
+
+
 class PacketFlowAnimator:
     """Event-driven animation controller."""
 
@@ -69,6 +80,7 @@ class PacketFlowAnimator:
         self.positions = self._compute_layout()
         self.originator_colors = self._assign_origin_colors()
         self.transmissions_by_time = self._build_transmissions()
+        self.packet_losses = self._extract_packet_losses()
         self.events = self._group_events()
         self.min_time = (
             float(self.df["time_ms"].min()) if not self.df.empty else 0.0
@@ -106,8 +118,15 @@ class PacketFlowAnimator:
         graph = nx.Graph()
         topo = self.df[self.df["event"] == "TOPOLOGY"]
         for _, row in topo.iterrows():
-            graph.add_edge(int(row["sender_id"]), int(row["receiver_id"]))
+            # Handle both topology formats:
+            # - Simple sim: TOPOLOGY has sender_id and receiver_id (edge definition)
+            # - Physical sim: TOPOLOGY has only sender_id (node position)
+            if pd.notna(row["sender_id"]) and pd.notna(row["receiver_id"]):
+                graph.add_edge(int(row["sender_id"]), int(row["receiver_id"]))
+            elif pd.notna(row["sender_id"]):
+                graph.add_node(int(row["sender_id"]))
 
+        # Fallback: add nodes from SEND events
         send_rows = self.df[self.df["event"] == "SEND"]
         for _, row in send_rows.iterrows():
             if pd.notna(row["sender_id"]):
@@ -117,6 +136,26 @@ class PacketFlowAnimator:
     def _compute_layout(self) -> Dict[int, Tuple[float, float]]:
         if not self.graph.nodes:
             return {}
+
+        # Try to extract actual positions from TOPOLOGY events
+        # Format: time_ms,event,sender_id,receiver_id,originator_id,ttl,path_length,rssi,latitude,longitude
+        # For physical sim TOPOLOGY: columns 9,10 contain actual X,Y positions (not GPS coords)
+        pos = {}
+        topo = self.df[self.df["event"] == "TOPOLOGY"]
+        for _, row in topo.iterrows():
+            if pd.notna(row["sender_id"]):
+                node_id = int(row["sender_id"])
+                # Columns 9 and 10 (latitude, longitude) actually contain X, Y positions
+                if pd.notna(row["latitude"]) and pd.notna(row["longitude"]):
+                    x = float(row["latitude"])
+                    y = float(row["longitude"])
+                    pos[node_id] = (x, y)
+
+        # If we successfully extracted positions, return them
+        if len(pos) == len(self.graph.nodes):
+            return pos
+
+        # Otherwise fall back to spring layout
         pos = nx.spring_layout(self.graph, seed=7, k=2.5, iterations=200)
         for node, (x, y) in pos.items():
             pos[node] = (x * 0.7, y * 0.7)
@@ -154,7 +193,11 @@ class PacketFlowAnimator:
                 int(send["originator_id"]) if pd.notna(send["originator_id"]) else sender
             )
             time_ms = float(send["time_ms"])
-            for neighbor in self.graph.neighbors(sender):
+
+            # Get neighbors from topology edges, or use all nodes if no edges defined
+            neighbors = list(self.graph.neighbors(sender)) if self.graph.has_node(sender) and self.graph.degree(sender) > 0 else [n for n in self.graph.nodes() if n != sender]
+
+            for neighbor in neighbors:
                 recv_row = self._match_recv_event(
                     recv_lookup, neighbor, origin, time_ms
                 )
@@ -171,6 +214,23 @@ class PacketFlowAnimator:
                 )
 
         return transmissions
+
+    def _extract_packet_losses(self) -> List[PacketLoss]:
+        """Extract packet loss events from the trace."""
+        losses = []
+        loss_df = self.df[self.df["event"] == "PACKET_LOSS"]
+
+        for _, row in loss_df.iterrows():
+            if pd.notna(row["sender_id"]) and pd.notna(row["receiver_id"]):
+                losses.append(PacketLoss(
+                    time_ms=float(row["time_ms"]),
+                    sender_id=int(row["sender_id"]),
+                    receiver_id=int(row["receiver_id"]),
+                    originator_id=int(row["originator_id"]) if pd.notna(row["originator_id"]) else 0,
+                    rssi=float(row["rssi"]) if pd.notna(row["rssi"]) else -100.0
+                ))
+
+        return losses
 
     def _match_recv_event(
         self,
@@ -201,12 +261,17 @@ class PacketFlowAnimator:
                 [int(val) for val in rows["sender_id"].dropna().astype(int).tolist()]
             )
             transmissions = self.transmissions_by_time.get(time_ms, [])
+
+            # Get packet losses at this time
+            losses_at_time = [loss for loss in self.packet_losses if loss.time_ms == time_ms]
+
             grouped_events.append(
                 {
                     "time_ms": float(time_ms),
                     "senders": senders,
                     "receivers": [],
                     "transmissions": transmissions,
+                    "packet_losses": losses_at_time,
                     "phase": "SEND",
                     "recv_details": [],
                 }
@@ -223,12 +288,17 @@ class PacketFlowAnimator:
                 receiver = int(row["receiver_id"])
                 origin = int(row["originator_id"])
                 details.append(f"{receiver} ← origin {origin}")
+
+            # Get packet losses at this time
+            losses_at_time = [loss for loss in self.packet_losses if loss.time_ms == time_ms]
+
             grouped_events.append(
                 {
                     "time_ms": float(time_ms),
                     "senders": [],
                     "receivers": receivers,
                     "transmissions": [],
+                    "packet_losses": losses_at_time,
                     "phase": "RECV",
                     "recv_details": details,
                 }
@@ -308,7 +378,7 @@ class PacketFlowAnimator:
         self.ax.add_artist(state_legend)
         current_anchor_y -= 0.24  # shift down for the next legend
 
-        # Transmission type legend (self broadcast vs forwarded)
+        # Transmission type legend (self broadcast vs forwarded vs packet loss)
         own_handle = Line2D(
             [0],
             [0],
@@ -325,8 +395,19 @@ class PacketFlowAnimator:
             label="Forwarded packet",
             linestyle=(0, (5, 3)),
         )
+        loss_handle = Line2D(
+            [0],
+            [0],
+            color="red",
+            lw=1.5,
+            label="Packet lost (X)",
+            linestyle=":",
+            marker='x',
+            markersize=8,
+            markeredgewidth=2,
+        )
         tx_type_legend = self.ax.legend(
-            handles=[own_handle, forward_handle],
+            handles=[own_handle, forward_handle, loss_handle],
             loc="upper left",
             bbox_to_anchor=(anchor_x, max(0.74, current_anchor_y)),
             bbox_transform=self.ax.transAxes,
@@ -335,7 +416,7 @@ class PacketFlowAnimator:
             title="Transmission type",
         )
         self.ax.add_artist(tx_type_legend)
-        current_anchor_y -= 0.18
+        current_anchor_y -= 0.22
 
         # Arrow origin legend (stacked below node states and transmission type)
         if self.originator_colors:
@@ -398,6 +479,7 @@ class PacketFlowAnimator:
         self._clear_arrows()
         self._set_node_states(event["senders"], event["receivers"])
         self._draw_transmissions(event["transmissions"])
+        self._draw_packet_losses(event.get("packet_losses", []))
         self._update_labels(event)
         return self.node_collection
 
@@ -441,20 +523,55 @@ class PacketFlowAnimator:
             self.ax.add_patch(arrow)
             self.arrow_artists.append(arrow)
 
+    def _draw_packet_losses(self, losses: List[PacketLoss]) -> None:
+        """Draw red X marks for packet losses."""
+        for loss in losses:
+            start = self.positions.get(loss.sender_id)
+            end = self.positions.get(loss.receiver_id)
+            if start is None or end is None:
+                continue
+
+            # Draw a dashed red line to show attempted transmission
+            from matplotlib.lines import Line2D
+            line = Line2D(
+                [start[0], end[0]],
+                [start[1], end[1]],
+                color='red',
+                linestyle=':',
+                linewidth=1.5,
+                alpha=0.6,
+                zorder=5
+            )
+            self.ax.add_line(line)
+            self.arrow_artists.append(line)
+
+            # Draw red X at midpoint
+            mid_x = (start[0] + end[0]) / 2
+            mid_y = (start[1] + end[1]) / 2
+            x_mark = self.ax.plot(mid_x, mid_y, 'rx', markersize=12, markeredgewidth=3, zorder=10)[0]
+            self.arrow_artists.append(x_mark)
+
     def _update_labels(self, event: dict) -> None:
         self.timeline_text.set_text(f"Simulation time: {event['time_ms']:.0f} ms")
         transmissions = event["transmissions"]
+        packet_losses = event.get("packet_losses", [])
         phase = event.get("phase", "SEND")
 
-        if transmissions:
+        if transmissions or packet_losses:
             lines = []
-            for tx in transmissions[:6]:
+            for tx in transmissions[:4]:
                 lines.append(
-                    f"{tx.sender_id} → {tx.receiver_id} (origin {tx.originator_id})"
+                    f"✓ {tx.sender_id} → {tx.receiver_id} (origin {tx.originator_id})"
                 )
-            if len(transmissions) > 6:
+            for loss in packet_losses[:4]:
+                lines.append(
+                    f"✗ {loss.sender_id} ↛ {loss.receiver_id} (RSSI: {loss.rssi:.0f} dBm)"
+                )
+            if len(transmissions) + len(packet_losses) > 8:
                 lines.append("...")
-            self.event_text.set_text("Packets in flight:\n" + "\n".join(lines))
+
+            summary = f"Packets: {len(transmissions)} sent, {len(packet_losses)} lost"
+            self.event_text.set_text(summary + "\n" + "\n".join(lines))
             return
 
         if phase == "SEND":
