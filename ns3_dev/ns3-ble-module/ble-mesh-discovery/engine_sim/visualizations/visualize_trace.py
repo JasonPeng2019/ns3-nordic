@@ -113,22 +113,51 @@ def load_trace(filepath: str) -> pd.DataFrame:
 
 def extract_topology(df: pd.DataFrame) -> nx.Graph:
     """
-    Build a NetworkX graph from TOPOLOGY events.
+    Build a NetworkX graph from SEND/RECV events.
 
-    TOPOLOGY events are logged at t=0 and define which nodes can communicate.
-    Each row represents a bidirectional link: sender_id <-> receiver_id
+    The mesh topology is inferred from successful packet exchanges:
+    - If a SEND from Node A is followed by RECV at Node B (same originator, time+1ms),
+      then A and B can communicate directly.
+
+    Note: TOPOLOGY events in this simulation only log node positions, not links.
     """
     G = nx.Graph()
 
+    # First, add all nodes from TOPOLOGY events (if available)
     topology_df = df[df['event'] == 'TOPOLOGY']
-
     for _, row in topology_df.iterrows():
-        node_a = int(row['sender_id'])
-        node_b = int(row['receiver_id'])
-        G.add_edge(node_a, node_b)
+        if pd.notna(row['sender_id']):
+            G.add_node(int(row['sender_id']))
 
-    # Also add any nodes we see in SEND/RECV events (in case topology wasn't logged)
-    for _, row in df[df['event'] == 'SEND'].iterrows():
+    # Build mesh from SEND/RECV events
+    # Look for direct communications: packets where originator == sender
+    send_df = df[df['event'] == 'SEND'].copy()
+    recv_df = df[df['event'] == 'RECV'].copy()
+
+    for _, send_row in send_df.iterrows():
+        sender = int(send_row['sender_id'])
+        originator = send_row['originator_id']
+
+        # Only consider direct transmissions (not forwarded)
+        # Direct transmission: originator should equal sender
+        if pd.notna(originator) and int(originator) == sender:
+            send_time = send_row['time_ms']
+            ttl = send_row['ttl']
+
+            # Find corresponding RECV events (typically at send_time or send_time+1)
+            matching_recvs = recv_df[
+                (recv_df['time_ms'].between(send_time, send_time + 2)) &
+                (recv_df['originator_id'] == originator) &
+                (recv_df['ttl'] == ttl)
+            ]
+
+            for _, recv_row in matching_recvs.iterrows():
+                receiver = int(recv_row['receiver_id'])
+                # Add edge between sender and receiver
+                G.add_edge(sender, receiver)
+
+    # Also add nodes from SEND events that might not have TOPOLOGY entries
+    for _, row in send_df.iterrows():
         if pd.notna(row['sender_id']):
             G.add_node(int(row['sender_id']))
 
