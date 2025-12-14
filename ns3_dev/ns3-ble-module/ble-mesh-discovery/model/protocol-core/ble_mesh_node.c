@@ -8,6 +8,46 @@
 #include "ble_mesh_node.h"
 #include <string.h>
 
+static void
+ble_mesh_slot_clear(ble_slot_assignment_t *slot)
+{
+    if (!slot) {
+        return;
+    }
+    memset(slot, 0, sizeof(ble_slot_assignment_t));
+}
+
+static bool
+ble_mesh_slot_assign_from_hash(ble_slot_assignment_t *slot,
+                               uint32_t hash,
+                               uint32_t tdma_slots,
+                               uint32_t fdma_channels,
+                               uint32_t frame_ms,
+                               bool is_listener)
+{
+    if (!slot || tdma_slots == 0 || fdma_channels == 0) {
+        return false;
+    }
+
+    uint32_t slot_index = 0;
+    uint32_t channel_index = 0;
+    if (!ble_hash_map_to_slot(hash, tdma_slots, fdma_channels, &slot_index, &channel_index)) {
+        return false;
+    }
+
+    ble_mesh_slot_clear(slot);
+    slot->assigned = true;
+    slot->is_listener = is_listener;
+    slot->slot_index = slot_index;
+    slot->channel_index = channel_index;
+    slot->tdma_slots = tdma_slots;
+    slot->fdma_channels = fdma_channels;
+    slot->frame_ms = (frame_ms == 0) ? BLE_DISCOVERY_MIN_FRAME_MS : frame_ms;
+    slot->next_slot_time_ms = 0;
+    slot->collision_count = 0;
+    return true;
+}
+
 static uint32_t
 ble_mesh_node_get_candidate_requirement(const ble_mesh_node_t *node)
 {
@@ -63,6 +103,8 @@ void ble_mesh_node_init(ble_mesh_node_t *node, uint32_t node_id)
     node->neighbors.count = 0;
 
     memset(&node->stats, 0, sizeof(ble_node_statistics_t));
+    ble_mesh_slot_clear(&node->self_slot);
+    ble_mesh_slot_clear(&node->cluster_slot);
 }
 
 /* ===== GPS Management ===== */
@@ -220,6 +262,81 @@ const char* ble_mesh_node_state_name(ble_node_state_t state)
     }
 }
 
+/* ===== Slot Management (hash-derived FDMA/TDMA) ===== */
+
+void ble_mesh_node_clear_slots(ble_mesh_node_t *node)
+{
+    if (!node) return;
+    ble_mesh_slot_clear(&node->self_slot);
+    ble_mesh_slot_clear(&node->cluster_slot);
+}
+
+bool ble_mesh_node_assign_self_slot(ble_mesh_node_t *node,
+                                    uint32_t tdma_slots,
+                                    uint32_t fdma_channels,
+                                    uint32_t frame_ms)
+{
+    if (!node) return false;
+    return ble_mesh_slot_assign_from_hash(&node->self_slot,
+                                          node->election_hash,
+                                          tdma_slots,
+                                          fdma_channels,
+                                          frame_ms,
+                                          false);
+}
+
+bool ble_mesh_node_assign_cluster_slot(ble_mesh_node_t *node,
+                                       uint32_t clusterhead_hash,
+                                       uint32_t tdma_slots,
+                                       uint32_t fdma_channels,
+                                       uint32_t frame_ms)
+{
+    if (!node) return false;
+    /* Edges derive listen slot from cluster hash + edge ID */
+    uint32_t mixed = ble_hash_combine_cluster_edge(clusterhead_hash, node->node_id);
+    return ble_mesh_slot_assign_from_hash(&node->cluster_slot,
+                                          mixed,
+                                          tdma_slots,
+                                          fdma_channels,
+                                          frame_ms,
+                                          true);
+}
+
+uint64_t ble_mesh_node_next_slot_time(ble_mesh_node_t *node,
+                                      bool use_cluster_slot,
+                                      uint64_t now_ms)
+{
+    if (!node) {
+        return now_ms;
+    }
+
+    ble_slot_assignment_t *slot = use_cluster_slot ? &node->cluster_slot : &node->self_slot;
+    if (!slot->assigned || slot->tdma_slots == 0) {
+        return now_ms;
+    }
+
+    uint64_t next_time = ble_hash_next_slot_time_ms(now_ms,
+                                                    slot->frame_ms,
+                                                    slot->tdma_slots,
+                                                    slot->slot_index);
+    slot->next_slot_time_ms = next_time;
+    return next_time;
+}
+
+void ble_mesh_node_record_slot_collision(ble_mesh_node_t *node, bool use_cluster_slot)
+{
+    if (!node) return;
+    ble_slot_assignment_t *slot = use_cluster_slot ? &node->cluster_slot : &node->self_slot;
+    if (!slot->assigned) return;
+    slot->collision_count++;
+}
+
+void ble_mesh_node_clear_cluster_slot(ble_mesh_node_t *node)
+{
+    if (!node) return;
+    ble_mesh_slot_clear(&node->cluster_slot);
+}
+
 /* ===== Cycle Management ===== */
 
 void ble_mesh_node_advance_cycle(ble_mesh_node_t *node)
@@ -365,9 +482,8 @@ bool ble_mesh_node_should_become_edge(const ble_mesh_node_t *node)
 {
     if (!node) return false;
 
-    // Node becomes edge if very few direct neighbors (< 3)
+    /* Become edge if we have very few direct neighbors. */
     uint16_t direct_neighbors = ble_mesh_node_count_direct_neighbors(node);
-
     return (direct_neighbors < 3);
 }
 
@@ -383,7 +499,7 @@ bool ble_mesh_node_should_become_candidate(const ble_mesh_node_t *node)
     /* Require a reasonable degree before running for clusterhead to avoid
      * every node becoming a candidate.
      */
-    if (direct_neighbors < 8) {
+    if (direct_neighbors < 3) {
         return false;
     }
 

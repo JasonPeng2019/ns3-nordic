@@ -28,6 +28,7 @@ extern "C" {
 #define BLE_DISCOVERY_DEFAULT_TTL 10        /**< Default Time To Live */
 #define BLE_DISCOVERY_MAX_CLUSTER_SIZE 150  /**< Maximum devices per cluster */
 #define BLE_PDSF_MAX_HOPS BLE_DISCOVERY_MAX_PATH_LENGTH /**< Maximum hops tracked for PDSF */
+#define BLE_DISCOVERY_MIN_FRAME_MS 1        /**< Minimum frame length in ms */
 
 /* ===== Message Types ===== */
 
@@ -267,6 +268,59 @@ uint32_t ble_election_update_pdsf(ble_election_packet_t *packet,
  * @return Hash value for time/frequency slot assignment
  */
 uint32_t ble_election_generate_hash(uint32_t node_id);
+
+/**
+ * @brief Combine clusterhead hash and edge ID for edge-specific slotting
+ * @param cluster_hash Hash advertised by clusterhead
+ * @param edge_id Edge device ID
+ * @return Mixed hash value for edge slot derivation
+ */
+uint32_t ble_hash_combine_cluster_edge(uint32_t cluster_hash, uint32_t edge_id);
+
+/**
+ * @brief Map a hash value to TDMA slot and FDMA channel
+ * @param hash Hash value (e.g., from ble_election_generate_hash)
+ * @param tdma_slots Number of TDMA slots per frame (must be >0)
+ * @param fdma_channels Number of FDMA channels (must be >0)
+ * @param slot_index_out Output slot index (0-based)
+ * @param channel_index_out Output channel index (0-based)
+ * @return true on success, false if inputs invalid
+ */
+bool ble_hash_map_to_slot(uint32_t hash,
+                          uint32_t tdma_slots,
+                          uint32_t fdma_channels,
+                          uint32_t *slot_index_out,
+                          uint32_t *channel_index_out);
+
+/**
+ * @brief Compute the next slot start time in milliseconds at or after now
+ * @param now_ms Current time in milliseconds
+ * @param frame_ms Frame duration in milliseconds (must be >0)
+ * @param tdma_slots Number of TDMA slots in the frame (must be >0)
+ * @param slot_index Slot index (0-based, must be < tdma_slots)
+ * @return Absolute time in ms for the next slot start (>= now_ms)
+ */
+uint64_t ble_hash_next_slot_time_ms(uint64_t now_ms,
+                                    uint32_t frame_ms,
+                                    uint32_t tdma_slots,
+                                    uint32_t slot_index);
+
+/**
+ * @brief Convenience: map edge-specific slot using cluster hash + edge ID
+ * @param cluster_hash Hash advertised by clusterhead
+ * @param edge_id Edge device ID
+ * @param tdma_slots TDMA slots per frame
+ * @param fdma_channels FDMA channels
+ * @param slot_index_out Output slot index
+ * @param channel_index_out Output channel index
+ * @return true on success, false on invalid input
+ */
+bool ble_hash_map_edge_slot(uint32_t cluster_hash,
+                            uint32_t edge_id,
+                            uint32_t tdma_slots,
+                            uint32_t fdma_channels,
+                            uint32_t *slot_index_out,
+                            uint32_t *channel_index_out);
 
 #ifdef __cplusplus
 }

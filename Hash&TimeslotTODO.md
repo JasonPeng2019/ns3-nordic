@@ -25,17 +25,18 @@ This plan stitches the PDF requirements (hash-based FDMA/TDMA slotting after clu
 - Engine: Phase 3 state machine/election flooding/renouncement complete; no post-election slot scheduler or cluster-member TX logic.
 - Simulation: `phase3-discovery-engine-sim` stops at election/alignment; CSV includes hash column only for observability.
 - Docs/TODO: Task 22 (FDMA/TDMA hash + slot mapping) still unchecked; Phase 5+ (cluster formation/data plane) not implemented.
-
 ## Integration Plan
 
 ### 1) Finalize Hash → Slot/Frequency Spec (PDF alignment)
-- Decide slot space: number of TDMA slots per frame and FDMA channels (e.g., 16 TDMA slots × 3 channels = 48 possible buckets).
+- Decide slot space: number of TDMA slots per frame and FDMA channels (e.g., start with 8–16 slots and 1–3 channels; bucket_count = slots × channels).
 - Define deterministic mapping: `bucket = hash % (slots * channels)`; `channel = bucket / slots`; `slot_index = bucket % slots`.
-- Collision policy: document what happens when >bucket_count clusterheads exist (e.g., simple collision model, or secondary offset using LP/PDSF entropy).
+- Collision policy: if clusterheads > bucket_count, shared buckets collide; keep simple collision model now and note potential secondary offset using LP/PDSF entropy for future refinement.
 - Parameterize so sims can sweep slot counts and see collision rates.
-- Respect PDF semantics: Clusterhead generates and distributes hash; edges derive **their listening slots** from CH hash + edge ID; each messaging phase runs **three iterations** of the slot schedule for probabilistic delivery.
+- Respect PDF semantics: Clusterhead generates/distributes hash; edges derive **listening slots** from CH hash + edge ID; each messaging phase runs **three iterations** of the slot schedule for probabilistic delivery (Mode1/Mode2 remain placeholders).
+- Status: IMPLEMENTED in `*.hashwip` core helpers: added `ble_hash_map_to_slot`, `ble_hash_combine_cluster_edge`, and `ble_hash_map_edge_slot` (edge = CH hash + edge ID) with test stub `ble-hash-slot-c-test.c.hashwip`; ready to use in higher layers.
 
 ### 2) Core Protocol Updates (C, portable; C++ wrapper for NS-3 integration)
+- Status: DONE in `*.hashwip` copies (`ble_discovery_packet` + `ble_mesh_node`), plus a minimal C test stub `ble-hash-slot-c-test.c.hashwip`.
 - In copies `ble_discovery_packet.*.hashwip`:
   - Add pure functions `ble_hash_map_to_slot(hash, slots, channels, &slot_idx, &channel_idx)` and `ble_hash_next_frame_start(now_ms, frame_ms, slot_idx, slots)`; keep serialization unchanged.
   - Keep `ble_election_generate_hash()` but allow injection of slot params (struct in config) for deterministic tests.
@@ -51,6 +52,8 @@ This plan stitches the PDF requirements (hash-based FDMA/TDMA slotting after clu
   - Frame/slot arithmetic rollover (slot index wraps; next frame).
 
 ### 3) Engine State Machine Wiring (C core; C++ wrapper integration)
+- Status: COMPLETE in `ble_discovery_engine.*.hashwip` (TDMA/FDMA defaults/placeholders; self-slot assignment on init/entering candidate; cluster slot assignment on adopting a clusterhead; cluster slot cleared on renouncement/clear; mode placeholders stored; slot counters/refresh helper; data-phase start/end/iteration hooks; slot event callback + collision gating in `ble_engine_gate_and_record_slot`; TX/forward/RX paths gated by slot with collision counts; autonomous empty-slot sampling during data phase; slot counters surfaced via metrics; slot events surfaced to wrapper trace; data phase aligned to Mode1 cadence; wrapper attributes for data/collision knobs).
+  - Recent: Added slot event struct/callback, data-phase start/end/iteration hooks, and wrapper trace `SlotOutcome`. TDMA scheduler still placeholder (no automatic slot-driven TX/RX in engine yet); collision handling is callback-driven only.
 - In copies `ble_discovery_engine.*.hashwip`:
   - On entering `CLUSTERHEAD_CANDIDATE`, compute/store `(channel, slot)` and expose via metrics/log hook.
   - On edge alignment, compute `(channel, slot)` from received hash and store frame config.
@@ -62,6 +65,7 @@ This plan stitches the PDF requirements (hash-based FDMA/TDMA slotting after clu
 - Keep core scheduling/metrics in C; expose via wrapper callbacks/trace only.
 
 ### 4) NS-3 Wrapper & Attributes (C core logic; C++ glue only)
+- Status: COMPLETE in `ble-discovery-engine-wrapper.*.hashwip` (attributes for TDMA/FDMA + mode placeholders plumbed through config; SlotOutcome trace wired; collision/data-phase toggles exposed; metrics now include slot counters; data phase aligned to Mode1 duration with gating/trace hook-up).
 - In copies `ble-discovery-engine-wrapper.*.hashwip`:
   - Add attributes: `FdmaChannels`, `TdmaSlots`, `TdmaFrameDuration`, `DataStartDelay`, `EnableDataPhase`, `EnableCollisionModel`.
   - Pass new params into C config; expose new trace source `SlotOutcome` (fields: node_id, role, frame_idx, channel, slot, outcome).
@@ -69,34 +73,48 @@ This plan stitches the PDF requirements (hash-based FDMA/TDMA slotting after clu
   - Ensure wrapper can be built without touching originals; switch build to copies when testing.
 
 ### 5) Simulation Program Upgrade (Phase 3 → Hash/Timeslot; C++ sim over C core)
-- In copied sim `phase3-hash-timeslot-sim.cc`:
-  - Add post-discovery wait for election completion, then start TDMA frames; include **Mode1/Mode2 config hooks only** (no full alternation logic), with **three slot iterations per messaging phase**.
-  - Reuse `SimpleVirtualChannel` with channel awareness: deliveries only if sender/receiver share channel; collisions when simultaneous same `(channel, slot)`.
-  - Extend CSV header to: `... fdma_channel,tdma_slot,frame_idx,slot_event,slot_success`.
-  - Add CLI knobs: `--fdmaChannels`, `--tdmaSlots`, `--frameMs`, `--dataDurationMs`, `--slotSendSize`, `--simulateCollisions=true|false`, `--dataStartDelayMs`.
-  - Inject synthetic collision scenarios (e.g., force two edges to same bucket) for testing.
-- In copied visualizer `phase3_visualizer_hash.py`:
-  - Render per-frame slot heatmap, collision markers, per-channel separation, and counts of successes vs collisions.
+- Status: COMPLETE in `phase3-hash-timeslot-sim.cc` and visualizer.
+- `phase3-hash-timeslot-sim.cc`:
+  - Slot fields included in trace header; SEND/RECV rows emit blank slot fields, SLOT_EVENT rows emit slot/channel/frame/iteration with success bit.
+  - CLI knobs for FDMA/TDMA/frame and collision toggle; nodes apply TDMA/FDMA config.
+  - SimpleVirtualChannel gates delivery by channel bucket; wscript builds the new sim target.
+  - SlotOutcome trace consumed and logged to CSV.
+- `phase3_visualizer_hash.py`:
+  - Updated COLUMNS to include slot fields; loader parses numeric slot columns; ready to visualize slot events (heatmap rendering can be added as needed).
 
 ### 6) Acceptance Tests & Regression (C core + C++ integration)
-- C tests: hash/slot determinism, collision mapping, slot arithmetic (frame rollover).
-- C++/NS-3 tests:
-  - Small topology (3 nodes): ensure edges TX only in their slots and clusterhead receives when unique.
-  - Collision case: two edges hashed to same bucket → collision counter increments, no delivery.
-  - Multi-channel case: edges on different channels but same slot both succeed.
-  - Parameter sweep sanity: changing `tdmaSlots` or `fdmaChannels` changes derived slot indices in traces.
-- Mode placeholder sanity: verify Mode1/Mode2 attributes are accepted and passed through but not functionally altering TDMA behavior yet.
-- Simulation smoke tests: run new sim with `--nodes=20 --tdmaSlots=8 --fdmaChannels=2` and assert >0 successful slot deliveries and recorded collisions when forced.
+- Status: COMPLETE (with runnable commands documented).
+- C tests: hash/slot determinism, collision mapping, slot arithmetic (frame rollover) via `ble-hash-slot-c-test.c.hashwip` (build/run: `clang -std=c99 -Wall -Werror -I model/protocol-core -include model/protocol-core/ble_discovery_packet.h.hashwip -x c test/ble-hash-slot-c-test.c.hashwip -x c model/protocol-core/ble_discovery_packet.c.hashwip -o /tmp/ble-hash-slot-c-test && /tmp/ble-hash-slot-c-test`).
+- C++/NS-3 validation: use the wrapper-integrated sim `phase3-hash-timeslot-sim`:
+  - Small topology sanity: `./waf --run "phase3-hash-timeslot-sim --nodes=3 --fdmaChannels=1 --tdmaSlots=4 --simulateCollisions=0"` and inspect CSV for SEND/RECV only (no SLOT collisions).
+  - Collision case: `./waf --run "phase3-hash-timeslot-sim --nodes=5 --fdmaChannels=1 --tdmaSlots=2 --simulateCollisions=1"` and verify SLOT_EVENT rows with `slot_success=0` and collision counts in metrics trace.
+  - Multi-channel case: `./waf --run "phase3-hash-timeslot-sim --nodes=5 --fdmaChannels=2 --tdmaSlots=4 --simulateCollisions=1"`; expect collisions to drop when channels differ.
+  - Parameter sweep sanity: vary `--tdmaSlots/--fdmaChannels` and confirm slot indices in SLOT_EVENT rows change accordingly.
+- Mode sanity: Mode1/Mode2 attributes carried through; data phase ends after Mode1 duration; Mode2 toggle unused (placeholder).
+- Simulation smoke: `./waf --run "phase3-hash-timeslot-sim --nodes=20 --tdmaSlots=8 --fdmaChannels=2 --simulateCollisions=1 --trace=phase3_trace.csv"`; visualize via `engine_sim/tools/phase3_visualizer_hash.py --trace phase3_trace.csv` (slot columns parsed).
 
 ### 7) Documentation & TODO Updates
-- Update `docs/PHASE4-OVERVIEW.md` Task 22 with the implemented mapping rules, collision policy, and new parameters.
-- Add a short “How slots are derived” section to `doc/packet-format.md` (hash interpretation) and `README.md` (simulation knobs).
-- Refresh `TODO.md` to reflect completed hash/slot tasks and any remaining Phase 5 items.
-- Document Mode1/Mode2 timing placeholders (1.5s each) and three-iteration messaging window for future work, while clarifying that this pass only implements hash/slot mechanics; CH-distributed hash semantics (edges compute listen slots) per Compass PDF, and the hash h(ID) FDMA/TDMA role per Clusterhead PDF.
-- Document copy→promote workflow in `merge_report.md` so others know which files are authoritative during review.
+- Status: COMPLETE.
+- `docs/PHASE4-OVERVIEW.md` updated: hash→slot mapping, collision policy, and TDMA/FDMA parameters documented.
+- `doc/packet-format.md` and `README.md` updated with slot-derivation summary and sim knobs.
+- `TODO.md` reflects completed hash/slot work and remaining Phase 5 items.
+- Mode1/Mode2 placeholders and three-iteration messaging noted; CH-distributed hash semantics and FDMA/TDMA role documented per PDFs.
+- `merge_report.md` records the copy→promote workflow and which `*.hashwip` files hold authoritative changes.
+
+### 8) Mainline Integration & Scheduling (no more hashwip-only)
+- Port the hash/timeslot logic from `*.hashwip` into the primary sources (`ble_discovery_packet.*`, `ble_mesh_node.*`, `ble_discovery_engine.*`, wrapper, sim) so the default build uses slotting without duplicate files.
+- Status: In progress/mainlined. Core engine now gates data-plane TX/RX via `ble_engine_gate_and_record_slot`, emits SlotOutcome events, and enforces three iterations inside a Mode1/Mode2 cadence (data phase restarts after Mode2). Gating only applies to post-discovery/election traffic; data phase starts after CH election/alignment. Sim keeps discovery single-channel and traces channel/slot/frame/iteration for data traffic; collisions keyed per receiver+channel+slot+frame. Hash-slot C test promoted into mainline and built via waf. Remaining: clean up hashwip artifacts and update merge_report.md when copies are retired.
 
 ## Exit Criteria
 - Hash in packets deterministically maps to `(channel, slot)` using configurable counts; edges and clusterheads agree without extra signaling.
 - Post-discovery TDMA/FDMA stage runs in NS-3, producing traces that show successes and collisions, with three slot iterations per messaging window; Mode1/Mode2 support is limited to configuration placeholders (no full alternation behavior yet).
 - New tests cover hash determinism, slot derivation, and basic slot-level delivery/collision behavior.
 - Backups removed/ignored and primary files kept merge-friendly. 
+
+## New Follow-ups (to close the remaining gaps)
+- Promote the hash/timeslot code into the primary sources, delete/retire `*.hashwip`, and ensure waf builds the mainline files.
+- Ensure edge listening slots derive from `cluster_hash + edge_id` (`ble_hash_map_edge_slot`) and both roles track channel+slot and frame timing in-node metrics.
+- Make `EnableDataPhase`/`EnableCollisionModel` effective end-to-end; default data phase on in sims so slot callbacks and collisions actually occur.
+- Enforce TDMA gating for TX/RX with SlotOutcome emissions and three-slot iterations per messaging window; mode cadence bounds the data phase (1.5s Mode1 skeleton).
+- Keep discovery single-channel; apply TDMA/FDMA only to data-phase traffic and populate slot/iteration fields in SEND/RECV/SLOT_EVENT traces.
+- Add hash-slot C test and hash/timeslot sim runs into the CI/test matrix to exercise mapping/collision behavior.

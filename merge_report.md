@@ -153,3 +153,10 @@ Subsequent local work (tracked in this branch) has now **implemented the first t
 ---
 
 This `merged_changes.md` reflects all additions/modifications introduced by the merge relative to the snapshot baseline. Use it to orient yourself when reviewing the incoming branch or planning subsequent work.***
+
+---
+
+## 10. Hash/Timeslot Cleanup (current workspace)
+
+- The temporary `*.hashwip` copies (engine, packet, mesh_node, wrapper) have been removed now that slot-gating and hash→slot logic are ported into the main sources. The build uses the primary files only.
+- Hash→slot C regression test is part of the main test tree; phase3-hash-timeslot sim remains as the slot-aware driver.

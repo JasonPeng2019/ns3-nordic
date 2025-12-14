@@ -51,6 +51,11 @@ typedef struct {
     uint32_t messages_forwarded;         /**< Successfully forwarded messages */
     uint32_t messages_received;          /**< Total messages received */
     double forwarding_success_rate;      /**< Forwarding success ratio */
+    /* Slot counters (data phase) */
+    uint32_t slots_tx;                   /**< Slot transmissions */
+    uint32_t slots_rx;                   /**< Slot receptions */
+    uint32_t slots_collision;            /**< Slot collisions observed */
+    uint32_t slots_empty;                /**< Empty slot observations */
 } ble_connectivity_metrics_t;
 
 #define BLE_RSSI_BUFFER_SIZE 100         /**< Max RSSI samples stored per measurement */

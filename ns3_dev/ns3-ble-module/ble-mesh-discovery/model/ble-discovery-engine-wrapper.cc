@@ -9,6 +9,7 @@
 #include "ns3/double.h"
 #include "ns3/integer.h"
 #include "ns3/uinteger.h"
+#include "ns3/boolean.h"
 
 namespace ns3 {
 
@@ -62,6 +63,41 @@ BleDiscoveryEngineWrapper::GetTypeId (void)
                    UintegerValue (BLE_ENGINE_DEFAULT_NEIGHBOR_TIMEOUT_CYCLES),
                    MakeUintegerAccessor (&BleDiscoveryEngineWrapper::m_neighborTimeoutCycles),
                    MakeUintegerChecker<uint32_t> (1))
+    .AddAttribute ("FdmaChannels",
+                   "FDMA channels for data phase (placeholder wiring)",
+                   UintegerValue (BLE_ENGINE_DEFAULT_FDMA_CHANNELS),
+                   MakeUintegerAccessor (&BleDiscoveryEngineWrapper::m_fdmaChannels),
+                   MakeUintegerChecker<uint32_t> (1))
+    .AddAttribute ("TdmaSlots",
+                   "TDMA slots per frame for data phase (placeholder wiring)",
+                   UintegerValue (BLE_ENGINE_DEFAULT_TDMA_SLOTS),
+                   MakeUintegerAccessor (&BleDiscoveryEngineWrapper::m_tdmaSlots),
+                   MakeUintegerChecker<uint32_t> (1))
+    .AddAttribute ("FrameDuration",
+                   "TDMA frame duration (placeholder wiring)",
+                   TimeValue (MilliSeconds (BLE_ENGINE_DEFAULT_FRAME_DURATION_MS)),
+                   MakeTimeAccessor (&BleDiscoveryEngineWrapper::m_frameDuration),
+                   MakeTimeChecker ())
+    .AddAttribute ("Mode1Duration",
+                   "Mode1 duration (placeholder, not enforced)",
+                   TimeValue (MilliSeconds (BLE_ENGINE_DEFAULT_MODE_DURATION_MS)),
+                   MakeTimeAccessor (&BleDiscoveryEngineWrapper::m_mode1Duration),
+                   MakeTimeChecker ())
+    .AddAttribute ("Mode2Duration",
+                   "Mode2 duration (placeholder, not enforced)",
+                   TimeValue (MilliSeconds (BLE_ENGINE_DEFAULT_MODE_DURATION_MS)),
+                   MakeTimeAccessor (&BleDiscoveryEngineWrapper::m_mode2Duration),
+                   MakeTimeChecker ())
+    .AddAttribute ("EnableCollisionModel",
+                   "Enable slot-level collision gating",
+                   BooleanValue (true),
+                   MakeBooleanAccessor (&BleDiscoveryEngineWrapper::m_enableCollisionModel),
+                   MakeBooleanChecker ())
+    .AddAttribute ("EnableDataPhase",
+                   "Enable data-phase scheduling hooks",
+                   BooleanValue (true),
+                   MakeBooleanAccessor (&BleDiscoveryEngineWrapper::m_enableDataPhase),
+                   MakeBooleanChecker ())
     .AddAttribute ("NodeId",
                    "Unique node identifier",
                    UintegerValue (0),
@@ -71,6 +107,10 @@ BleDiscoveryEngineWrapper::GetTypeId (void)
                      "Fires when the engine publishes connectivity metrics",
                      MakeTraceSourceAccessor (&BleDiscoveryEngineWrapper::m_metricsTrace),
                      "ns3::BleDiscoveryEngineWrapper::MetricsTraceCallback")
+    .AddTraceSource ("SlotOutcome",
+                     "Fires when a data-phase slot outcome is recorded",
+                     MakeTraceSourceAccessor (&BleDiscoveryEngineWrapper::m_slotOutcomeTrace),
+                     "ns3::BleDiscoveryEngineWrapper::SlotOutcomeTraceCallback")
   ;
   return tid;
 }
@@ -85,8 +125,15 @@ BleDiscoveryEngineWrapper::BleDiscoveryEngineWrapper ()
     m_neighborSlotCount (BLE_ENGINE_DEFAULT_NEIGHBOR_SLOTS),
     m_neighborSlotDuration (MilliSeconds (BLE_ENGINE_DEFAULT_NEIGHBOR_SLOT_DURATION_MS)),
     m_neighborTimeoutCycles (BLE_ENGINE_DEFAULT_NEIGHBOR_TIMEOUT_CYCLES),
-    m_initialized (false),
-    m_running (false)
+    m_fdmaChannels (BLE_ENGINE_DEFAULT_FDMA_CHANNELS),
+    m_tdmaSlots (BLE_ENGINE_DEFAULT_TDMA_SLOTS),
+  m_frameDuration (MilliSeconds (BLE_ENGINE_DEFAULT_FRAME_DURATION_MS)),
+  m_mode1Duration (MilliSeconds (BLE_ENGINE_DEFAULT_MODE_DURATION_MS)),
+  m_mode2Duration (MilliSeconds (BLE_ENGINE_DEFAULT_MODE_DURATION_MS)),
+  m_enableCollisionModel (true),
+  m_enableDataPhase (true),
+  m_initialized (false),
+  m_running (false)
 {
   NS_LOG_FUNCTION (this);
   ble_engine_config_init (&m_config);
@@ -124,9 +171,17 @@ BleDiscoveryEngineWrapper::Initialize (void)
   m_config.neighbor_slot_count = m_neighborSlotCount;
   m_config.neighbor_slot_duration_ms = static_cast<uint32_t> (m_neighborSlotDuration.GetMilliSeconds ());
   m_config.neighbor_timeout_cycles = m_neighborTimeoutCycles;
+  m_config.fdma_channels = m_fdmaChannels;
+  m_config.tdma_slots = m_tdmaSlots;
+  m_config.frame_duration_ms = static_cast<uint32_t> (m_frameDuration.GetMilliSeconds ());
+  m_config.mode1_duration_ms = static_cast<uint32_t> (m_mode1Duration.GetMilliSeconds ());
+  m_config.mode2_duration_ms = static_cast<uint32_t> (m_mode2Duration.GetMilliSeconds ());
+  m_config.enable_collision_model = m_enableCollisionModel;
+  m_config.enable_data_phase = m_enableDataPhase;
   m_config.send_cb = &BleDiscoveryEngineWrapper::EngineSendHook;
   m_config.log_cb = &BleDiscoveryEngineWrapper::EngineLogHook;
   m_config.metrics_cb = &BleDiscoveryEngineWrapper::EngineMetricsHook;
+  m_config.slot_cb = &BleDiscoveryEngineWrapper::EngineSlotHook;
   m_config.user_context = this;
 
   if (!ble_engine_init (&m_engine, &m_config))
@@ -294,6 +349,26 @@ BleDiscoveryEngineWrapper::EngineMetricsHook (const ble_connectivity_metrics_t *
     {
       self->HandleMetricsUpdate (metrics);
     }
+}
+
+void
+BleDiscoveryEngineWrapper::EngineSlotHook (const ble_engine_slot_event_t *evt,
+                                           void *context)
+{
+  BleDiscoveryEngineWrapper *self = static_cast<BleDiscoveryEngineWrapper *> (context);
+  if (!self || !evt)
+    {
+      return;
+    }
+  SlotOutcomeEvent out;
+  out.nodeId = evt->node_id;
+  out.isClusterSlot = evt->is_cluster_slot;
+  out.frameIndex = evt->frame_index;
+  out.slotIndex = evt->slot_index;
+  out.channelIndex = evt->channel_index;
+  out.iteration = evt->iteration;
+  out.outcome = static_cast<uint8_t> (evt->outcome);
+  self->m_slotOutcomeTrace (out);
 }
 
 void

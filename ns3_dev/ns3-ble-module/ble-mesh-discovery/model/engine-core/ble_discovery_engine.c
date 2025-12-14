@@ -96,6 +96,18 @@ static uint32_t
 ble_engine_count_already_reached(ble_engine_t *engine,
                                  const ble_discovery_packet_t *packet);
 
+static void
+ble_engine_refresh_slots(ble_engine_t *engine, uint32_t now_ms);
+
+static void
+ble_engine_record_slot_outcome(ble_engine_t *engine, ble_engine_slot_outcome_t outcome);
+
+static bool
+ble_engine_is_in_slot(const ble_slot_assignment_t *slot, uint32_t frame_ms, uint32_t now_ms, uint32_t *frame_idx_out);
+
+static void
+ble_engine_autonomous_slot_tick(ble_engine_t *engine, uint32_t now_ms);
+
 void
 ble_engine_config_init(ble_engine_config_t *config)
 {
@@ -111,6 +123,14 @@ ble_engine_config_init(ble_engine_config_t *config)
     config->neighbor_slot_count = BLE_ENGINE_DEFAULT_NEIGHBOR_SLOTS;
     config->neighbor_slot_duration_ms = BLE_ENGINE_DEFAULT_NEIGHBOR_SLOT_DURATION_MS;
     config->neighbor_timeout_cycles = BLE_ENGINE_DEFAULT_NEIGHBOR_TIMEOUT_CYCLES;
+    config->tdma_slots = BLE_ENGINE_DEFAULT_TDMA_SLOTS;
+    config->fdma_channels = BLE_ENGINE_DEFAULT_FDMA_CHANNELS;
+    config->frame_duration_ms = BLE_ENGINE_DEFAULT_FRAME_DURATION_MS;
+    config->mode1_duration_ms = BLE_ENGINE_DEFAULT_MODE_DURATION_MS;
+    config->mode2_duration_ms = BLE_ENGINE_DEFAULT_MODE_DURATION_MS;
+    config->slot_cb = NULL;
+    config->enable_data_phase = true;
+    config->enable_collision_model = true;
 }
 
 bool
@@ -134,6 +154,24 @@ ble_engine_init(ble_engine_t *engine, const ble_engine_config_t *config)
     if (engine->config.neighbor_slot_duration_ms == 0) {
         engine->config.neighbor_slot_duration_ms = BLE_ENGINE_DEFAULT_NEIGHBOR_SLOT_DURATION_MS;
     }
+    if (engine->config.tdma_slots == 0) {
+        engine->config.tdma_slots = BLE_ENGINE_DEFAULT_TDMA_SLOTS;
+    }
+    if (engine->config.fdma_channels == 0) {
+        engine->config.fdma_channels = BLE_ENGINE_DEFAULT_FDMA_CHANNELS;
+    }
+    if (engine->config.frame_duration_ms == 0) {
+        engine->config.frame_duration_ms = BLE_ENGINE_DEFAULT_FRAME_DURATION_MS;
+    }
+    if (engine->config.mode1_duration_ms == 0) {
+        engine->config.mode1_duration_ms = BLE_ENGINE_DEFAULT_MODE_DURATION_MS;
+    }
+    if (engine->config.mode2_duration_ms == 0) {
+        engine->config.mode2_duration_ms = BLE_ENGINE_DEFAULT_MODE_DURATION_MS;
+    }
+    /* Booleans default to true */
+    engine->config.enable_data_phase = config->enable_data_phase;
+    engine->config.enable_collision_model = config->enable_collision_model;
     engine->proximity_threshold = config->proximity_threshold;
     engine->neighbor_timeout_cycles =
         (config->neighbor_timeout_cycles == 0) ? BLE_ENGINE_DEFAULT_NEIGHBOR_TIMEOUT_CYCLES
@@ -160,6 +198,23 @@ ble_engine_init(ble_engine_t *engine, const ble_engine_config_t *config)
 
     ble_mesh_node_init(&engine->node, config->node_id);
     ble_mesh_node_set_state(&engine->node, BLE_NODE_STATE_DISCOVERY);
+    /* Precompute slot assignments (hash-derived). Mode placeholders are stored but not used yet. */
+    ble_mesh_node_assign_self_slot(&engine->node,
+                                   engine->config.tdma_slots,
+                                   engine->config.fdma_channels,
+                                   engine->config.frame_duration_ms);
+    engine->data_phase_active = false;
+    engine->data_phase_start_ms = 0;
+    engine->data_slot_iteration = 0;
+    engine->slots_tx = 0;
+    engine->slots_rx = 0;
+    engine->slots_collision = 0;
+    engine->slots_empty = 0;
+    engine->last_slot_active = false;
+    engine->last_slot_frame = 0;
+    engine->last_slot_index = 0;
+    engine->last_slot_channel = 0;
+    engine->last_slot_iteration = 0;
     ble_election_init(&engine->election);
     ble_broadcast_timing_init(&engine->noisy_timing,
                               BLE_BROADCAST_SCHEDULE_NOISY,
@@ -184,6 +239,16 @@ ble_engine_init(ble_engine_t *engine, const ble_engine_config_t *config)
     engine->last_renouncement_cycle_sent = UINT32_MAX;
     engine->selected_clusterhead_hops = UINT16_MAX;
     engine->selected_clusterhead_direct_connections = 0;
+    engine->slots_tx = 0;
+    engine->slots_rx = 0;
+    engine->slots_collision = 0;
+    engine->slots_empty = 0;
+    engine->last_slot_active = false;
+    engine->last_slot_frame = 0;
+    engine->last_slot_index = 0;
+    engine->last_slot_channel = 0;
+    engine->last_slot_iteration = 0;
+    ble_engine_refresh_slots(engine, 0);
     ble_engine_enter_phase(engine, BLE_ENGINE_PHASE_NOISY, 0);
     return true;
 }
@@ -198,6 +263,19 @@ ble_engine_reset(ble_engine_t *engine)
     ble_discovery_cycle_stop(&engine->cycle);
     ble_mesh_node_init(&engine->node, engine->config.node_id);
     ble_mesh_node_set_state(&engine->node, BLE_NODE_STATE_DISCOVERY);
+    ble_mesh_node_clear_slots(&engine->node);
+    engine->data_phase_active = false;
+    engine->data_phase_start_ms = 0;
+    engine->data_slot_iteration = 0;
+    engine->slots_tx = 0;
+    engine->slots_rx = 0;
+    engine->slots_collision = 0;
+    engine->slots_empty = 0;
+    engine->last_slot_active = false;
+    engine->last_slot_frame = 0;
+    engine->last_slot_index = 0;
+    engine->last_slot_channel = 0;
+    engine->last_slot_iteration = 0;
     ble_election_init(&engine->election);
     ble_broadcast_timing_init(&engine->noisy_timing,
                               BLE_BROADCAST_SCHEDULE_NOISY,
@@ -221,6 +299,11 @@ ble_engine_reset(ble_engine_t *engine)
     engine->last_renouncement_cycle_sent = UINT32_MAX;
     engine->selected_clusterhead_hops = UINT16_MAX;
     engine->selected_clusterhead_direct_connections = 0;
+    engine->slots_tx = 0;
+    engine->slots_rx = 0;
+    engine->slots_collision = 0;
+    engine->slots_empty = 0;
+    ble_engine_refresh_slots(engine, engine->last_tick_time_ms);
     ble_engine_enter_phase(engine, BLE_ENGINE_PHASE_NOISY, 0);
 }
 
@@ -232,6 +315,35 @@ ble_engine_tick(ble_engine_t *engine, uint32_t now_ms)
     }
 
     engine->last_tick_time_ms = now_ms;
+
+    /* Start data phase only after a clusterhead is selected or we become a clusterhead. */
+    if (engine->config.enable_data_phase &&
+        !engine->data_phase_active &&
+        (ble_mesh_node_get_state(&engine->node) == BLE_NODE_STATE_CLUSTERHEAD ||
+         engine->node.clusterhead_id != BLE_MESH_INVALID_NODE_ID)) {
+        ble_engine_start_data_phase(engine, now_ms);
+    }
+
+    /* Autonomous slot sampling for empty slots during data phase */
+    ble_engine_autonomous_slot_tick(engine, now_ms);
+
+    /* End data phase when Mode1 window elapses */
+    if (engine->data_phase_active && engine->config.enable_data_phase) {
+        uint32_t elapsed = now_ms - engine->data_phase_start_ms;
+        if (elapsed >= engine->config.mode1_duration_ms) {
+            ble_engine_end_data_phase(engine);
+        }
+    }
+    /* Restart data phase after Mode2 wait to mimic basic Mode1/Mode2 cadence */
+    if (!engine->data_phase_active && engine->config.enable_data_phase) {
+        uint32_t cycle_len = engine->config.mode1_duration_ms + engine->config.mode2_duration_ms;
+        if (cycle_len > 0 && engine->data_phase_start_ms > 0) {
+            uint32_t since_start = now_ms - engine->data_phase_start_ms;
+            if (since_start >= cycle_len) {
+                ble_engine_start_data_phase(engine, now_ms);
+            }
+        }
+    }
 
     if (ble_engine_run_phase_slot(engine, now_ms)) {
         return;
@@ -264,6 +376,23 @@ ble_engine_receive_packet(ble_engine_t *engine,
     bool in_noisy_phase = (engine->phase == BLE_ENGINE_PHASE_NOISY);
     bool in_neighbor_phase = (engine->phase == BLE_ENGINE_PHASE_NEIGHBOR);
     bool is_election = (packet->message_type == BLE_MSG_ELECTION_ANNOUNCEMENT);
+
+    /* Gate RX during data phase only for data-plane traffic (non-discovery/election). */
+    bool gate_data = engine->config.enable_data_phase &&
+                     engine->data_phase_active &&
+                     !is_election &&
+                     packet->message_type != BLE_MSG_DISCOVERY;
+    if (gate_data) {
+        bool use_cluster_slot = (engine->node.clusterhead_id != BLE_MESH_INVALID_NODE_ID);
+        ble_engine_slot_outcome_t rx_outcome =
+            ble_engine_gate_and_record_slot(engine, use_cluster_slot, now_ms, false);
+        if (rx_outcome != BLE_ENGINE_SLOT_OUTCOME_RX) {
+            if (rx_outcome == BLE_ENGINE_SLOT_OUTCOME_COLLISION) {
+                ble_mesh_node_inc_dropped(&engine->node);
+            }
+            return false;
+        }
+    }
 
     if (is_election) {
         const ble_election_packet_t *election_packet =
@@ -437,9 +566,24 @@ ble_engine_transmit_own_message(ble_engine_t *engine)
                               engine->node.gps_location.z);
     }
 
-    ble_mesh_node_inc_sent(&engine->node);
     if (engine->config.send_cb) {
-        engine->config.send_cb(&engine->tx_buffer, engine->config.user_context);
+        bool gate_data = engine->config.enable_data_phase &&
+                         engine->data_phase_active &&
+                         engine->tx_buffer.message_type != BLE_MSG_ELECTION_ANNOUNCEMENT &&
+                         engine->tx_buffer.message_type != BLE_MSG_DISCOVERY;
+        if (gate_data) {
+            ble_engine_slot_outcome_t outcome =
+                ble_engine_gate_and_record_slot(engine, false, engine->last_tick_time_ms, true);
+            if (outcome == BLE_ENGINE_SLOT_OUTCOME_TX) {
+                ble_mesh_node_inc_sent(&engine->node);
+                engine->config.send_cb(&engine->tx_buffer, engine->config.user_context);
+            } else if (outcome == BLE_ENGINE_SLOT_OUTCOME_COLLISION) {
+                ble_mesh_node_inc_dropped(&engine->node);
+            }
+        } else {
+            ble_mesh_node_inc_sent(&engine->node);
+            engine->config.send_cb(&engine->tx_buffer, engine->config.user_context);
+        }
     }
 }
 
@@ -510,7 +654,23 @@ ble_engine_forward_next_message(ble_engine_t *engine)
                               engine->node.gps_location.z);
     }
 
-    if (engine->config.send_cb) {
+    bool gate_data = engine->config.enable_data_phase &&
+                     engine->data_phase_active &&
+                     packet_to_process.base.message_type != BLE_MSG_ELECTION_ANNOUNCEMENT &&
+                     packet_to_process.base.message_type != BLE_MSG_DISCOVERY;
+    if (gate_data) {
+        /* Gate forwarding by slot; edges forward using cluster slot if aligned, else self slot */
+        bool use_cluster_slot = (engine->node.clusterhead_id != BLE_MESH_INVALID_NODE_ID);
+        ble_engine_slot_outcome_t outcome =
+            ble_engine_gate_and_record_slot(engine, use_cluster_slot, engine->last_tick_time_ms, true);
+        if (outcome == BLE_ENGINE_SLOT_OUTCOME_TX && engine->config.send_cb) {
+            engine->config.send_cb((const ble_discovery_packet_t *)&packet_to_process,
+                                   engine->config.user_context);
+            ble_mesh_node_inc_forwarded(&engine->node);
+        } else if (outcome == BLE_ENGINE_SLOT_OUTCOME_COLLISION) {
+            ble_mesh_node_inc_dropped(&engine->node);
+        }
+    } else if (engine->config.send_cb) {
         engine->config.send_cb((const ble_discovery_packet_t *)&packet_to_process,
                                engine->config.user_context);
         ble_mesh_node_inc_forwarded(&engine->node);
@@ -549,6 +709,7 @@ ble_engine_enter_phase(ble_engine_t *engine, ble_engine_phase_t phase, uint32_t 
                                   BLE_BROADCAST_NEIGHBOR_LISTEN_RATIO);
         ble_broadcast_timing_set_crowding(&engine->neighbor_timing, engine->crowding_factor);
         break;
+    
     case BLE_ENGINE_PHASE_DISCOVERY:
     default:
         break;
@@ -610,6 +771,10 @@ ble_engine_publish_metrics(ble_engine_t *engine)
     ble_mesh_node_update_statistics(&engine->node);
     ble_election_update_metrics(&engine->election);
     engine->last_metrics = engine->election.metrics;
+    engine->last_metrics.slots_tx = engine->slots_tx;
+    engine->last_metrics.slots_rx = engine->slots_rx;
+    engine->last_metrics.slots_collision = engine->slots_collision;
+    engine->last_metrics.slots_empty = engine->slots_empty;
 
     if (engine->config.metrics_cb) {
         engine->config.metrics_cb(&engine->last_metrics, engine->config.user_context);
@@ -646,6 +811,11 @@ ble_engine_evaluate_state(ble_engine_t *engine)
             double score = ble_mesh_node_calculate_candidacy_score(&engine->node,
                                                                   engine->node.noise_level);
             engine->node.candidacy_score = score;
+            /* Ensure self slot is assigned for clusterhead role */
+            ble_mesh_node_assign_self_slot(&engine->node,
+                                           engine->config.tdma_slots,
+                                           engine->config.fdma_channels,
+                                           engine->config.frame_duration_ms);
             ble_engine_log(engine, "INFO", "Node transitioned to CLUSTERHEAD_CANDIDATE state");
             ble_engine_clear_selected_clusterhead(engine);
             ble_engine_start_election_rounds(engine);
@@ -853,8 +1023,13 @@ ble_engine_clear_selected_clusterhead(ble_engine_t *engine)
     }
     engine->node.clusterhead_id = BLE_MESH_INVALID_NODE_ID;
     engine->node.cluster_class = 0;
+    ble_mesh_node_clear_cluster_slot(&engine->node);
     engine->selected_clusterhead_direct_connections = 0;
     engine->selected_clusterhead_hops = UINT16_MAX;
+    engine->slots_tx = 0;
+    engine->slots_rx = 0;
+    engine->slots_collision = 0;
+    engine->slots_empty = 0;
 }
 
 static void
@@ -917,6 +1092,12 @@ ble_engine_update_clusterhead_selection(ble_engine_t *engine,
         engine->selected_clusterhead_direct_connections = packet->election.direct_connections;
         engine->selected_clusterhead_hops = incoming_hops;
         engine->node.pdsf = packet->election.pdsf;
+        ble_mesh_node_assign_cluster_slot(&engine->node,
+                                          packet->election.hash,
+                                          engine->config.tdma_slots,
+                                          engine->config.fdma_channels,
+                                          engine->config.frame_duration_ms);
+        ble_engine_refresh_slots(engine, engine->last_tick_time_ms);
         ble_engine_log(engine, "INFO", "Adopted new clusterhead candidate");
     }
 }
@@ -968,6 +1149,290 @@ ble_engine_count_already_reached(ble_engine_t *engine,
 }
 
 static void
+ble_engine_refresh_slots(ble_engine_t *engine, uint32_t now_ms)
+{
+    if (!engine) {
+        return;
+    }
+    /* Compute next slot times for assigned slots (self + cluster) */
+    ble_mesh_node_next_slot_time(&engine->node, false, now_ms);
+    ble_mesh_node_next_slot_time(&engine->node, true, now_ms);
+}
+
+static void
+ble_engine_emit_slot_event(ble_engine_t *engine,
+                           bool use_cluster_slot,
+                           uint32_t frame_idx,
+                           uint32_t slot_idx,
+                           uint32_t channel_idx,
+                           uint8_t iteration,
+                           ble_engine_slot_outcome_t outcome,
+                           bool mark_last)
+{
+    if (!engine) {
+        return;
+    }
+
+    if (mark_last) {
+        engine->last_slot_active = true;
+        engine->last_slot_frame = frame_idx;
+        engine->last_slot_index = slot_idx;
+        engine->last_slot_channel = channel_idx;
+        engine->last_slot_iteration = iteration;
+        engine->data_slot_iteration = iteration;
+    }
+
+    ble_engine_record_slot_outcome(engine, outcome);
+
+    if (engine->config.slot_cb) {
+        ble_engine_slot_event_t evt;
+        evt.node_id = engine->node.node_id;
+        evt.is_cluster_slot = use_cluster_slot;
+        evt.frame_index = frame_idx;
+        evt.slot_index = slot_idx;
+        evt.channel_index = channel_idx;
+        evt.iteration = iteration;
+        evt.outcome = outcome;
+        engine->config.slot_cb(&evt, engine->config.user_context);
+    }
+}
+
+static void
+ble_engine_record_slot_outcome(ble_engine_t *engine, ble_engine_slot_outcome_t outcome)
+{
+    if (!engine) {
+        return;
+    }
+    switch (outcome) {
+        case BLE_ENGINE_SLOT_OUTCOME_TX:
+            engine->slots_tx++;
+            break;
+        case BLE_ENGINE_SLOT_OUTCOME_RX:
+            engine->slots_rx++;
+            break;
+        case BLE_ENGINE_SLOT_OUTCOME_COLLISION:
+            engine->slots_collision++;
+            break;
+        case BLE_ENGINE_SLOT_OUTCOME_EMPTY:
+        default:
+            engine->slots_empty++;
+            break;
+    }
+}
+
+void
+ble_engine_record_slot_event(ble_engine_t *engine,
+                             bool use_cluster_slot,
+                             ble_engine_slot_outcome_t outcome,
+                             uint32_t now_ms)
+{
+    if (!engine || !engine->data_phase_active) {
+        return;
+    }
+
+    ble_slot_assignment_t *slot = use_cluster_slot ? &engine->node.cluster_slot : &engine->node.self_slot;
+    if (!slot->assigned || slot->tdma_slots == 0 || engine->config.frame_duration_ms == 0) {
+        return;
+    }
+
+    uint32_t frame_len = engine->config.frame_duration_ms;
+    uint32_t slots = slot->tdma_slots;
+    uint32_t slot_len = (frame_len / slots);
+    if (slot_len == 0) {
+        slot_len = 1;
+    }
+
+    if (now_ms < engine->data_phase_start_ms) {
+        return;
+    }
+    uint32_t delta = now_ms - engine->data_phase_start_ms;
+    uint32_t frame_idx = delta / frame_len;
+    uint32_t slot_offset_ms = delta % frame_len;
+    uint32_t slot_idx = slot_offset_ms / slot_len;
+
+    /* Only record if we are within our assigned slot */
+    if (slot_idx != slot->slot_index) {
+        return;
+    }
+
+    /* Update iteration based on frame index (0..2) */
+    engine->data_slot_iteration = frame_idx % 3;
+    ble_engine_record_slot_outcome(engine, outcome);
+
+    if (engine->config.slot_cb) {
+        ble_engine_slot_event_t evt;
+        evt.node_id = engine->node.node_id;
+        evt.is_cluster_slot = use_cluster_slot;
+        evt.frame_index = frame_idx;
+        evt.slot_index = slot->slot_index;
+        evt.channel_index = slot->channel_index;
+        evt.iteration = engine->data_slot_iteration;
+        evt.outcome = outcome;
+        engine->config.slot_cb(&evt, engine->config.user_context);
+    }
+}
+
+static void
+ble_engine_autonomous_slot_tick(ble_engine_t *engine, uint32_t now_ms)
+{
+    if (!engine || !engine->data_phase_active || !engine->config.enable_data_phase ||
+        engine->config.frame_duration_ms == 0) {
+        return;
+    }
+
+    /* Emit empty slot observations when within assigned slots. Do not mark last_* to avoid spurious collisions. */
+    uint32_t frame_idx = 0;
+    if (ble_engine_is_in_slot(&engine->node.self_slot, engine->config.frame_duration_ms, now_ms, &frame_idx)) {
+        uint8_t iteration = frame_idx % 3;
+        ble_engine_emit_slot_event(engine,
+                                   false,
+                                   frame_idx,
+                                   engine->node.self_slot.slot_index,
+                                   engine->node.self_slot.channel_index,
+                                   iteration,
+                                   BLE_ENGINE_SLOT_OUTCOME_EMPTY,
+                                   false);
+    }
+    if (ble_engine_is_in_slot(&engine->node.cluster_slot, engine->config.frame_duration_ms, now_ms, &frame_idx)) {
+        uint8_t iteration = frame_idx % 3;
+        ble_engine_emit_slot_event(engine,
+                                   true,
+                                   frame_idx,
+                                   engine->node.cluster_slot.slot_index,
+                                   engine->node.cluster_slot.channel_index,
+                                   iteration,
+                                   BLE_ENGINE_SLOT_OUTCOME_EMPTY,
+                                   false);
+    }
+}
+
+void
+ble_engine_start_data_phase(ble_engine_t *engine, uint32_t start_ms)
+{
+    if (!engine) {
+        return;
+    }
+    if (!engine->config.enable_data_phase) {
+        engine->data_phase_active = false;
+        return;
+    }
+    engine->data_phase_active = true;
+    engine->data_phase_start_ms = start_ms;
+    engine->data_slot_iteration = 0;
+    engine->slots_tx = 0;
+    engine->slots_rx = 0;
+    engine->slots_collision = 0;
+    engine->slots_empty = 0;
+    engine->last_slot_active = false;
+    engine->last_slot_frame = 0;
+    engine->last_slot_index = 0;
+    engine->last_slot_channel = 0;
+    engine->last_slot_iteration = 0;
+    ble_engine_refresh_slots(engine, start_ms);
+}
+
+void
+ble_engine_end_data_phase(ble_engine_t *engine)
+{
+    if (!engine) {
+        return;
+    }
+    engine->data_phase_active = false;
+    engine->last_slot_active = false;
+}
+
+void
+ble_engine_advance_slot_iteration(ble_engine_t *engine)
+{
+    if (!engine) {
+        return;
+    }
+    engine->data_slot_iteration = (engine->data_slot_iteration + 1) % 3;
+}
+
+static bool
+ble_engine_is_in_slot(const ble_slot_assignment_t *slot, uint32_t frame_ms, uint32_t now_ms, uint32_t *frame_idx_out)
+{
+    if (!slot || !slot->assigned || slot->tdma_slots == 0 || frame_ms == 0) {
+        return false;
+    }
+    uint32_t slots = slot->tdma_slots;
+    uint32_t slot_len = frame_ms / slots;
+    if (slot_len == 0) {
+        slot_len = 1;
+    }
+    uint32_t delta = now_ms % frame_ms;
+    uint32_t slot_idx = delta / slot_len;
+    if (slot_idx != slot->slot_index) {
+        return false;
+    }
+    if (frame_idx_out) {
+        *frame_idx_out = now_ms / frame_ms;
+    }
+    return true;
+}
+
+ble_engine_slot_outcome_t
+ble_engine_gate_and_record_slot(ble_engine_t *engine,
+                                bool use_cluster_slot,
+                                uint32_t now_ms,
+                                bool is_tx)
+{
+    if (!engine || !engine->data_phase_active) {
+        return BLE_ENGINE_SLOT_OUTCOME_EMPTY;
+    }
+
+    if (!engine->config.enable_data_phase) {
+        return BLE_ENGINE_SLOT_OUTCOME_EMPTY;
+    }
+
+    ble_slot_assignment_t *slot = use_cluster_slot ? &engine->node.cluster_slot : &engine->node.self_slot;
+    if (!slot->assigned || slot->tdma_slots == 0 || engine->config.frame_duration_ms == 0) {
+        return BLE_ENGINE_SLOT_OUTCOME_EMPTY;
+    }
+
+    uint32_t frame_idx = 0;
+    if (!ble_engine_is_in_slot(slot, engine->config.frame_duration_ms, now_ms, &frame_idx)) {
+        return BLE_ENGINE_SLOT_OUTCOME_EMPTY;
+    }
+
+    /* Collision detection: if prior event in same frame/slot/channel, mark collision */
+    bool collision = false;
+    if (engine->last_slot_active &&
+        engine->last_slot_frame == frame_idx &&
+        engine->last_slot_index == slot->slot_index &&
+        engine->last_slot_channel == slot->channel_index) {
+        collision = engine->config.enable_collision_model;
+    }
+
+    engine->last_slot_active = true;
+    engine->last_slot_frame = frame_idx;
+    engine->last_slot_index = slot->slot_index;
+    engine->last_slot_channel = slot->channel_index;
+    engine->last_slot_iteration = frame_idx % 3;
+    engine->data_slot_iteration = engine->last_slot_iteration;
+
+    ble_engine_slot_outcome_t outcome = BLE_ENGINE_SLOT_OUTCOME_EMPTY;
+    if (collision) {
+        outcome = BLE_ENGINE_SLOT_OUTCOME_COLLISION;
+        ble_mesh_node_record_slot_collision(&engine->node, use_cluster_slot);
+    } else {
+        outcome = is_tx ? BLE_ENGINE_SLOT_OUTCOME_TX : BLE_ENGINE_SLOT_OUTCOME_RX;
+    }
+
+    ble_engine_emit_slot_event(engine,
+                               use_cluster_slot,
+                               frame_idx,
+                               slot->slot_index,
+                               slot->channel_index,
+                               engine->data_slot_iteration,
+                               outcome,
+                               true);
+
+    return outcome;
+}
+
+static void
 ble_engine_handle_election_packet(ble_engine_t *engine,
                                   const ble_election_packet_t *packet,
                                   int8_t rssi,
@@ -1009,6 +1474,39 @@ ble_engine_handle_election_packet(ble_engine_t *engine,
             ble_engine_start_renouncement_rounds(engine);
             ble_engine_clear_selected_clusterhead(engine);
             ble_engine_update_clusterhead_selection(engine, packet);
+        }
+        return;
+    }
+
+    /* If we are already a clusterhead but hear a stronger (or lower-ID) peer,
+     * demote to EDGE and align to it to avoid everyone remaining a CH.
+     */
+    if (ble_mesh_node_get_state(&engine->node) == BLE_NODE_STATE_CLUSTERHEAD) {
+        uint32_t local_direct = ble_mesh_node_count_direct_neighbors(&engine->node);
+        uint32_t remote_direct = packet->election.direct_connections;
+        bool remote_better = false;
+
+        if (remote_direct > local_direct) {
+            remote_better = true;
+        } else if (remote_direct == local_direct &&
+                   packet->base.sender_id < engine->node.node_id) {
+            remote_better = true;
+        }
+
+        if (remote_better) {
+            ble_engine_log(engine, "INFO", "Demoting clusterhead; stronger peer heard");
+            ble_mesh_node_set_state(&engine->node, BLE_NODE_STATE_EDGE);
+            engine->node.clusterhead_id = packet->base.sender_id;
+            engine->node.cluster_class = packet->election.class_id;
+            engine->selected_clusterhead_direct_connections = packet->election.direct_connections;
+            engine->selected_clusterhead_hops = packet->base.path_length == 0 ? 1 : packet->base.path_length;
+            engine->node.pdsf = packet->election.pdsf;
+            ble_mesh_node_assign_cluster_slot(&engine->node,
+                                              packet->election.hash,
+                                              engine->config.tdma_slots,
+                                              engine->config.fdma_channels,
+                                              engine->config.frame_duration_ms);
+            ble_engine_refresh_slots(engine, engine->last_tick_time_ms);
         }
         return;
     }

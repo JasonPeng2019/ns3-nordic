@@ -66,6 +66,10 @@ def build(bld):
         'test/ble-broadcast-timing-test.cc',
         ]
 
+    if bld.env.ENABLE_TESTS:
+        hash_slot = bld.create_ns3_program('ble-hash-slot-c-test', ['ble-mesh-discovery'])
+        hash_slot.source = 'test/ble-hash-slot-c-test.c'
+
     headers = bld(features='ns3header')
     headers.module = 'ble-mesh-discovery'
     headers.source = [

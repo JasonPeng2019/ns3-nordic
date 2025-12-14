@@ -440,7 +440,7 @@ uint32_t ble_election_calculate_pdsf(uint32_t previous_pdsf,
     return (uint32_t)updated_sum;
 }
 
-static double clamp_unit(double value)
+static double __attribute__((unused)) clamp_unit(double value)
 {
     if (value < 0.0) {
         return 0.0;
@@ -489,4 +489,95 @@ uint32_t ble_election_generate_hash(uint32_t node_id)
     hash *= 16777619;
 
     return hash;
+}
+
+uint32_t
+ble_hash_combine_cluster_edge(uint32_t cluster_hash, uint32_t edge_id)
+{
+    /* FNV-1a style mix of cluster hash and edge ID to derive edge-specific slot */
+    uint32_t hash = 2166136261u;
+    uint32_t inputs[2] = { cluster_hash, edge_id };
+    for (size_t i = 0; i < 2; ++i) {
+        uint32_t v = inputs[i];
+        hash ^= (v & 0xFF);
+        hash *= 16777619u;
+        hash ^= ((v >> 8) & 0xFF);
+        hash *= 16777619u;
+        hash ^= ((v >> 16) & 0xFF);
+        hash *= 16777619u;
+        hash ^= ((v >> 24) & 0xFF);
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+bool
+ble_hash_map_to_slot(uint32_t hash,
+                     uint32_t tdma_slots,
+                     uint32_t fdma_channels,
+                     uint32_t *slot_index_out,
+                     uint32_t *channel_index_out)
+{
+    if (tdma_slots == 0 || fdma_channels == 0 ||
+        slot_index_out == NULL || channel_index_out == NULL) {
+        return false;
+    }
+
+    uint64_t bucket_count = (uint64_t)tdma_slots * (uint64_t)fdma_channels;
+    if (bucket_count == 0) {
+        return false;
+    }
+
+    uint32_t bucket = (uint32_t)(hash % bucket_count);
+    *channel_index_out = bucket / tdma_slots;
+    *slot_index_out = bucket % tdma_slots;
+    return true;
+}
+
+uint64_t
+ble_hash_next_slot_time_ms(uint64_t now_ms,
+                           uint32_t frame_ms,
+                           uint32_t tdma_slots,
+                           uint32_t slot_index)
+{
+    if (tdma_slots == 0) {
+        return now_ms;
+    }
+
+    uint32_t safe_frame_ms = frame_ms;
+    if (safe_frame_ms < BLE_DISCOVERY_MIN_FRAME_MS) {
+        safe_frame_ms = BLE_DISCOVERY_MIN_FRAME_MS;
+    }
+
+    uint32_t normalized_slot = slot_index % tdma_slots;
+    uint32_t slot_duration = safe_frame_ms / tdma_slots;
+    if (slot_duration == 0) {
+        slot_duration = 1;
+    }
+
+    uint64_t frame_start = now_ms - (now_ms % safe_frame_ms);
+    uint64_t candidate = frame_start + ((uint64_t)slot_duration * (uint64_t)normalized_slot);
+
+    if (candidate < now_ms) {
+        frame_start += safe_frame_ms;
+        candidate = frame_start + ((uint64_t)slot_duration * (uint64_t)normalized_slot);
+    }
+
+    return candidate;
+}
+
+bool
+ble_hash_map_edge_slot(uint32_t cluster_hash,
+                       uint32_t edge_id,
+                       uint32_t tdma_slots,
+                       uint32_t fdma_channels,
+                       uint32_t *slot_index_out,
+                       uint32_t *channel_index_out)
+{
+    uint32_t mixed = ble_hash_combine_cluster_edge(cluster_hash, edge_id);
+    return ble_hash_map_to_slot(mixed,
+                                tdma_slots,
+                                fdma_channels,
+                                slot_index_out,
+                                channel_index_out);
 }

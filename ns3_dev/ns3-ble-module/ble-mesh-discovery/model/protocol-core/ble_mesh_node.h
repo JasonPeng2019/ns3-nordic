@@ -84,6 +84,23 @@ typedef struct {
     uint16_t direct_connections;    /**< Number of direct (1-hop) connections */
 } ble_node_statistics_t;
 
+/* ===== Slot Assignment Structure ===== */
+
+/**
+ * @brief Slot assignment derived from hash (FDMA/TDMA)
+ */
+typedef struct {
+    bool assigned;                  /**< True if slot/channel assigned */
+    bool is_listener;               /**< True if this role primarily listens in slot */
+    uint32_t channel_index;         /**< FDMA channel (0-based) */
+    uint32_t slot_index;            /**< TDMA slot (0-based) */
+    uint32_t tdma_slots;            /**< Slots per frame */
+    uint32_t fdma_channels;         /**< Channels available */
+    uint32_t frame_ms;              /**< Frame duration in milliseconds */
+    uint64_t next_slot_time_ms;     /**< Next scheduled slot time (ms) */
+    uint32_t collision_count;       /**< Collision counter for diagnostics */
+} ble_slot_assignment_t;
+
 /* ===== Main Node Structure ===== */
 
 /**
@@ -121,6 +138,10 @@ typedef struct {
 
     /* Statistics */
     ble_node_statistics_t stats;    /**< Node statistics */
+
+    /* Slotting (hash-derived) */
+    ble_slot_assignment_t self_slot;    /**< Slot assignment when acting as clusterhead */
+    ble_slot_assignment_t cluster_slot; /**< Slot assignment learned from clusterhead */
 
 } ble_mesh_node_t;
 
@@ -204,6 +225,66 @@ bool ble_mesh_node_is_valid_transition(ble_node_state_t current, ble_node_state_
  * @return String representation of state
  */
 const char* ble_mesh_node_state_name(ble_node_state_t state);
+
+/* ===== Slot Management (hash-derived FDMA/TDMA) ===== */
+
+/**
+ * @brief Clear all slot assignments
+ * @param node Pointer to node structure
+ */
+void ble_mesh_node_clear_slots(ble_mesh_node_t *node);
+
+/**
+ * @brief Assign clusterhead slot from this node's own hash (clusterhead role)
+ * @param node Pointer to node structure
+ * @param tdma_slots TDMA slots per frame
+ * @param fdma_channels FDMA channels available
+ * @param frame_ms Frame duration in milliseconds
+ * @return true on success, false on invalid input
+ */
+bool ble_mesh_node_assign_self_slot(ble_mesh_node_t *node,
+                                    uint32_t tdma_slots,
+                                    uint32_t fdma_channels,
+                                    uint32_t frame_ms);
+
+/**
+ * @brief Assign cluster slot derived from clusterhead hash (edge/member role)
+ * @param node Pointer to node structure
+ * @param clusterhead_hash Hash advertised by clusterhead
+ * @param tdma_slots TDMA slots per frame
+ * @param fdma_channels FDMA channels available
+ * @param frame_ms Frame duration in milliseconds
+ * @return true on success, false on invalid input
+ */
+bool ble_mesh_node_assign_cluster_slot(ble_mesh_node_t *node,
+                                       uint32_t clusterhead_hash,
+                                       uint32_t tdma_slots,
+                                       uint32_t fdma_channels,
+                                       uint32_t frame_ms);
+
+/**
+ * @brief Compute next slot time for either self or cluster assignment
+ * @param node Pointer to node structure
+ * @param use_cluster_slot True to use cluster slot; false for self slot
+ * @param now_ms Current time in milliseconds
+ * @return Absolute ms of next slot (or now_ms if no assignment)
+ */
+uint64_t ble_mesh_node_next_slot_time(ble_mesh_node_t *node,
+                                      bool use_cluster_slot,
+                                      uint64_t now_ms);
+
+/**
+ * @brief Record a slot collision for diagnostics
+ * @param node Pointer to node structure
+ * @param use_cluster_slot True to increment cluster slot counter; false for self slot
+ */
+void ble_mesh_node_record_slot_collision(ble_mesh_node_t *node, bool use_cluster_slot);
+
+/**
+ * @brief Clear only the cluster slot assignment (keep self slot intact)
+ * @param node Pointer to node structure
+ */
+void ble_mesh_node_clear_cluster_slot(ble_mesh_node_t *node);
 
 /**
  * @brief Advance to next discovery cycle

@@ -29,6 +29,17 @@ class BleDiscoveryEngineWrapper : public Object
 public:
   typedef Callback<void, Ptr<Packet> > TxCallback;
   typedef TracedCallback<const ble_connectivity_metrics_t &> MetricsTraceCallback;
+  struct SlotOutcomeEvent
+  {
+    uint32_t nodeId;
+    bool isClusterSlot;
+    uint32_t frameIndex;
+    uint32_t slotIndex;
+    uint32_t channelIndex;
+    uint8_t iteration;
+    uint8_t outcome; // mirrors ble_engine_slot_outcome_t
+  };
+  typedef TracedCallback<const SlotOutcomeEvent &> SlotOutcomeTraceCallback;
 
   static TypeId GetTypeId (void);
 
@@ -99,6 +110,7 @@ private:
   static void EngineSendHook (const ble_discovery_packet_t *packet, void *context);
   static void EngineLogHook (const char *level, const char *message, void *context);
   static void EngineMetricsHook (const ble_connectivity_metrics_t *metrics, void *context);
+  static void EngineSlotHook (const ble_engine_slot_event_t *evt, void *context);
   void HandleEngineSend (const ble_discovery_packet_t *packet);
   void HandleMetricsUpdate (const ble_connectivity_metrics_t *metrics);
 
@@ -111,6 +123,15 @@ private:
   uint32_t m_neighborSlotCount;
   Time m_neighborSlotDuration;
   uint32_t m_neighborTimeoutCycles;
+  /* Slotting (hash-derived data phase) */
+  uint32_t m_fdmaChannels;
+  uint32_t m_tdmaSlots;
+  Time m_frameDuration;
+  /* Mode placeholders (no behavior yet) */
+  Time m_mode1Duration;
+  Time m_mode2Duration;
+  bool m_enableCollisionModel;
+  bool m_enableDataPhase;
 
   bool m_initialized;
   bool m_running;
@@ -120,6 +141,7 @@ private:
   ble_engine_t m_engine;
   TxCallback m_txCallback;
   MetricsTraceCallback m_metricsTrace;
+  SlotOutcomeTraceCallback m_slotOutcomeTrace;
 };
 
 } // namespace ns3
