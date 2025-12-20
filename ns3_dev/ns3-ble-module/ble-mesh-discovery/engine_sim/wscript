@@ -12,3 +12,7 @@ def build(bld):
     obj3 = bld.create_ns3_program('phase2-discovery-physical-sim-random',
                                    ['ble-mesh-discovery', 'mobility', 'spectrum', 'propagation'])
     obj3.source = 'phase2-discovery-physical-sim-random.cc'
+
+    obj4 = bld.create_ns3_program('phase2-discovery-physical-sim-random-toggle',
+                                   ['ble-mesh-discovery', 'mobility', 'spectrum', 'propagation'])
+    obj4.source = 'phase2-discovery-physical-sim-random-toggle.cc'
