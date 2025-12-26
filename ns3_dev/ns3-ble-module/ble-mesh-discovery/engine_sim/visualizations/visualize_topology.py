@@ -27,6 +27,7 @@ def load_trace(trace_file):
 
     # Read CSV with proper column names
     df = pd.read_csv(trace_file)
+    df.columns = [col.strip() for col in df.columns]
 
     # Convert numeric columns
     numeric_cols = ['time_ms', 'sender_id', 'receiver_id', 'originator_id',
@@ -43,16 +44,38 @@ def extract_topology(df):
 
     # Get node positions from TOPOLOGY events
     topology_df = df[df['event'] == 'TOPOLOGY'].copy()
+    if topology_df.empty:
+        print("No TOPOLOGY rows found in trace")
+        return {}, defaultdict(set), {}
+
+    if 'latitude' not in topology_df.columns or 'longitude' not in topology_df.columns:
+        print("Missing latitude/longitude columns in trace")
+        return {}, defaultdict(set), {}
+
+    if topology_df['longitude'].isna().all() and 'rssi' in topology_df.columns:
+        rssi_vals = pd.to_numeric(topology_df['rssi'], errors='coerce')
+        lat_vals = pd.to_numeric(topology_df['latitude'], errors='coerce')
+        if rssi_vals.notna().any() and lat_vals.notna().any():
+            topology_df['latitude'] = rssi_vals
+            topology_df['longitude'] = lat_vals
+            print("Detected shifted TOPOLOGY columns; using rssi/latitude as X/Y meters")
+
+    topology_df = topology_df.dropna(subset=['latitude', 'longitude'])
+    if topology_df.empty:
+        print("TOPOLOGY rows missing latitude/longitude values")
+        return {}, defaultdict(set), {}
 
     node_positions = {}
+
     for _, row in topology_df.iterrows():
         node_id = int(row['sender_id'])
-        # Use the last two columns for x, y positions (Cartesian coordinates)
-        x = row['latitude']  # Actually x coordinate in TOPOLOGY events
-        y = row['longitude']  # Actually y coordinate in TOPOLOGY events
+        # Use latitude/longitude columns as X/Y meters
+        x = row['latitude']
+        y = row['longitude']
         node_positions[node_id] = (x, y)
 
     print(f"Found {len(node_positions)} nodes")
+    print("Interpreting TOPOLOGY coordinates as meters")
 
     # Extract connections from RECV events
     recv_df = df[df['event'] == 'RECV'].copy()
@@ -165,7 +188,10 @@ def plot_topology(node_positions, connections, avg_rssi, output_file='mesh_topol
     print(f"Total Nodes: {num_nodes}")
     print(f"Total Connections: {num_connections}")
     print(f"Average Node Degree: {avg_degree:.2f}")
-    print(f"Network Density: {(2 * num_connections) / (num_nodes * (num_nodes - 1)):.3f}")
+    density = 0.0
+    if num_nodes > 1:
+        density = (2 * num_connections) / (num_nodes * (num_nodes - 1))
+    print(f"Network Density: {density:.3f}")
 
     if avg_rssi:
         all_rssi = list(avg_rssi.values())

@@ -105,6 +105,26 @@ struct GpsCoordinate
   }
 };
 
+static Vector
+ConvertGpsToLocalMeters (const GpsCoordinate &origin, const GpsCoordinate &point)
+{
+  GpsCoordinate northPoint (point.latitude, origin.longitude, point.altitude);
+  double north = origin.DistanceTo (northPoint);
+  if (point.latitude < origin.latitude)
+    {
+      north = -north;
+    }
+
+  GpsCoordinate eastPoint (origin.latitude, point.longitude, point.altitude);
+  double east = origin.DistanceTo (eastPoint);
+  if (point.longitude < origin.longitude)
+    {
+      east = -east;
+    }
+
+  return Vector (east, north, point.altitude);
+}
+
 class PhysicalSimNode;
 
 // Structure to track ongoing transmissions for collision detection
@@ -185,6 +205,7 @@ public:
   void Configure (uint32_t nodeId,
                   const GpsCoordinate &gpsLocation,
                   const Vector &nsPosition,
+                  const Vector &gpsMeters,
                   Time slotDuration,
                   uint8_t initialTtl,
                   double proximityThreshold,
@@ -200,6 +221,7 @@ public:
   uint32_t GetNodeId () const { return m_nodeId; }
   GpsCoordinate GetGpsLocation () const { return m_gpsLocation; }
   Vector GetPosition () const { return m_position; }
+  double GetRxSensitivityDbm () const { return m_rxSensitivityDbm; }
   const ble_mesh_node_t* GetNodeState () const;
 
   // Timing error simulation
@@ -396,7 +418,7 @@ RealisticBleChannel::CalculateRssi (double txPowerDbm, double distance) const
   double shadowing = CalculateShadowing ();
   double fading = CalculateRicianFading ();
 
-  double rssi = txPowerDbm - pathLoss - shadowing - fading;
+  double rssi = txPowerDbm - pathLoss - shadowing + fading;
 
   NS_LOG_DEBUG ("Distance=" << distance << "m, PathLoss=" << pathLoss
                 << "dB, Shadowing=" << shadowing << "dB, RicianFading=" << fading
@@ -534,7 +556,7 @@ RealisticBleChannel::Transmit (uint32_t senderId, Ptr<Packet> packet, double txP
       double rssi = CalculateRssi (txPowerDbm, distance);
 
       // Check if signal is above receiver sensitivity (use fixed threshold)
-      double rxSensitivity = -90.0; // Default BLE receiver sensitivity
+      double rxSensitivity = receiver->GetRxSensitivityDbm ();
       if (rssi < rxSensitivity)
         {
           NS_LOG_DEBUG ("Packet dropped: RSSI " << rssi << " dBm below sensitivity");
@@ -719,6 +741,7 @@ void
 PhysicalSimNode::Configure (uint32_t nodeId,
                             const GpsCoordinate &gpsLocation,
                             const Vector &nsPosition,
+                            const Vector &gpsMeters,
                             Time slotDuration,
                             uint8_t initialTtl,
                             double proximityThreshold,
@@ -767,7 +790,7 @@ PhysicalSimNode::Configure (uint32_t nodeId,
 
   // Set GPS location for all nodes (needed for trace output)
   // When smart forwarding is disabled, proximity check won't matter due to huge threshold
-  m_engine->SetGpsLocation (nsPosition, true);
+  m_engine->SetGpsLocation (gpsMeters, true);
 
   m_engine->SetSendCallback (MakeCallback (&PhysicalSimNode::HandleEngineSend, this));
 
@@ -786,7 +809,7 @@ PhysicalSimNode::Start ()
   m_startTime = Simulator::Now ();
 
   // Apply random initial timing offset (simulates unsynchronized nodes)
-  Time initialOffset = MilliSeconds (m_timingJitterRng->GetValue ());
+  Time initialOffset = MilliSeconds (std::abs (m_timingJitterRng->GetValue ()));
   Simulator::Schedule (initialOffset, &BleDiscoveryEngineWrapper::Start, m_engine);
 
   NS_LOG_INFO ("Node " << m_nodeId << " starting with "
@@ -971,6 +994,7 @@ main (int argc, char *argv[])
   cmd.Parse (argc, argv);
 
   Time slotDuration = MilliSeconds (slotDurationMs);
+  GpsCoordinate baseGps (baseLatitude, baseLongitude, 0.0);
 
   // Set random seed for reproducibility
   RngSeedManager::SetSeed (randomSeed);
@@ -1033,9 +1057,10 @@ main (int argc, char *argv[])
       double latOffset = y / metersPerDegreeLat;
       double lonOffset = x / metersPerDegreeLon;
       GpsCoordinate gpsLocation (baseLatitude + latOffset, baseLongitude + lonOffset, 0.0);
+      Vector gpsMeters = ConvertGpsToLocalMeters (baseGps, gpsLocation);
 
       Ptr<PhysicalSimNode> node = CreateObject<PhysicalSimNode> ();
-      node->Configure (i + 1, gpsLocation, position, slotDuration,
+      node->Configure (i + 1, gpsLocation, position, gpsMeters, slotDuration,
                        ttl, proximityThreshold,
                        channel, txPowerDbm, -90.0 /* rx sensitivity */,
                        smartForwarding);
@@ -1050,9 +1075,8 @@ main (int argc, char *argv[])
       nodes.push_back (node);
 
       // Log topology
-      g_traceFile << "0,TOPOLOGY," << (i + 1) << ",,"
-                  << gpsLocation.latitude << "," << gpsLocation.longitude
-                  << ",,," << position.x << "," << position.y << "\n";
+      g_traceFile << "0,TOPOLOGY," << (i + 1) << ",,,,,"
+                  << position.x << "," << position.y << "\n";
 
       NS_LOG_INFO ("Node " << (i + 1) << " placed at (" << x << ", " << y << ")");
     }
