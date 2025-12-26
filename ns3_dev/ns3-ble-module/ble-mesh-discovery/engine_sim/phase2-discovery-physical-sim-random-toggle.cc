@@ -243,6 +243,7 @@ private:
   double m_txPowerDbm;             // Transmit power (typical: 0 dBm for BLE)
   double m_rxSensitivityDbm;       // Receiver sensitivity (typical: -90 dBm)
   bool m_smartForwarding;          // Enable smart forwarding features
+  Time m_slotDuration;             // Slot duration for random transmission timing
 
   // Timing error modeling
   double m_clockDriftPpm;          // Clock drift in parts per million
@@ -759,6 +760,7 @@ PhysicalSimNode::Configure (uint32_t nodeId,
   m_txPowerDbm = txPowerDbm;
   m_rxSensitivityDbm = rxSensitivityDbm;
   m_smartForwarding = enableSmartForwarding;
+  m_slotDuration = slotDuration;
 
   m_engine->SetAttribute ("NodeId", UintegerValue (nodeId));
   m_engine->SetAttribute ("SlotDuration", TimeValue (slotDuration));
@@ -911,8 +913,15 @@ PhysicalSimNode::HandleEngineSend (Ptr<Packet> packet)
 {
   NS_ABORT_MSG_IF (!m_channel, "Channel not bound");
 
-  // Apply timing error to transmission
-  Time sendDelay = ApplyTimingError (MilliSeconds (0));
+  // Each node should transmit at a random point within the slot
+  // Generate random offset within the slot [0, slotDuration)
+  Ptr<UniformRandomVariable> slotOffsetRng = CreateObject<UniformRandomVariable> ();
+  slotOffsetRng->SetAttribute ("Min", DoubleValue (0.0));
+  slotOffsetRng->SetAttribute ("Max", DoubleValue (m_slotDuration.GetMilliSeconds ()));
+  double randomOffsetMs = slotOffsetRng->GetValue ();
+
+  // Add small timing jitter on top of the random slot offset
+  Time sendDelay = MilliSeconds (randomOffsetMs) + ApplyTimingError (MilliSeconds (0));
 
   Ptr<Packet> txPacket = packet->Copy ();
   Simulator::Schedule (sendDelay,
@@ -921,6 +930,9 @@ PhysicalSimNode::HandleEngineSend (Ptr<Packet> packet)
                        m_nodeId,
                        txPacket,
                        m_txPowerDbm);
+
+  NS_LOG_DEBUG ("Node " << m_nodeId << " scheduling transmission at +"
+                << sendDelay.GetMilliSeconds () << "ms within slot");
 }
 
 Time
