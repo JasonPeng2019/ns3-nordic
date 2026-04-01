@@ -59,7 +59,7 @@ struct ConnectivityMetrics
  * Wraps the pure C election implementation for NS-3 integration.
  * Implements Phase 3 Tasks 12-18.
  */
-class BleElection : public Object
+class BleElectionEngine : public Object
 {
 public:
   /**
@@ -71,12 +71,12 @@ public:
   /**
    * \brief Constructor
    */
-  BleElection ();
+  BleElectionEngine ();
 
   /**
    * \brief Destructor
    */
-  virtual ~BleElection ();
+  virtual ~BleElectionEngine ();
 
   /**
    * \brief Add or update neighbor information (Task 15)

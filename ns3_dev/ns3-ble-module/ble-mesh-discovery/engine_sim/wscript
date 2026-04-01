@@ -12,3 +12,7 @@ def build(bld):
     obj4 = bld.create_ns3_program('phase3-hash-timeslot-sim',
                                    ['ble-mesh-discovery'])
     obj4.source = 'phase3-hash-timeslot-sim.cc'
+
+    obj5 = bld.create_ns3_program('phase4-hybrid-sim',
+                                   ['ble-mesh-discovery'])
+    obj5.source = 'phase4-hybrid-sim.cc'

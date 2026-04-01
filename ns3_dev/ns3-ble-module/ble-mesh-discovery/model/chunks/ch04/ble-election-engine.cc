@@ -7,7 +7,7 @@
  * C++ Wrapper Implementation - Thin layer over C protocol core
  */
 
-#include "ble-election.h"
+#include "ble-election-engine.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
 #include "ns3/uinteger.h"
@@ -15,43 +15,43 @@
 
 namespace ns3 {
 
-NS_LOG_COMPONENT_DEFINE ("BleElection");
-NS_OBJECT_ENSURE_REGISTERED (BleElection);
+NS_LOG_COMPONENT_DEFINE ("BleElectionEngine");
+NS_OBJECT_ENSURE_REGISTERED (BleElectionEngine);
 
 TypeId
-BleElection::GetTypeId (void)
+BleElectionEngine::GetTypeId (void)
 {
-  static TypeId tid = TypeId ("ns3::BleElection")
+  static TypeId tid = TypeId ("ns3::BleElectionEngine")
     .SetParent<Object> ()
     .SetGroupName ("BleMeshDiscovery")
-    .AddConstructor<BleElection> ()
+    .AddConstructor<BleElectionEngine> ()
     .AddAttribute ("MinNeighborsForCandidacy",
                    "Minimum direct neighbors to become candidate",
                    UintegerValue (10),
-                   MakeUintegerAccessor (&BleElection::m_state.min_neighbors_for_candidacy),
+                   MakeUintegerAccessor (&BleElectionEngine::m_state.min_neighbors_for_candidacy),
                    MakeUintegerChecker<uint32_t> ())
     .AddAttribute ("MinConnectionNoiseRatio",
                    "Minimum connection:noise ratio for candidacy",
                    DoubleValue (5.0),
-                   MakeDoubleAccessor (&BleElection::m_state.min_connection_noise_ratio),
+                   MakeDoubleAccessor (&BleElectionEngine::m_state.min_connection_noise_ratio),
                    MakeDoubleChecker<double> ())
   ;
   return tid;
 }
 
-BleElection::BleElection ()
+BleElectionEngine::BleElectionEngine ()
 {
   NS_LOG_FUNCTION (this);
   ble_election_init (&m_state);
 }
 
-BleElection::~BleElection ()
+BleElectionEngine::~BleElectionEngine ()
 {
   NS_LOG_FUNCTION (this);
 }
 
 void
-BleElection::UpdateNeighbor (uint32_t nodeId, Vector location, int8_t rssi)
+BleElectionEngine::UpdateNeighbor (uint32_t nodeId, Vector location, int8_t rssi)
 {
   NS_LOG_FUNCTION (this << nodeId << location << static_cast<int32_t> (rssi));
 
@@ -69,7 +69,7 @@ BleElection::UpdateNeighbor (uint32_t nodeId, Vector location, int8_t rssi)
 }
 
 void
-BleElection::AddRssiSample (int8_t rssi)
+BleElectionEngine::AddRssiSample (int8_t rssi)
 {
   NS_LOG_FUNCTION (this << static_cast<int32_t> (rssi));
   uint32_t current_time_ms = static_cast<uint32_t> (Simulator::Now ().GetMilliSeconds ());
@@ -77,7 +77,7 @@ BleElection::AddRssiSample (int8_t rssi)
 }
 
 void
-BleElection::BeginCrowdingMeasurement (Time duration)
+BleElectionEngine::BeginCrowdingMeasurement (Time duration)
 {
   NS_LOG_FUNCTION (this << duration);
   uint32_t window_ms = static_cast<uint32_t> (duration.GetMilliSeconds ());
@@ -85,20 +85,20 @@ BleElection::BeginCrowdingMeasurement (Time duration)
 }
 
 double
-BleElection::EndCrowdingMeasurement ()
+BleElectionEngine::EndCrowdingMeasurement ()
 {
   NS_LOG_FUNCTION (this);
   return ble_election_end_crowding_measurement (&m_state);
 }
 
 bool
-BleElection::IsCrowdingMeasurementActive () const
+BleElectionEngine::IsCrowdingMeasurementActive () const
 {
   return ble_election_is_crowding_measurement_active (&m_state);
 }
 
 double
-BleElection::CalculateCrowding () const
+BleElectionEngine::CalculateCrowding () const
 {
   double crowding = ble_election_calculate_crowding (&m_state);
   NS_LOG_DEBUG ("Crowding factor: " << crowding);
@@ -106,7 +106,7 @@ BleElection::CalculateCrowding () const
 }
 
 uint32_t
-BleElection::CountDirectConnections () const
+BleElectionEngine::CountDirectConnections () const
 {
   uint32_t count = ble_election_count_direct_connections (&m_state);
   NS_LOG_DEBUG ("Direct connections: " << count);
@@ -114,7 +114,7 @@ BleElection::CountDirectConnections () const
 }
 
 double
-BleElection::CalculateGeographicDistribution () const
+BleElectionEngine::CalculateGeographicDistribution () const
 {
   double distribution = ble_election_calculate_geographic_distribution (&m_state);
   NS_LOG_DEBUG ("Geographic distribution: " << distribution);
@@ -122,7 +122,7 @@ BleElection::CalculateGeographicDistribution () const
 }
 
 void
-BleElection::UpdateMetrics ()
+BleElectionEngine::UpdateMetrics ()
 {
   NS_LOG_FUNCTION (this);
   ble_election_update_metrics (&m_state);
@@ -135,7 +135,7 @@ BleElection::UpdateMetrics ()
 }
 
 double
-BleElection::CalculateCandidacyScore () const
+BleElectionEngine::CalculateCandidacyScore () const
 {
   double score = ble_election_calculate_candidacy_score (&m_state);
   NS_LOG_DEBUG ("Candidacy score: " << score);
@@ -143,7 +143,7 @@ BleElection::CalculateCandidacyScore () const
 }
 
 bool
-BleElection::ShouldBecomeCandidate ()
+BleElectionEngine::ShouldBecomeCandidate ()
 {
   NS_LOG_FUNCTION (this);
 
@@ -169,7 +169,7 @@ BleElection::ShouldBecomeCandidate ()
 }
 
 ConnectivityMetrics
-BleElection::GetMetrics () const
+BleElectionEngine::GetMetrics () const
 {
   ConnectivityMetrics metrics;
   metrics.directConnections = m_state.metrics.direct_connections;
@@ -185,7 +185,7 @@ BleElection::GetMetrics () const
 }
 
 std::vector<NeighborInfo>
-BleElection::GetNeighbors () const
+BleElectionEngine::GetNeighbors () const
 {
   std::vector<NeighborInfo> neighbors;
 
@@ -210,7 +210,7 @@ BleElection::GetNeighbors () const
 }
 
 bool
-BleElection::GetNeighbor (uint32_t nodeId, NeighborInfo& info) const
+BleElectionEngine::GetNeighbor (uint32_t nodeId, NeighborInfo& info) const
 {
   const ble_election_neighbor_info_t* c_neighbor = ble_election_get_neighbor (&m_state, nodeId);
 
@@ -232,7 +232,7 @@ BleElection::GetNeighbor (uint32_t nodeId, NeighborInfo& info) const
 }
 
 uint32_t
-BleElection::CleanOldNeighbors (Time timeout)
+BleElectionEngine::CleanOldNeighbors (Time timeout)
 {
   NS_LOG_FUNCTION (this << timeout);
 
@@ -250,32 +250,32 @@ BleElection::CleanOldNeighbors (Time timeout)
 }
 
 void
-BleElection::SetThresholds (uint32_t minNeighbors, double minCnRatio, double minGeoDist)
+BleElectionEngine::SetThresholds (uint32_t minNeighbors, double minCnRatio, double minGeoDist)
 {
   NS_LOG_FUNCTION (this << minNeighbors << minCnRatio << minGeoDist);
   ble_election_set_thresholds (&m_state, minNeighbors, minCnRatio, minGeoDist);
 }
 
 void
-BleElection::RecordMessageForwarded ()
+BleElectionEngine::RecordMessageForwarded ()
 {
   m_state.metrics.messages_forwarded++;
 }
 
 void
-BleElection::RecordMessageReceived ()
+BleElectionEngine::RecordMessageReceived ()
 {
   m_state.metrics.messages_received++;
 }
 
 bool
-BleElection::IsCandidate () const
+BleElectionEngine::IsCandidate () const
 {
   return m_state.is_candidate;
 }
 
 double
-BleElection::GetCandidacyScore () const
+BleElectionEngine::GetCandidacyScore () const
 {
   return m_state.candidacy_score;
 }

@@ -24,7 +24,7 @@ namespace ns3 {
 /**
  * \brief NS-3 wrapper for the pure C discovery engine
  */
-class BleDiscoveryEngineWrapper : public Object
+class BleDiscoveryEngine : public Object
 {
 public:
   typedef Callback<void, Ptr<Packet> > TxCallback;
@@ -43,8 +43,8 @@ public:
 
   static TypeId GetTypeId (void);
 
-  BleDiscoveryEngineWrapper ();
-  ~BleDiscoveryEngineWrapper () override;
+  BleDiscoveryEngine ();
+  ~BleDiscoveryEngine () override;
 
   /**
    * \brief Configure and initialize the engine with current attributes
