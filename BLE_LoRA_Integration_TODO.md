@@ -10,12 +10,13 @@ Goal: extend the current BLE-only discovery/election + hash/slotting work to inc
 - CH listen ratio: ~75% listen / 25% TX during messaging phases.
 
 ## Workstream 1: LoRA Protocol Core
-- Define pure-C LoRA packet structs (discovery, CH declaration, search, data) and serialization.
-- Implement LoRA discovery logic: channel listen, CAD/RSSI crowding assessment, channel voting/migration, crowding factor calculation, TTL/PSF, GPS.
-- Implement LoRA CH election: candidate criteria, CH declaration, conflict resolution (higher direct count, lower ID tie-breaker), cluster formation.
-- Implement LoRA hash/slotting: stochastic slot assignment for LoRA Edge↔CH and CH↔CH; reuse hash mix functions where possible; derive listen slots per PDF.
-- Add LoRA node state machine: channel home/k, crowding factor, CH/edge roles, neighbor table, stats.
-- Unit tests: serialization, channel migration decisions, crowding/voting, CH election tie-breakers, hash→slot mapping.
+- Status: scaffolding expanded further. Packets/nodes include channel/home/target, crowding, CH flag; engine emits discovery packets each tick, ignores off-channel traffic, bumps crowding on strong RSSI, and adopts lowest-ID CH seen. Simple serialization/deserialization added for discovery packets. Still missing real discovery/channel voting, CH election, hash/slotting.
+- Define pure-C LoRA packet structs (discovery, CH declaration, search, data) and serialization. (Partial: discovery serialize/deserialize done; search/data still TODO)
+- Implement LoRA discovery logic: channel listen, CAD/RSSI crowding assessment, channel voting/migration, crowding factor calculation, TTL/PSF, GPS. (TODO)
+- Implement LoRA CH election: candidate criteria, CH declaration, conflict resolution (higher direct count, lower ID tie-breaker), cluster formation. (TODO)
+- Implement LoRA hash/slotting: stochastic slot assignment for LoRA Edge↔CH and CH↔CH; reuse hash mix functions where possible; derive listen slots per PDF. (TODO)
+- Add LoRA node state machine: channel home/k, crowding factor, CH/edge roles, neighbor table, stats. (TODO: expand beyond current minimal fields)
+- Unit tests: serialization, channel migration decisions, crowding/voting, CH election tie-breakers, hash→slot mapping. (TODO)
 
 ## Workstream 2: Engine Integration (C core)
 - Extend engine to own two radio contexts: BLE and LoRA, each with its own discovery phases, timing, and queues.
@@ -26,17 +27,15 @@ Goal: extend the current BLE-only discovery/election + hash/slotting work to inc
 - Metrics: track per-radio slots_tx/rx/collision/empty, CH counts, channel crowding, mode transitions.
 
 ## Workstream 3: NS-3 Wrapper & Attributes
-- Add LoRA attributes: channel count, CAD/RSSI thresholds, crowding vote thresholds, TDMA slots, frame durations, hash/slot enable flag.
-- Add Mode1/Mode2 attributes (duration, iteration count) and CH listen ratio knobs.
-- Expose separate trace sources for BLE and LoRA SlotOutcome, election events, and channel migration events.
-- Ensure wrapper wiring passes mode cadence and per-radio configs into the C core.
+- Status: placeholder `LoraEngineWrapper` added (NodeId, SlotDuration, InitialChannel, MaxChannels, TX callback). No attributes for slots/voting yet; no traces.
+- Add LoRA attributes: channel count, CAD/RSSI thresholds, crowding vote thresholds, TDMA slots, frame durations, hash/slot enable flag. (TODO)
+- Add Mode1/Mode2 attributes (duration, iteration count) and CH listen ratio knobs. (TODO)
+- Expose separate trace sources for BLE and LoRA SlotOutcome, election events, and channel migration events. (TODO)
+- Ensure wrapper wiring passes mode cadence and per-radio configs into the C core. (TODO)
 
 ## Workstream 4: Hybrid Simulation Program
-- Create a new sim (e.g., `phase4-hybrid-sim.cc`) that instantiates nodes with both BLE and LoRA engines.
-- Discovery: BLE on single channel; LoRA on voted channels. Channel model: distance-based RSSI for both; LoRA range > BLE.
-- Mode scheduler: drive Mode1/Mode2, activate appropriate radio roles per window; log SEND/RECV/SLOT events with radio tag, channel/slot/frame/iteration, collisions.
-- Support command-line knobs: BLE/LoRA node counts, tdmaSlots/fdmaChannels per radio, Mode durations, collision toggles, channel vote thresholds.
-- Visualization: extend visualizer to plot BLE vs LoRA events, channel migrations, and slot heatmaps.
+- Status: basic hybrid driver added (`phase4-hybrid-sim.cc`) wiring BLE and LoRA wrappers over simple channels; LoRA still placeholder behavior.
+- TODO: evolve hybrid sim to enforce Mode1/Mode2 roles, slot gating, channel migration, and logging/tracing per PDF.
 
 ## Workstream 5: Rediscovery & Failure Handling
 - Implement 30-minute (simulated) rediscovery hooks: BLE rediscovery in Mode1, LoRA rediscovery in Mode2.
