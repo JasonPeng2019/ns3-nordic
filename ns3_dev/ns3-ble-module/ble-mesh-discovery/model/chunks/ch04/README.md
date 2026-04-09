@@ -29,6 +29,21 @@ Scope of this README is **only files inside `ch04/`**.
 
 The broadcast and election subsystems are separate in code (no direct function calls between the two C cores), but are conceptually coupled through crowding and clusterhead candidacy behavior.
 
+Temporal note:
+- `BleBroadcastTiming` slot scheduling is independent from `ch02` discovery-cycle slot state in this folder; timeline coordination is handled only in higher-level integrated runtime paths.
+
+## PDF Section 3 Mapping (Election Sequence)
+
+This chunk mostly covers PDF Section 3 steps (a)-(c), and defers later steps to subsequent chunks.
+
+| PDF Section 3 step | `ch04` code mapping | Ownership/status |
+|---|---|---|
+| (a) noisy broadcast + random listen -> crowding factor `f(RSSI)` | `BleBroadcastTiming` noisy/stochastic schedule support + `ble_election_add_rssi_sample` + `ble_election_calculate_crowding` | Implemented in this chunk (with formula/config deviations noted below) |
+| (b) clusterhead broadcast phase -> direct connection counting | `BleBroadcastTiming` stochastic slot behavior + `ble_election_update_neighbor` + `ble_election_count_direct_connections` | Implemented in structure, but directness classification is currently over-permissive |
+| (c) candidacy from connection/noise relationship | `ble_election_should_become_candidate` + `connection_noise_ratio` metric path | Partially implemented (locked full-formula candidacy set not complete) |
+| (d) candidate comparison + election announcement | Election round/conflict logic in later runtime paths | Owned by `ch05` |
+| (e) cluster formation | Assignment/path management and cluster state realization | Owned by `ch06` |
+
 ## Dependencies (Per File)
 
 ### `ble_broadcast_timing.h`
@@ -103,6 +118,7 @@ The broadcast and election subsystems are separate in code (no direct function c
   - Utility clamp used by crowding/profile logic.
 - `ble_broadcast_compute_neighbor_tx_slots(crowding_factor)`
   - Maps crowding `[0,1]` to TX slots in `[3,15]` (inverse relationship).
+  - This `[3,15]` cap range is a local implementation policy in this chunk, not a locked value from PDF/split.
 - `ble_broadcast_apply_neighbor_profile(state*)`
   - For STOCHASTIC schedule, enforces slot bounds and recomputes:
     - `max_broadcast_slots`
@@ -184,14 +200,17 @@ The broadcast and election subsystems are separate in code (no direct function c
   - Counts neighbors with `is_direct=true`.
 - `ble_election_calculate_geographic_distribution(state*)`
   - Computes centroid and distance variance for valid neighbor locations, normalizes by `std_dev/100`.
+  - Valid-location filtering currently uses `(x,y,z)!=(0,0,0)` sentinel behavior rather than explicit GPS-availability semantics.
 - `ble_election_update_metrics(state*)`
   - Updates direct/total/crowding/CN ratio/geographic metrics and forwarding success rate.
 - `ble_election_calculate_candidacy_score(state*)`
   - Delegates to external `ble_election_calculate_score(direct_connections, crowding_factor)`.
+  - External score helper lives in `ch01/ble_discovery_packet.c`, not `ch04`.
 - `ble_election_reset_rssi_samples(state*)`
   - Clears RSSI circular buffer indices/count.
 - `ble_election_begin_crowding_measurement(state*, window_ms)`
   - Clears RSSI buffer and enables measurement flag.
+  - `window_ms` is currently ignored by C core implementation.
 - `ble_election_end_crowding_measurement(state*)`
   - Finalizes crowding, caches it, updates metric, disables measurement, clears samples.
 - `ble_election_is_crowding_measurement_active(state*)`
@@ -248,7 +267,7 @@ The broadcast and election subsystems are separate in code (no direct function c
 
 ## Conformance to `split.md` Chunk 4
 
-Reference plan: `chunks/split.md`, Chunk 4 ("Connectivity Metrics + Candidacy Decision"), updated `2026-03-31`.
+Reference plan: `chunks/split.md`, Chunk 4 ("Connectivity Metrics + Candidacy Decision"), updated `2026-04-05`.
 
 ### What fits the plan
 
@@ -274,11 +293,27 @@ Reference plan: `chunks/split.md`, Chunk 4 ("Connectivity Metrics + Candidacy De
 5. `forwarding_success_rate` formula differs at `received == 0` edge:
    - Plan: `forwarded / max(1, received)`.
    - Current code: `0.0` when `received == 0`.
+   - Practical nuance: these differ when `forwarded > 0 && received == 0` (possible for locally-originated traffic accounting paths), otherwise both often evaluate to `0.0`.
 6. Candidate gate checks do not include all planned criteria; current gate enforces only:
    - min direct neighbors
    - min connection:noise ratio
 7. `window_ms` and `current_time_ms` parameters in crowding window APIs are currently ignored, so crowding windows are event-count bounded (buffer-size bounded), not truly time bounded.
 8. Planned candidate transition path `DISCOVERY -> CLUSTERHEAD_CANDIDATE` is not represented in this chunk as an explicit node-state transition; this chunk only sets `is_candidate` boolean in election state.
+9. Broadcast timing policy contains unspec'd hardcoded slot-cap behavior:
+   - `ble_broadcast_compute_neighbor_tx_slots` maps crowding `[0,1]` to transmit slots `[3,15]`.
+   - PDF/split do not lock this exact range; this should be centralized config policy with explicit ownership.
+10. Configuration surface exposed by `BleElectionEngine` is incomplete versus locked Chunk 4 formula set:
+   - Wrapper attributes expose only `MinNeighborsForCandidacy` and `MinConnectionNoiseRatio`.
+   - Locked formula family additionally requires tunables for weighted score (`w1..w5`), dynamic `min_direct` slope/floor/ceil behavior, and `unique_paths` window/signature controls.
+
+### Cross-Chunk Audit Notes (2026-04-05)
+
+- `ble_election_calculate_score(...)` is provided by `ch01/ble_discovery_packet.*`, not by files in `ch04`.
+- Concrete score implementation reference: `ch01/ble_discovery_packet.c` -> `ble_election_calculate_score(uint32_t direct_connections, double noise_level)`.
+- The explicit node-state transition `DISCOVERY -> CLUSTERHEAD_CANDIDATE` is implemented in the integrated engine path (`ch05` + shared `ble_mesh_node.*`), not in this chunk.
+- Locked Chunk 4 formula elements (`unique_paths`, 8-sector geographic occupancy, 5-term weighted score, dynamic `min_direct`) were not found in `ch04`, `ch05`, or `model/shared` in this audit.
+- Crowding normalization constants are duplicated across chunks (`ch03` forwarding and `ch04` election both use `RSSI_MIN=-90`, `RSSI_MAX=-40`) with no shared config source of truth.
+- Temporal relationship between `BleBroadcastTiming` slots and `ch02` discovery-cycle slots is not defined in this folder; integration timing policy is deferred to higher-level engine orchestration.
 
 ## Implementation Highlights
 
@@ -288,23 +323,75 @@ Reference plan: `chunks/split.md`, Chunk 4 ("Connectivity Metrics + Candidacy De
 - Election core provides a full metrics pipeline (neighbors, crowding, geographic spread, forwarding success, candidacy gates).
 - Wrappers are thin and mostly straightforward, minimizing NS-3-specific logic in core algorithms.
 
+## Chunk 4 Exit Gate Checklist (`split.md`)
+
+Required Chunk 4 gate conditions:
+
+1. For fixed seed (`D0`), candidate sets are identical across 30 runs.
+2. Clustered vs uniform scenarios produce statistically different candidacy distributions (`p < 0.05`).
+
+Current folder-local evidence status:
+
+- No folder-local artifact proving 30/30 identical candidate sets for fixed-seed (`D0`) runs.
+- No folder-local statistical report showing clustered-vs-uniform candidacy distribution separation with `p < 0.05`.
+
 ## Potential Issues and Risks
 
-1. `ble_election_calculate_candidacy_score()` calls `ble_election_calculate_score(...)`, but that function is not defined anywhere in `ch04`.
-2. `ble_election_should_become_candidate()` only checks direct-neighbor and CN-ratio thresholds; geographic threshold and forwarding-success requirement mentioned in comments are not enforced.
-3. `min_geographic_distribution` is stored/set but not used for candidacy gating.
-4. `ble_election_update_neighbor()` marks every updated neighbor `is_direct = true`; RSSI-based directness classification is effectively disabled.
-5. `ble_election_begin_crowding_measurement(window_ms)` and `ble_election_add_rssi_sample(..., current_time_ms)` ignore time parameters, so no true time-window filtering is implemented.
-6. New neighbor entries are only partially initialized on insert; if `location == NULL`, stale location data can persist in reused slots after compaction.
-7. Geographic distribution treats `(0,0,0)` as invalid/no-GPS, which can discard valid origin coordinates.
-8. `ble_broadcast_timing_rand_double()` can return `1.0` when RNG hits `UINT32_MAX`, despite docs saying `[0.0, 1.0)`.
+1. Candidacy score depends on cross-chunk function ownership.
+- `ble_election_calculate_candidacy_score()` calls `ble_election_calculate_score(...)` from `ch01`.
+- This is not a missing symbol in the repo snapshot, but it is a coupling point where formula drift can occur if chunk ownership boundaries are unclear.
+
+2. `ble_election_should_become_candidate()` only checks direct-neighbor and CN-ratio thresholds.
+- Geographic threshold and forwarding-success criteria mentioned in comments are not enforced.
+- `min_geographic_distribution` is stored/set but not used for candidacy gating.
+
+3. Direct-neighbor classification is structurally incorrect for candidacy inputs.
+- `ble_election_update_neighbor()` marks every updated neighbor `is_direct = true`.
+- This effectively counts "all heard neighbors" as direct and can distort the direct-connections signal that feeds candidacy logic.
+
+4. Crowding measurement APIs ignore timing parameters.
+- `ble_election_begin_crowding_measurement(window_ms)` and `ble_election_add_rssi_sample(..., current_time_ms)` ignore time inputs.
+- Current windowing is sample-count bounded, not truly time bounded.
+
+5. Geographic validity uses a magic coordinate sentinel rather than explicit availability semantics.
+- `(0,0,0)` is treated as invalid/no-GPS in geographic calculations.
+- Wire contract already has explicit `gps_available`; filtering should use that semantics rather than coordinate-value assumptions.
+
+6. Geographic metric semantics diverge from locked Chunk 4 formulation.
+- Current metric is centroid-distance spread (then clamped to `[0,1]`), not 8-sector occupancy ratio.
+- Even though clamped, threshold meaning remains formulation-specific and not directly portable from split defaults.
+
+7. Crowding normalization constants are duplicated with `ch03`.
+- Both forwarding (`ch03`) and election (`ch04`) crowding logic hardcode `RSSI_MIN=-90`, `RSSI_MAX=-40`.
+- No shared config source of truth, increasing drift risk.
+
+8. `ble_broadcast_compute_neighbor_tx_slots` encodes unspec'd policy constants.
+- Crowding `[0,1]` is mapped to TX-slot cap `[3,15]` by hardcoded logic.
+- This range/shape is not locked in PDF/split and should be explicit config policy.
+
 9. `BleBroadcastTiming::AdvanceSlot()` has two code paths with behavioral drift:
    - `m_rng` path bypasses C-core STOCHASTIC constraints (`max_broadcast_slots`, `broadcasts_this_cycle`, cycle reset behavior).
    - no schedule-specific branching in wrapper RNG path.
-10. `BleBroadcastTiming` constructor does not initialize `m_state`; calling methods before `Initialize()` risks undefined behavior.
-11. Slot advancement performs modulo by `num_slots`; if `num_slots` is ever zero (mis-initialization), this is unsafe.
-12. `ble-election-engine.h` includes `<map>` but does not use it (minor hygiene issue).
-13. Time values are cast to `uint32_t` milliseconds in wrappers; long simulations can wrap around.
+
+10. Relationship between `ch04` broadcast timing slots and `ch02` discovery-cycle slots is not documented.
+- Without explicit integration semantics, it's unclear whether these timelines are sequential phases, nested slots, or separate schedulers.
+
+11. Neighbor cleanup compacts array in-place and changes indices.
+- `ble_election_clean_old_neighbors` may move entries (`state->neighbors[new_count] = state->neighbors[i]`).
+- Any future logic caching neighbor indices/pointers across cleanup boundaries can break.
+
+12. New-neighbor insert path is only partially initialized.
+- If `location == NULL`, location fields may retain stale data in reused slots after compaction.
+
+13. `ble_broadcast_timing_rand_double()` can return `1.0` when RNG hits `UINT32_MAX`, despite docs saying `[0.0, 1.0)`.
+
+14. `BleBroadcastTiming` constructor does not initialize `m_state`; calling methods before `Initialize()` risks undefined behavior.
+
+15. Slot advancement performs modulo by `num_slots`; if `num_slots` is ever zero (mis-initialization), this is unsafe.
+
+16. `ble-election-engine.h` includes `<map>` but does not use it (minor hygiene issue).
+
+17. Time values are cast to `uint32_t` milliseconds in wrappers; long simulations can wrap around.
 
 ## Prerequisites (Embedded, Required)
 

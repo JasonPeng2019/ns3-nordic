@@ -6,6 +6,12 @@ This chunk contains a pure-C packet protocol core (`ble_discovery_packet.*`) and
 
 The C layer defines packet structures, serialization/deserialization, PDSF/election math, and hash-based slot mapping. The C++ layer adapts that core to `ns3::Header`.
 
+## Protocol Boundary (PDF vs Chunks)
+
+- This chunk primarily covers the wire/data-carrier layer from the PDF: packet fields, encoding/decoding, and packet-level helper math.
+- The election/cluster behavior layer (candidate policy, conflict lifecycle, convergence behavior, assignment/path policy) is implemented in later chunks and shared runtime modules.
+- In practical terms: `ch01` owns field carriage + codec behavior; higher-level protocol decisions are chunk4+ concerns.
+
 ## File Inventory and Dependencies
 
 ### `ble_discovery_packet.h`
@@ -79,7 +85,21 @@ The C layer defines packet structures, serialization/deserialization, PDSF/elect
 - `ble_election_packet_t` = `base` discovery packet + `election` extension:
   - `class_id`, `direct_connections`, `pdsf`, `last_pi`, `score`, `hash`, `pdsf_history`, `is_renouncement`
 
-### Discovery wire format (in order, big-endian numeric fields)
+### PDF Term to Code Field Mapping
+
+| PDF term | ch01 field(s) | Notes |
+|---|---|---|
+| `ID` | `sender_id` | Sender/origin identifier carried on wire |
+| `TTL` | `ttl` | Hop budget, decremented by forwarding logic outside this chunk |
+| `PSF` / Path So Far | `path_length`, `path[]` | Ordered node ID sequence |
+| `LHGPS` / GPS availability + coordinates | `gps_available`, `gps_location.{x,y,z}` | Coordinates present only when `gps_available=1` |
+| `Class ID` | `election.class_id` | Election/class identifier |
+| `PDSF` | `election.pdsf` | Running estimate; helper state includes `last_pi` + `pdsf_history` |
+| `Score` | `election.score` | Carrier field; policy semantics are finalized in later chunks |
+| `Hash` / `h(ID)` | `election.hash` | Slot/hash identifier |
+| Renouncement flag | `election.is_renouncement` | Encoded in election extension flags byte |
+
+### Discovery wire format (in order)
 
 1. `message_type` (1 byte)
 2. `is_clusterhead_message` (1 byte)
@@ -89,6 +109,18 @@ The C layer defines packet structures, serialization/deserialization, PDSF/elect
 6. `path[i]` (`path_length * 4` bytes)
 7. `gps_available` (1 byte)
 8. If GPS available: `x`, `y`, `z` as 3 IEEE-754 doubles (24 bytes)
+
+Encoding notes:
+
+- Integer fields are serialized in network byte order (big-endian).
+- `double` values are serialized by copying the host 64-bit bit pattern and emitting two big-endian `uint32` words.
+- This relies on the platform using 64-bit IEEE-754 `double`; it is a host-bit-pattern carriage scheme, not a canonical cross-platform float wire primitive.
+- This is deterministic on the same host architecture (`D0` scope), but cross-architecture float-bit identity is not guaranteed by this encoding approach alone.
+
+Semantics note:
+
+- `message_type` and `is_clusterhead_message` are distinct wire fields with overlapping intent.
+- Keeping both is part of the current wire contract, but readers should treat `message_type` as the canonical packet-kind discriminator to avoid mode-drift bugs.
 
 ### Election wire format
 
@@ -178,6 +210,7 @@ The C layer defines packet structures, serialization/deserialization, PDSF/elect
   - Dependencies: `ble_election_get_size`, `ble_discovery_serialize`, `write_u*`, `write_double`.
 - `ble_election_deserialize(ble_election_packet_t *packet, const uint8_t *buffer, uint32_t buffer_size)`
   - Decodes election packet and validates `hop_count <= BLE_PDSF_MAX_HOPS`.
+  - Note: this range check does not by itself guarantee remaining-byte safety for the implied variable-length section.
   - Dependencies: `ble_discovery_deserialize`, `ble_election_pdsf_history_reset`, `read_u*`, `read_double`.
 
 ### PDSF/election math
@@ -188,13 +221,15 @@ The C layer defines packet structures, serialization/deserialization, PDSF/elect
 - `ble_election_pdsf_history_add(ble_pdsf_history_t *history, uint32_t direct_connections)`
   - Appends one hop contribution if capacity remains.
 - `ble_election_update_pdsf(ble_election_packet_t *packet, uint32_t direct_connections, uint32_t already_reached)`
-  - Clamps overlap, derives unique connections, records history, updates cumulative PDSF and `last_pi`.
+  - Implements "exclude already reached devices" by clamping overlap and deriving `unique_connections = direct_connections - already_reached`.
+  - Records per-hop unique contribution, updates cumulative PDSF and `last_pi`.
   - Dependencies: `ble_election_pdsf_history_add`, `ble_election_calculate_pdsf`.
 - `ble_election_calculate_pdsf(uint32_t previous_pdsf, uint32_t previous_pi, uint32_t direct_neighbors, uint32_t *new_pi_out)`
   - Saturating product/sum update: `pi_term = previous_pi_or_1 * direct_neighbors`, `new_pdsf = previous_pdsf + pi_term`.
   - Dependency: `UINT32_MAX` saturation.
 - `ble_election_calculate_score(uint32_t direct_connections, double noise_level)`
-  - Returns `direct_connections + ((direct_connections / MAX_CLUSTER_SIZE) * (1/(noise_level+1)))`.
+  - Current implementation returns `direct_connections + ((direct_connections / MAX_CLUSTER_SIZE) * (1/(noise_level+1)))`.
+  - This is an interim utility formula and is not the locked weighted Chunk 4 score; it also does not match the PDF candidacy-ratio intent as a final policy.
 
 ### Hashing and slot mapping
 
@@ -206,6 +241,7 @@ The C layer defines packet structures, serialization/deserialization, PDSF/elect
   - Maps hash to one `(slot, channel)` bucket.
 - `ble_hash_next_slot_time_ms(uint64_t now_ms, uint32_t frame_ms, uint32_t tdma_slots, uint32_t slot_index)`
   - Calculates next absolute start time for the given slot index.
+  - Uses `BLE_DISCOVERY_MIN_FRAME_MS` as a lower bound safety clamp for downstream slot scheduling helpers.
 - `ble_hash_map_edge_slot(uint32_t cluster_hash, uint32_t edge_id, uint32_t tdma_slots, uint32_t fdma_channels, uint32_t *slot_index_out, uint32_t *channel_index_out)`
   - Convenience wrapper: combine then map.
   - Dependencies: `ble_hash_combine_cluster_edge`, `ble_hash_map_to_slot`.
@@ -295,7 +331,7 @@ The C layer defines packet structures, serialization/deserialization, PDSF/elect
 ## Important Implementation Highlights
 
 - Clean layering: protocol core is C-only and portable; NS-3 code is a thin bridge.
-- Binary format is explicit and endian-stable (manual big-endian helpers).
+- Binary format is explicit: integer fields use manual big-endian encoding, and `double` fields use host-bit-pattern carriage via big-endian word writes.
 - Election packets extend discovery packets without duplicating codec logic.
 - PDSF handling includes overflow saturation to `UINT32_MAX`.
 - Slotting utilities support deterministic FDMA/TDMA mapping from hash inputs.
@@ -313,7 +349,7 @@ Assessment basis: `ns3_dev/ns3-ble-module/ble-mesh-discovery/model/chunks/split.
 
 ### Where this deviates from Chunk 1 plan
 
-- No explicit wire-contract lock metadata in this chunk (for example `ble-mesh-wire-v1.0.0` identifier and version enforcement hooks).
+- Required Chunk 1 deliverable `ble-mesh-wire-v1.0.0` lock metadata (constant + test reference) is missing in this chunk.
 - Defaults/tunables are hardcoded as C macros here, not routed through a centralized `BleMeshDiscoveryConfig` mapping layer.
 - Deterministic replay controls required by Chunk 1 (`D0` seed/timing/RNG ownership) are not implemented in this folder.
 - Chunk 1 test-plan artifacts are missing in this folder:
@@ -323,6 +359,28 @@ Assessment basis: `ns3_dev/ns3-ble-module/ble-mesh-discovery/model/chunks/split.
 - No explicit build-layout upstream mirror note is included in this chunk docs/code.
 
 Overall status for Chunk 1 from this folder alone: `PARTIAL`.
+
+### Cross-Chunk Audit Notes (2026-04-05)
+
+- `BleMeshDiscoveryConfig` and `BleMeshNodeState` are implemented in `model/shared/ble-mesh-discovery-config.h`, not in `ch01`.
+- This chunk intentionally provides shared score/hash/wire helpers consumed by later chunks (`ble_election_calculate_score` is used from `ch04` and `ch05`).
+- Per-node runtime/state-machine behavior is implemented in shared `ble_mesh_node.*` and integrated by `ch05`.
+- `BLE_DISCOVERY_MIN_FRAME_MS` is exposed here for shared hash/slot helper safety, but frame-cycle ownership and scheduling policy are chunk2/chunk5 runtime concerns.
+- Therefore, this folder-local `PARTIAL` status remains accurate, but repo-level status for some APIs depends on `model/shared` plus later chunks.
+
+## Chunk 1 Exit Gate Checklist (`split.md`)
+
+Chunk 1 exit gate requires all of the following:
+
+1. Packet tests pass 100%.
+2. `D0` determinism pass rate is 30/30.
+3. Contract version + schema are documented and referenced by tests.
+
+Current folder-local status:
+
+- No evidence in `ch01` of the required 1,000 randomized packet roundtrip test artifacts.
+- No evidence in `ch01` of `D0` 30/30 replay artifacts.
+- No machine-checkable `ble-mesh-wire-v1.0.0` lock/reference tied to tests in `ch01`.
 
 ## Prerequisites (Required for Embedded Deployment)
 
@@ -386,7 +444,8 @@ These are strict requirements for this implementation family when targeting prod
 
 1. `ble_discovery_deserialize` and `ble_election_deserialize` do not fully bounds-check reads against `buffer_size`.
 
-- They validate some fields (e.g., `path_length`, `hop_count`) but still read variable sections without per-step remaining-length checks.
+- They range-validate fields (for example `path_length`, `hop_count`), but do not validate that the implied byte spans remain within `buffer_size`.
+- They still read variable sections without per-step remaining-length checks.
 - Risk: malformed/truncated payload can cause out-of-bounds reads.
 
 2. `ble_discovery_deserialize` minimum-size guard is too small.
@@ -418,6 +477,7 @@ These are strict requirements for this implementation family when targeting prod
 7. Score API documentation and behavior are misaligned.
 
 - Header comment says score is `0.0-1.0`, but implementation returns roughly `direct_connections + tiny_bonus`.
+- Current score helper is also not aligned to the PDF's candidacy-ratio intent and not aligned to the locked Chunk 4 weighted score formula.
 - Unused score normalizer macros (`BLE_SCORE_DIRECT_NORMALIZER`, `BLE_SCORE_CN_RATIO_NORMALIZER`) and unused `clamp_unit` suggest incomplete formula migration.
 
 8. `ble_hash_next_slot_time_ms` can produce slot times outside nominal frame partitioning when `tdma_slots > frame_ms`.

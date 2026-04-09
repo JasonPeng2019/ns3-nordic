@@ -1,178 +1,174 @@
-# ch07 Overview: `BleMeshMetricsCollector`
+# ch07: `BleMeshMetricsCollector`
 
-This README documents only the files inside `model/chunks/ch07`.
+This README documents only files in `model/chunks/ch07`.
 
-## Files in This Chunk
+## Scope and File Inventory
 
-- `ble-mesh-metrics-collector.h`: Declares `ns3::BleMeshMetricsCollector`, its public API, and internal state.
-- `ble-mesh-metrics-collector.cc`: Implements type registration and all methods declared in the header.
-
-## High-Level Purpose
-
-`BleMeshMetricsCollector` is currently a lightweight ns-3 `Object` wrapper that stores one configuration value (`m_outputPrefix`).
-
-Despite the name, this chunk does **not** yet implement metrics collection logic, file writing, aggregation, or trace hookups.
-
-## Alignment With `split.md` Chunk 7 Plan
-
-`split.md` (Section "Chunk 7: Scenario + Instrumentation for Scale") marks this chunk as a scaffold stage and expects:
-
-- Scenario presets/runners for `20`, `150`, and `1000+` node profiles (static + mobility).
-- `BleMeshMetricsCollector` CSV and JSON exports.
-- Metric computation for convergence, E2E latency, PDR, control overhead, cluster-size distribution, and invariant counters.
-- Synthetic data-plane traffic model (default `1 packet/sec` from each edge after convergence).
-
-Current `ch07` implementation is **only partially aligned**:
-
-- Fits: `BleMeshMetricsCollector` class scaffold exists and is ns-3 type-registered.
-- Deviates: no scenario helper/presets in this folder.
-- Deviates: no metrics are computed or tracked.
-- Deviates: no CSV/JSON serialization or artifact schema.
-- Deviates: no synthetic traffic hooks for E2E/PDR measurement.
-- Deviates: no reproducibility/reporting logic tied to `D0/D1` expectations.
-
-## Dependency Map
-
-### File-Level Includes
+This chunk contains exactly:
 
 - `ble-mesh-metrics-collector.h`
-- depends on `ns3/object.h` for `ns3::Object` and `TypeId` integration.
-- depends on `<string>` for `std::string`.
-
 - `ble-mesh-metrics-collector.cc`
-- depends on local header `ble-mesh-metrics-collector.h`.
-- indirectly depends on ns-3 type system APIs used by `GetTypeId()` (`TypeId`, `SetParent`, `SetGroupName`, `AddConstructor`) and `NS_OBJECT_ENSURE_REGISTERED`.
 
-### Symbol/Runtime Dependencies
+Current class behavior is a scaffold:
 
-- `BleMeshMetricsCollector` inherits from `ns3::Object`.
-- `NS_OBJECT_ENSURE_REGISTERED (BleMeshMetricsCollector)` ties the class into ns-3 runtime type registration.
-- `TypeId ("ns3::BleMeshMetricsCollector")` defines how ns-3 introspection identifies this class.
+- stores one string field (`m_outputPrefix`)
+- provides setter/getter
+- no metric aggregation, scenario control, trace ingestion, or export
 
-## API and Function-by-Function Breakdown
+## Requirement Sources (PDF vs `split.md`)
 
-### `ble-mesh-metrics-collector.h`
+Chunk 7 requirements are primarily from `split.md`, not from a detailed PDF benchmarking section.
 
-- `static TypeId GetTypeId (void);`
-- Purpose: ns-3 type metadata declaration for object factory/introspection.
-- Dependencies: `TypeId`, `Object` base class type chain.
+- The PDF describes protocol behavior and protocol-level metric concepts.
+- The PDF does not define the Chunk 7 instrumentation contract (scenario presets, CSV/JSON artifact schema, CI-scale export gates).
+- Therefore this README treats `split.md` Chunk 7 and Section 5 as the canonical requirements for this chunk.
 
-- `BleMeshMetricsCollector ();`
-- Purpose: construct object with default output prefix.
-- Dependencies: `std::string` initialization.
+## Current API and Behavior
 
-- `~BleMeshMetricsCollector () override;`
-- Purpose: virtual cleanup path via `ns3::Object` interface.
-- Dependencies: `Object` virtual destructor chain.
+Class: `ns3::BleMeshMetricsCollector` (`ns3::Object`)
 
-- `void SetOutputPrefix (const std::string &prefix);`
-- Purpose: update internal prefix value.
-- Dependencies: `std::string` copy assignment.
+- `GetTypeId()`: registers `"ns3::BleMeshMetricsCollector"` in group `"BleMeshDiscovery"`.
+- constructor: initializes `m_outputPrefix = "ble_mesh_metrics"`.
+- `SetOutputPrefix(const std::string&)`: stores caller value with no validation.
+- `GetOutputPrefix() const`: returns current prefix by value.
 
-- `std::string GetOutputPrefix () const;`
-- Purpose: return current prefix value.
-- Dependencies: `std::string` copy return.
+Current implementation has no:
 
-- `std::string m_outputPrefix;` (private)
-- Role: sole internal state in this chunk.
+- ns-3 Attributes
+- trace sources
+- counters or aggregation state
+- file outputs
+- tests in this chunk
 
-### `ble-mesh-metrics-collector.cc`
+## Integration Contracts (Cross-Chunk)
 
-- `NS_OBJECT_ENSURE_REGISTERED (BleMeshMetricsCollector);`
-- Purpose: ensures registration object code is linked and type is available at runtime.
+### Upstream Producers Already Available
 
-- `TypeId BleMeshMetricsCollector::GetTypeId (void)`
-- Creates a function-local static `TypeId` once.
-- Declares type name as `"ns3::BleMeshMetricsCollector"`.
-- Sets parent class to `Object`.
-- Assigns ns-3 group name `"BleMeshDiscovery"`.
-- Registers default constructor via `AddConstructor<BleMeshMetricsCollector>()`.
+`ch05::BleDiscoveryEngine` already exposes trace producers this chunk should consume:
 
-- `BleMeshMetricsCollector::BleMeshMetricsCollector () : m_outputPrefix ("ble_mesh_metrics") {}`
-- Initializes default prefix to `"ble_mesh_metrics"`.
+- `MetricsUpdate` trace
+  - payload type: `ble_connectivity_metrics_t`
+  - fields include:
+    - `direct_connections`, `total_neighbors`, `crowding_factor`, `connection_noise_ratio`, `geographic_distribution`
+    - `messages_forwarded`, `messages_received`, `forwarding_success_rate`
+    - `slots_tx`, `slots_rx`, `slots_collision`, `slots_empty`
+- `SlotOutcome` trace
+  - payload fields:
+    - `nodeId`, `isClusterSlot`, `frameIndex`, `slotIndex`, `channelIndex`, `iteration`, `outcome`
 
-- `BleMeshMetricsCollector::~BleMeshMetricsCollector () = default;`
-- No custom destruction behavior.
+Current `ch07` does not subscribe to either trace.
 
-- `void BleMeshMetricsCollector::SetOutputPrefix (const std::string &prefix)`
-- Replaces `m_outputPrefix` with caller-provided string.
+### Upstream Dependency for Synthetic Traffic Semantics
 
-- `std::string BleMeshMetricsCollector::GetOutputPrefix () const`
-- Returns current prefix by value.
+`split.md` requires default synthetic traffic:
 
-## Current Behavior Summary
+- each edge emits `1 packet/sec` toward selected clusterhead after convergence.
 
-- The class is constructible through ns-3 type system.
-- Default output prefix is `ble_mesh_metrics`.
-- Prefix can be overwritten and queried.
-- No side effects occur when setting prefix.
-- No files are opened or written.
-- No metrics are gathered or emitted.
+This depends on cluster assignment/path outputs (Chunk 6 ownership).  
+Because `ch06` is currently scaffold-level, `ch07` can only do:
 
-## Highlights
+- placeholder traffic generation against partial assignment state, or
+- wait for full Chunk 6 path/assignment implementation for protocol-faithful traffic.
 
-- Correct baseline ns-3 object integration (`SetParent<Object>`, constructor registration, runtime registration macro).
-- Small, stable API surface that is easy to extend.
-- Deterministic default configuration for prefix.
+### Downstream Role
 
-## Potential Issues / Gaps
+Chunk 7 is the primary consolidation point for reproducibility evidence and acceptance artifacts across earlier chunks, because it owns standardized CSV/JSON outputs and scenario-profile execution/reporting.
 
-- Name/implementation mismatch: class is called a metrics collector but currently stores only a string.
-- No ns-3 `Attribute` exposure for `m_outputPrefix`; cannot configure via standard attribute/config paths.
-- `SetOutputPrefix` accepts any string with no validation (empty value, path separators, invalid filename chars).
-- `GetOutputPrefix` returns by value; repeated calls copy the string (small cost now, but avoidable).
-- No trace sources, callbacks, counters, or aggregation state.
-- No logging (`NS_LOG_*`) for observability.
-- No tests in this chunk verifying defaults, setter/getter behavior, or type registration expectations.
+It is not the only possible way to prove D0 for a chunk, but it is the planned system-level path in `split.md`.
 
-## Prerequisites and Strict Embedded Design Requirements
+## Conformance Against `split.md` Chunk 7
 
-The following are non-optional requirements for using this chunk as part of an embedded-target BLE mesh system implementation.
+Reference: `split.md` "Chunk 7: Scenario + Instrumentation for Scale" and Section 5.
 
-- Functional completeness:
-- `BleMeshMetricsCollector` must implement Chunk 7 metric outputs: convergence (`cycles`, `seconds`), E2E latency, PDR, control overhead, cluster-size distribution, and invariant counters.
-- Synthetic post-convergence data-plane traffic generation (or equivalent measurement hooks) must exist for E2E/PDR.
+| Requirement | Status | Evidence in this chunk |
+|---|---|---|
+| Scenario presets/runners (`20`, `150`, `1000+`, static + mobility) | Missing | no scenario runner/helper code in this chunk. |
+| CSV + JSON exports | Missing | no serialization/output methods. |
+| Metric computation (convergence, latency, PDR, overhead, cluster size, invariants) | Missing | no counters/formulas in collector. |
+| Synthetic traffic model (`1 packet/sec` toward selected CH) | Missing | no traffic generation hooks. |
+| D0/D1 reproducibility reporting integration | Missing | no artifact compare/report path. |
+| `BleMeshMetricsCollector` scaffold existence | Implemented | type registration + prefix storage API. |
 
-- Determinism and reproducibility:
-- Static-profile runs must satisfy deterministic replay (`D0`) for fixed seed and timeline.
-- Metrics/export ordering must be deterministic (stable key order, stable record ordering, explicit schema version).
+## Chunk 7 Exit Gate (Restated)
 
-- Bounded resources (embedded mandatory):
-- Memory use must be bounded and pre-budgeted; no unbounded growth containers in long-running paths.
-- Per-cycle/per-packet collector work must have bounded runtime; avoid blocking file I/O in timing-critical paths.
-- Collector failure must not break discovery/election/cluster formation control flow (fail-open behavior).
+From `split.md`, Chunk 7 is complete only when:
 
-- Storage and export safety:
-- CSV/JSON artifacts must be versioned and parseable; schema changes require explicit version bump/migration note.
-- Export path/prefix inputs must be validated/sanitized (empty string, illegal characters, traversal patterns).
-- Write policy must minimize flash wear (batched flush/interval policy) and tolerate storage unavailability without crashing protocol logic.
+1. All profiles emit parseable CSV+JSON artifacts.
+2. 1000+ scenario completes with zero fatal invariant breaks.
 
-- Concurrency and integration discipline:
-- If called from multiple execution contexts, collector state updates must be synchronized (single-writer model or explicit locking).
-- Snapshot/export operations must avoid data races and partial-write corruption.
+Current status in this chunk: not met.
 
-- Verification requirements:
-- Unit tests must cover default config, setters/getters, metric formulas, export serialization, and validation failures.
-- Integration tests must verify parseable CSV+JSON output on `20`, `150`, and `1000+` profiles.
-- Regression gates must include invariant checks and zero fatal invariant breaks in large-scale (`1000+`) runs.
+## Cross-Section Invariants To Count (Section 5)
 
-- Industry-standard quality controls:
-- Enforce fixed coding standard/lint profile for embedded-target code paths (for example MISRA/CERT-aligned subsets where project policy requires it).
-- Track CPU, RAM, and storage budgets as CI-checked limits for each profile tier (`20`, `150`, `1000+`).
+Chunk 7 invariant counters must at minimum cover:
 
-## Extension Points (if this chunk is expanded later)
+1. No forwarding when `ttl == 0`.
+2. Max 3 forwarded messages per cycle.
+3. No PSF loops in forwarded traffic.
+4. Discovery/election single-channel operation in v1.
+5. `PDSF` soft-cap retransmission stop enforced.
+6. Hard membership cap violations tracked and zero at acceptance.
+7. `D0` determinism holds for fixed static scenarios.
 
-- Add explicit metrics state (per-node counters, discovery latency, packet statistics).
-- Add flush/export methods and output backend abstraction.
-- Promote `m_outputPrefix` to an ns-3 attribute for runtime configurability.
-- Add validation and sanitization rules for prefix values.
-- Add unit/integration tests around object lifecycle and output behavior.
+## Quantitative Acceptance Matrix (Locked CI Targets)
 
-## Quick Reference
+From `split.md` Section 5:
 
-- Class: `ns3::BleMeshMetricsCollector`
-- Namespace: `ns3`
-- Base class: `ns3::Object`
-- Group name: `BleMeshDiscovery`
-- Default prefix: `ble_mesh_metrics`
-- Public mutator/accessor: `SetOutputPrefix`, `GetOutputPrefix`
+| Profile | Convergence Bound | P95 E2E Latency Bound | PDR Floor | Hard Cap Violations |
+|---|---:|---:|---:|---:|
+| 20-node static | <= 20 cycles | <= 2.0 s | >= 0.98 | 0 |
+| 150-node static | <= 75 cycles | <= 5.0 s | >= 0.95 | 0 |
+| 1000+-node static | <= 220 cycles | <= 8.0 s | >= 0.90 | 0 |
+
+Chunk 7 exports must provide enough schema and fields to validate these thresholds directly.
+
+## Determinism Scope and Chunk 7 Role
+
+`split.md` determinism tiers:
+
+- `D0`: identical traces and final assignments for repeated fixed-seed static runs.
+- `D1`: mobility metrics (`convergence`, `PDR`, `overhead`) remain within +/-5%.
+
+Chunk 7 is where these tiers become testable at integration level:
+
+- stable artifact schema
+- stable ordering of records/keys
+- repeatable profile execution
+- deterministic comparison tooling
+
+Without this chunk implemented, earlier chunk D0 claims remain fragmented and hard to verify consistently.
+
+## Metric Definition Notes
+
+### Control Overhead
+
+`split.md` requires control-overhead reporting but does not lock a formula.  
+`ch03` exit criteria define relative overhead reduction (`>=30%` vs no-picky baseline), so Chunk 7 should at minimum emit a control-traffic count/time normalization sufficient to compute that comparison reproducibly.
+
+### Prefix Semantics
+
+Current `m_outputPrefix` semantics are undefined (filename stem vs directory path vs full path prefix).  
+Chunk 7 should lock this explicitly. Recommended minimal convention:
+
+- `<prefix>.csv`
+- `<prefix>.json`
+
+with deterministic suffixing for profile/seed if multiple runs are emitted.
+
+## Risks (Prioritized)
+
+1. Class/functionality mismatch: "metrics collector" currently stores only a string.
+2. No trace ingestion from `ch05` (`MetricsUpdate`, `SlotOutcome`), so no actionable measurement path.
+3. No export schema or output functions, so Chunk 7 exit-gate artifacts cannot be produced.
+4. No invariant-counter implementation, blocking Section 5 cross-section checks.
+5. Synthetic traffic model depends on cluster assignment/path state not fully available from current Chunk 6 scaffold.
+6. No `m_outputPrefix` validation/sanitization and semantics undefined.
+7. No ns-3 attributes, tests, logging, or trace outputs in this chunk.
+
+## Practical Next Integration Step
+
+Implement trace adapters in this chunk for `ch05` `MetricsUpdate` and `SlotOutcome` payloads first, then define a versioned CSV/JSON schema that includes:
+
+- profile/seed/run metadata
+- acceptance-matrix metrics
+- all seven cross-section invariant counters

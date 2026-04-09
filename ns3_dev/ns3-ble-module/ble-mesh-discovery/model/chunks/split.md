@@ -4,7 +4,7 @@
 
 - Specification ID: `ble-mesh-discovery-v1-plan`
 - Status: `active`
-- Last updated: `2026-03-31`
+- Last updated: `2026-04-05`
 - Protocol source of truth: `Clusterhead___BLE_Mesh_discovery_process (5) (2).pdf`
 - Local implementation target path: `ns3_dev/ns3-ble-module/ble-mesh-discovery`
 - Upstream mirror target path (when upstreaming): `ns-3-dev/src/ble-mesh-discovery`
@@ -53,6 +53,15 @@ Implement and validate the BLE Mesh Discovery + Clusterhead Election protocol fr
   - `BleClusterManager`
   - `BleMeshMetricsCollector`
 - Scenario/helper entrypoints for install/configure/run and trace export (CSV/JSON).
+
+### Component Placement and Ownership (Locked)
+- Chunk IDs define required behavior, tests, and exit gates; they do **not** require strict file/folder ownership.
+- Implementations may span `model/chunks/*` and shared support modules (for example `model/shared/*`) if:
+  - Section 2 wire-contract constraints are preserved.
+  - Required public APIs/types in this section remain available.
+  - Chunk exit gates are still met with traceable pass/fail evidence.
+- Deliverables that name a runtime class (for example `BleElectionEngine`) may be satisfied by an equivalent integrated runtime path (for example election logic hosted in `BleDiscoveryEngine`) when behavior and gates are unchanged.
+- Any cross-chunk placement must be documented in the corresponding chunk README(s) with explicit implementation pointers.
 
 ## 2. Canonical v1 Wire Contract Freeze
 
@@ -152,7 +161,7 @@ Each chunk is independently mergeable and has measurable pass/fail gates.
 - Define and use explicit convergence criterion for 20-node gate.
 
 ### Deliverables
-- `BleDiscoveryEngine` cycle/timer control.
+- `BleDiscoveryEngine` (or equivalent integrated runtime component) cycle/timer control.
 - Queue + dedupe + loop/TTL gating logic.
 - Convergence definition artifact for smoke tests.
 
@@ -225,8 +234,8 @@ Each chunk is independently mergeable and has measurable pass/fail gates.
   - `min_direct = clamp(round(base_min_direct + crowding_factor * crowding_slope), min_direct_floor, min_direct_ceil)`.
 
 ### Deliverables
-- `BleElectionEngine` metric collector and candidacy evaluator.
-- Candidate transition path `DISCOVERY -> CLUSTERHEAD_CANDIDATE`.
+- `BleElectionEngine` metric collector and candidacy evaluator (or equivalent integrated election runtime path).
+- Candidate transition path `DISCOVERY -> CLUSTERHEAD_CANDIDATE` (may be realized through shared node-runtime state machine integration).
 
 ### Section Test Plan
 - Unit tests for all metric functions and threshold logic.
@@ -253,7 +262,7 @@ Each chunk is independently mergeable and has measurable pass/fail gates.
 - Implement candidacy renouncement broadcasts after loss.
 
 ### Deliverables
-- Round scheduler and flood logic in `BleElectionEngine`.
+- Round scheduler and flood logic in election runtime (`BleElectionEngine` and/or integrated `BleDiscoveryEngine` path).
 - Conflict resolver + renouncement path.
 - Separate metrics for `pdsf_cap_stop_events` and `cluster_size_hard_cap_violations`.
 

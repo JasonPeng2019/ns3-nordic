@@ -26,8 +26,29 @@ This chunk provides two protocol primitives, each in two layers:
 
 Design intent is portability: C files hold platform-agnostic logic; C++ files integrate with NS-3 APIs.
 
+## Protocol Boundary (PDF vs Chunk Ownership)
+
+- This chunk implements cycle/queue primitives, not the full forwarding-policy decision pipeline.
+- PDF forwarding policy (picky forwarding -> GPS proximity -> TTL top-3) is owned by Chunk 3+ integrated runtime paths.
+- In this folder, TTL only appears as queue priority ordering (`255 - ttl`) and does not by itself implement the PDF's full 3-stage selection pipeline.
+- Slot mapping correspondence:
+  - PDF `S1` (own transmission) -> implementation `slot0`
+  - PDF `S2/S3/S4` (forwarding opportunities) -> implementation `slot1/slot2/slot3`
+
+### PDF to Code Mapping (Cycle + Forwarding Stages)
+
+| PDF term/step | Code/runtime mapping | Ownership/status |
+|---|---|---|
+| `S1` own-message slot | `slot0` (`BLE_DISCOVERY_SLOT_OWN_MESSAGE`) | Implemented in this chunk |
+| `S2` forwarding slot | `slot1` (`BLE_DISCOVERY_SLOT_FORWARD_1`) | Implemented as callback opportunity |
+| `S3` forwarding slot | `slot2` (`BLE_DISCOVERY_SLOT_FORWARD_2`) | Implemented as callback opportunity |
+| `S4` forwarding slot | `slot3` (`BLE_DISCOVERY_SLOT_FORWARD_3`) | Implemented as callback opportunity |
+| Forwarding stage 1: picky forwarding | Not in local queue/cycle core | Deferred to `ch03/ch05` integrated path |
+| Forwarding stage 2: GPS proximity filter | Not in local queue/cycle core | Deferred to `ch03/ch05` integrated path |
+| Forwarding stage 3: TTL top-3 selection | Local queue provides TTL ordering substrate (`255 - ttl`) | Partially represented here; final policy integration is later-chunk runtime logic |
+
 ## Alignment to `split.md` Chunk 2 Plan
-Reference: `model/chunks/split.md` (Spec `ble-mesh-discovery-v1-plan`, updated `2026-03-31`).
+Reference: `model/chunks/split.md` (Spec `ble-mesh-discovery-v1-plan`, updated `2026-04-05`).
 
 Overall status for this chunk implementation versus plan: **partial fit**.
 
@@ -49,6 +70,27 @@ Where this implementation deviates from chunk02 requirements:
 - No explicit convergence criterion artifact for the 20-node gate in this chunk.
 
 This aligns with `split.md` status section marking Chunk 2 as **PARTIAL**.
+
+### Cross-Chunk Audit Notes (2026-04-05)
+
+- Per-node runtime state container is not in this folder; it exists in shared `ble_mesh_node.*` and is integrated by `ch05/ble_discovery_engine.*`.
+- TTL decrement/drop-at-zero forwarding enforcement is not local to `ch02`; it is enforced in the integrated forwarding path (`ch03` + `ch05`), including `ble_engine_forward_next_message`.
+- Effective top-3 forwarding budget is realized when this chunk's 3 forwarding slots are driven by `BleDiscoveryEngine` (one dequeue/forward attempt per forwarding slot).
+- This chunk's TTL queue priority (`255 - ttl`) is only a substrate for the Chunk 3 forwarding pipeline; it does not implement picky-forwarding or GPS-proximity filtering.
+- The split-required dedupe identity key and default expiry policy remain missing in the current repo snapshot (`(sender_id, ttl)` is still used locally in `ch02`).
+
+### Requirement Ownership Matrix (Chunk 2 Scope)
+
+| Requirement from `split.md` | Owner chunk/module | Status in `ch02` folder | Notes |
+|---|---|---|---|
+| `BleMeshNodeState` runtime container | `model/shared` + `ch05` engine integration | Missing in-folder | Present outside this directory |
+| 4-slot scheduler (`S1..S4` <-> `slot0..slot3`) | `ch02` | Present | Implemented in C core + NS-3 wrapper |
+| Queue + dedupe cache | `ch02` | Present (partial semantics) | Dedupe key/expiry policy do not match locked contract |
+| Dedupe key avoids mutable forwarding fields | `ch02` | Missing | Current key is `(sender_id, ttl)` |
+| Dedupe expiry default (`2 * cycle_duration * initial_ttl`) | `ch02` + integrated config path | Missing in-folder | Cleanup API exists, no default policy wiring |
+| PSF loop rejection | `ch02` (+ integrated forward path) | Present | Enforced in enqueue loop check |
+| TTL decrement + drop-at-zero | `ch03/ch05` integration path | Missing in-folder | Not enforced by local queue/cycle core |
+| Convergence criterion artifact for 20-node gate | test/integration harness | Missing in-folder | No local convergence artifact |
 
 ## File-Level Dependencies
 
@@ -176,6 +218,10 @@ Depends on:
 3. Accepted packets are stored in fixed array with computed priority (`255 - ttl`).
 4. `Dequeue(...)` or `Peek(...)` finds the lowest numeric priority entry (highest priority), converts back to wrapper header.
 
+Important policy boundary:
+- This queue ordering is not the full PDF forwarding decision pipeline.
+- It reflects TTL ordering only, and currently has no in-folder hooks for picky-forwarding or GPS-proximity filtering stages.
+
 ## Detailed Function Reference
 
 ## `ble_discovery_cycle.c` functions
@@ -292,6 +338,7 @@ Internal call dependencies in this file:
   - Invalidates all queue and seen-cache entries; resets `size` and `seen_count`.
 - `ble_queue_has_seen(queue, sender_id, message_id)`
   - Linear scan on seen cache.
+  - Current signature is misleading: `sender_id` is checked explicitly, but `message_id` already embeds `sender_id` in current implementation.
 - `ble_queue_is_in_path(packet, node_id)`
   - Calls external `ble_discovery_is_in_path(packet, node_id)`.
 - `ble_queue_generate_message_id(packet)`
@@ -300,6 +347,7 @@ Internal call dependencies in this file:
   - `255 - ttl` (`ttl==0` maps to 255).
 - `ble_queue_clean_old_entries(queue, current_time_ms, max_age_ms)`
   - Invalidates aged seen-cache entries and decrements `seen_count`.
+  - This is a manually-driven cleanup API in this chunk (called only when wrapper/client invokes `CleanOldEntries`); there is no default periodic eviction scheduler wired locally.
 - `ble_queue_get_statistics(queue, ...)`
   - Copies statistics to non-null output pointers.
 
@@ -352,36 +400,53 @@ Internal call dependencies in this file:
 
 1. **Queue dedup hash is very weak** (`ble_queue_generate_message_id`)
 - Current ID is only `sender_id` + `ttl`.
-- Different packets from same sender with same TTL collide and may be falsely dropped as duplicates.
+- Because lookup key is `(sender_id, message_id)` and `message_id` already includes `sender_id`, the separate `sender_id` argument is effectively redundant in the current scheme.
+- Distinct payloads from the same sender at the same TTL collide (path changes, GPS changes, election metadata differences), so broad classes of legitimate retransmissions can be falsely dropped.
 
-2. **Queue wrapper does not preserve payload data** (`BleMessageQueue::Dequeue`)
+2. **TTL-priority dequeue is not the PDF forwarding policy pipeline**
+- Current queue priority (`255 - ttl`) models only TTL ordering.
+- The PDF pipeline requires picky-forwarding then GPS-proximity filtering before TTL top-3 selection; those stages are not implemented in this folder-local queue/cycle logic.
+
+3. **Slot budget invariant is not enforced by this chunk alone**
+- The wrapper schedules slot callbacks, but does not enforce "exactly/at-most one forwarding action per forwarding slot."
+- A callback can forward zero, one, or many messages unless constrained by higher-level engine logic.
+
+4. **Queue wrapper does not preserve payload data** (`BleMessageQueue::Dequeue`)
 - Returned `Ptr<Packet>` is always an empty newly-created packet.
 - Only header metadata is effectively round-tripped.
 
-3. **Cycle wrapper duplicates C-core state transitions instead of reusing C execution helpers**
+5. **Cycle wrapper duplicates C-core state transitions instead of reusing C execution helpers**
 - Wrapper directly writes `m_cycle.current_slot` and `m_cycle.cycle_count`.
 - It does not call `ble_discovery_cycle_execute_slot` / `ble_discovery_cycle_advance_slot`.
 - Behavior can drift between C core and C++ wrapper over time.
 
-4. **Zero slot duration is allowed**
+6. **Zero slot duration is allowed**
 - `ble_discovery_cycle_set_slot_duration` accepts `duration_ms == 0`.
 - Wrapper scheduling with zero duration can bunch all events at same simulation timestamp and create event churn.
 
-5. **Seen-cache saturation degrades dedup correctness**
+7. **Seen-cache saturation degrades dedup correctness**
 - When `seen_count == BLE_SEEN_CACHE_SIZE`, enqueue still accepts packets but stops recording new seen entries.
 - Duplicate suppression quality drops for newly arriving traffic.
 
-6. **Ambiguous return semantics in `ble_discovery_cycle_advance_slot`**
+8. **Seen-cache count can underflow if validity/count invariants are broken**
+- `ble_queue_clean_old_entries` decrements `seen_count` on every invalidation.
+- Under normal in-folder usage this is usually safe, but if `seen_count` is externally desynchronized from valid entries (or concurrent mutation occurs), unsigned underflow is possible.
+
+9. **Age computation wrap behavior is implicit and not contract-documented**
+- `age_ms` is computed as unsigned subtraction (`current_time_ms - seen_time_ms`).
+- This commonly behaves as expected across single wrap windows, but semantics for very large `max_age_ms` near 32-bit wrap horizon are not explicitly specified or tested here.
+
+10. **Ambiguous return semantics in `ble_discovery_cycle_advance_slot`**
 - Returns `0` both when wrapping a valid cycle and when called with null/not-running cycle.
 
-7. **`ble_discovery_cycle_get_slot_type` treats invalid slots as forwarding**
+11. **`ble_discovery_cycle_get_slot_type` treats invalid slots as forwarding**
 - Any non-zero slot number maps to forwarding, including out-of-range values.
 
-8. **Naming/include consistency risk**
+12. **Naming/include consistency risk**
 - Both hyphenated and underscored queue files exist (`ble-message-queue.*` vs `ble_message_queue.*`), and wrappers include headers via `ns3/...` path.
 - This is workable but easy to miswire during refactors/build-system changes.
 
-9. **Minor code hygiene**
+13. **Minor code hygiene**
 - `removed_count` in `ble_queue_clean_old_entries` is unused.
 - `ns3/vector.h` is included but unused in `ble-message-queue.cc`.
 
@@ -441,8 +506,32 @@ These are strict requirements for using this chunk as an embedded-target protoco
 - The queue C core expects `current_time_ms` from caller; wrappers pass `Simulator::Now().GetMilliSeconds()`.
 - Election packets are handled by copying full `ble_election_packet_t`; non-election packets use only the base packet region.
 
+## Chunk 2 Exit Gate Checklist (`split.md`)
+
+Chunk 2 scenario and gate requirements:
+
+1. Unit tests include:
+- state initialization/transitions,
+- slot budget enforcement (`<=1 own + <=3 forwarded` per cycle),
+- dedupe hit/miss and expiry behavior,
+- PSF loop rejection,
+- TTL decrement + drop-at-zero.
+2. Scenario smoke test (`20-node` static, fixed seed):
+- 50 consecutive cycles with no invariant violations,
+- convergence detected by configured criterion.
+3. Exit gate:
+- all invariants hold,
+- deterministic replay (`D0`) passes for the 20-node smoke test.
+
+Current folder-local evidence status:
+- No in-folder artifact proving the full unit-test checklist above.
+- No in-folder `20-node` fixed-seed `50-cycle` smoke evidence bundle.
+- No in-folder convergence criterion artifact tied to gate assertions.
+
 ## Quick Reference: Constants
 - Discovery cycle slots: `BLE_DISCOVERY_NUM_SLOTS = 4`
 - Default slot duration: `BLE_DISCOVERY_DEFAULT_SLOT_DURATION_MS = 100`
 - Queue capacity: `BLE_QUEUE_MAX_SIZE = 100`
 - Seen-cache capacity: `BLE_SEEN_CACHE_SIZE = 200`
+- Seen-cache expiry default constant: not defined in this chunk (policy must be supplied by caller/integrated config path).
+- Slot constants source: `ble_discovery_cycle.h` (`BLE_DISCOVERY_SLOT_OWN_MESSAGE`, `BLE_DISCOVERY_SLOT_FORWARD_1..3`).

@@ -8,11 +8,11 @@ This README documents only files in `model/chunks/ch03`:
 - `ble-forwarding-logic.h`
 - `ble-forwarding-logic.cc`
 
-The chunk implements BLE mesh discovery forwarding decisions using three metrics:
+The chunk implements BLE mesh discovery forwarding decisions using local gates plus TTL helper logic:
 
 1. Crowding-aware probabilistic forwarding ("picky forwarding")
 2. GPS proximity filtering
-3. TTL gating and priority mapping
+3. TTL hard reject (`ttl == 0`) and TTL priority mapping helper (`255 - ttl`)
 
 ## File Roles
 
@@ -30,31 +30,36 @@ The chunk implements BLE mesh discovery forwarding decisions using three metrics
 - Most C++ methods pass data directly into the C API after light conversion.
 - One important exception: `ShouldForwardCrowding(double,uint32_t)` in C++ reimplements the probability calculation when `m_randomStream` is set (instead of delegating to C RNG).
 
-## Forwarding Decision Pipeline
+## Forwarding Pipeline (Planned vs Local Implementation)
 
-`ble_forwarding_should_forward(...)` in C is the canonical full decision path:
+Planned Chunk 3 pipeline order from `split.md` / PDF language:
 
-1. Reject null packet.
-2. Reject `ttl == 0`.
-3. Run crowding probability gate.
-4. If packet GPS is available and current location is provided, apply distance threshold gate.
-5. Forward only if all checks pass.
+1. Picky forwarding (crowding-based probabilistic filter).
+2. GPS proximity filter (bypass when GPS unavailable).
+3. TTL sort + top-3 forwarding selection.
 
-Priority is separate (`ble_forwarding_calculate_priority`):
+Current folder-local implementation:
 
-- `ttl == 0` -> `255` (lowest priority)
-- otherwise `priority = 255 - ttl` (higher TTL => smaller number => higher priority)
+- `ble_forwarding_should_forward(...)` performs:
+  1. null guard,
+  2. hard drop when `ttl == 0`,
+  3. crowding gate,
+  4. GPS proximity gate (conditional on GPS/current-location availability).
+- `ble_forwarding_calculate_priority(...)` provides a TTL-derived priority helper (`255 - ttl`) but does not implement queue sorting or top-3 selection by itself.
+
+Implication:
+- This folder implements filter primitives and TTL gating helper behavior, but not the full planned pipeline integration stage (`TTL sort + top-3`) inside this chunk alone.
 
 ## Conformance to `split.md` Chunk 3
 
-Reference plan: `model/chunks/split.md` (Chunk 3: Forwarding Policy Pipeline, last updated 2026-03-31).
+Reference plan: `model/chunks/split.md` (Chunk 3: Forwarding Policy Pipeline, last updated 2026-04-05).
 
 Overall verdict: **partial fit**. This chunk implements key forwarding primitives, but it does not yet satisfy full Chunk 3 integration and gate requirements.
 
 | Planned requirement (Chunk 3) | Current ch03 status | Notes |
 |---|---|---|
 | Picky forwarding filter | Partial | Implemented in C core and wrapper, but RNG behavior differs by API path and uses global C RNG state by default. |
-| GPS proximity filter (bypass when GPS unavailable) | Implemented | Present and functionally matches bypass behavior. |
+| GPS proximity filter (bypass when GPS unavailable) | Partial | Core filter behavior is implemented, but threshold ownership is split between wrapper defaults and hardcoded defaults rather than fully centralized config routing. |
 | TTL sort + top-3 forwarding selection | Missing | Only TTL==0 drop and TTL->priority mapping are present; no queue sorting/top-3 selection logic in this chunk. |
 | All policy thresholds centralized in config | Missing | Proximity/default-neighbor are exposed in wrapper attributes; core thresholds are hardcoded (`RSSI_MIN/MAX`, crowding cutoffs, `2/neighbors`). |
 | Structured forwarding reason telemetry (`drop_*`, `forwarded`) | Missing | No structured counters/trace schema in this chunk; only log statements. |
@@ -68,6 +73,25 @@ Overall verdict: **partial fit**. This chunk implements key forwarding primitive
 3. Policy parameters are not fully centralized/config-driven.
 4. Determinism model conflicts with plan guidance due to shared global RNG state in C core.
 
+### Cross-Chunk Audit Notes (2026-04-05)
+
+- Top-3 forwarding behavior and discovery-cycle integration are implemented outside this folder (`ch02` queue ordering + `ch05` slot-driven forwarding).
+- Seed plumbing is exposed at the integrated engine/wrapper layer in `ch05`, but this chunk still uses a global C RNG state by default.
+- Structured forwarding-reason telemetry counters/traces from split (`drop_*`, `forwarded`) were not found in this folder or in other chunks.
+- PSF loop rejection is not implemented inside `ble_forwarding_should_forward(...)`; it is enforced upstream in queue logic (`ch02/ble_message_queue.c` via `ble_queue_is_in_path`).
+
+### Forwarding-Reason Taxonomy Mapping (Planned Counters)
+
+| Planned reason counter | Decision point that should own increment | Current status in `ch03` |
+|---|---|---|
+| `drop_ttl0` | `ble_forwarding_should_forward`: `packet->ttl == 0` reject branch | Missing counter hook |
+| `drop_loop` | Upstream queue/path guard (`ch02` `ble_queue_is_in_path`) before forwarding call | Missing counter hook in this chunk |
+| `drop_duplicate` | Upstream dedupe cache path (`ch02` enqueue/seen-cache check) | Missing counter hook in this chunk |
+| `drop_crowding` | `ble_forwarding_should_forward_crowding` reject branch | Missing counter hook |
+| `drop_gps` | `ble_forwarding_should_forward_proximity` reject branch | Missing counter hook |
+| `drop_capacity` | Selection-capacity stage (`TTL sort + top-3`) in integrated queue/engine path | Missing in this chunk |
+| `forwarded` | Successful pass after all forwarding filters and capacity gate | Missing counter hook |
+
 ## Prerequisites (Embedded Deployment Requirements)
 
 The following are strict requirements to treat this chunk as production-ready for embedded BLE mesh firmware.
@@ -79,7 +103,7 @@ The following are strict requirements to treat this chunk as production-ready fo
 2. Enforce invariants at runtime:
 - Never forward with `ttl == 0`.
 - Never exceed `3` forwarded messages per cycle.
-- Reject PSF loops before forwarding.
+- Reject PSF loops before forwarding (enforced upstream in queue path, not inside `ble_forwarding_should_forward`).
 3. Emit mandatory forwarding reason telemetry counters:
 - `drop_ttl0`, `drop_loop`, `drop_duplicate`, `drop_crowding`, `drop_gps`, `drop_capacity`, `forwarded`.
 
@@ -121,6 +145,20 @@ The following are strict requirements to treat this chunk as production-ready fo
 4. Quantitative acceptance checks from plan:
 - High-density control overhead reduction >= 30% vs no-picky baseline.
 - High-density reachability >= 90% of baseline.
+
+## Chunk 3 Exit Gate Checklist (`split.md`)
+
+Required gate conditions:
+
+1. Filter and integration tests pass 100%.
+2. In high density, control overhead is reduced by at least 30% versus no-picky baseline.
+3. In high density, reachability remains at least 90% of baseline.
+
+Current folder-local evidence status:
+
+- No folder-local artifact bundle proving 100% filter+integration gate for this chunk.
+- No folder-local density-sweep report demonstrating >=30% high-density overhead reduction.
+- No folder-local high-density reachability report demonstrating >=90% of baseline.
 
 ## Compile-Time Dependencies (Per File)
 
@@ -183,7 +221,8 @@ Runtime dependencies across wrapper methods:
 
 ### `void ble_forwarding_set_random_seed(uint32_t seed)`
 - Purpose: Seed internal C RNG.
-- Behavior: `seed == 0` resets to built-in default constant; otherwise uses provided seed.
+- Behavior: `seed == 0` resets to built-in default constant (`0x6d2b79f5`); otherwise uses provided seed.
+- Determinism caveat: callers that expect literal zero-seeding will not get a zero state stream.
 
 ### `double ble_forwarding_calculate_crowding_factor(const int8_t *rssi_samples, uint32_t num_samples)`
 - Purpose: Convert RSSI sample set into crowding factor [0.0, 1.0].
@@ -191,10 +230,12 @@ Runtime dependencies across wrapper methods:
   - Null/empty -> `0.0`
   - Mean RSSI normalized linearly between -90 dBm (0.0) and -40 dBm (1.0)
   - Values outside bounds saturate at 0 or 1
+- Specification caveat: `RSSI_MIN/RSSI_MAX` bounds are implementation constants in this chunk, not values locked by PDF text; split requires these thresholds be centralized in config.
 
 ### `double ble_forwarding_calculate_noise_level(const int8_t *rssi_samples, uint32_t num_samples)`
 - Purpose: Crowding factor scaled to [0, 100].
 - Behavior: `noise = crowding * 100`.
+- Scope caveat: this is a forwarding-local scaling helper and is not the Chunk 4 candidacy ratio formula (`direct_neighbors / (1 + crowding)`).
 
 ### `bool ble_forwarding_should_forward_crowding(double crowding_factor, uint32_t direct_neighbors)`
 - Purpose: Probabilistic forward/drop decision from crowding + neighbor count.
@@ -207,6 +248,7 @@ Runtime dependencies across wrapper methods:
     - crowding >= 0.9 -> probability base
     - in between -> linear interpolation from 1.0 down to base
   - Compares against RNG sample
+- Important edge case: for `direct_neighbors <= 2`, `base = min(1, 2/neighbors)` becomes `1.0`, so crowding no longer reduces forwarding probability (filter effectively no-op in that regime).
 
 ### `double ble_forwarding_calculate_distance(const ble_gps_location_t *loc1, const ble_gps_location_t *loc2)`
 - Purpose: 3D Euclidean distance.
@@ -217,6 +259,7 @@ Runtime dependencies across wrapper methods:
 - Behavior:
   - If either pointer missing -> returns `true` (skip proximity filtering)
   - Otherwise forwards when `distance > threshold`
+- PDF rationale mapping: this implements "too close -> do not forward"; equality boundary (`== threshold`) currently drops due to strict `>` check.
 
 ### `bool ble_forwarding_should_forward(const ble_discovery_packet_t *packet, const ble_gps_location_t *current_location, double crowding_factor, double proximity_threshold, uint32_t direct_neighbors)`
 - Purpose: Full 3-metric decision.
@@ -291,6 +334,7 @@ Runtime dependencies across wrapper methods:
 ### `void SetRandomStream(Ptr<RandomVariableStream> stream)`
 - Stores stream pointer.
 - If non-null, draws one integer from the stream and seeds C RNG with it (forcing seed 1 when integer is 0).
+- Determinism caveat: this is one-time bridge seeding; subsequent C-core RNG draws are no longer coupled step-by-step to the ns-3 stream.
 
 ## Function-Level Dependency Map
 
@@ -366,27 +410,51 @@ This table lists direct dependencies (functions called, global state used, or ex
 - Probability math is duplicated in wrapper (`ShouldForwardCrowding`) and C core.
 - Future changes in C logic could drift from C++ copy.
 
-4. Header include hygiene risk.
+4. One-time stream seeding can mislead determinism assumptions.
+- `SetRandomStream(...)` pulls one integer, then reseeds C RNG.
+- After that point, repeated C decisions are driven by C global RNG progression, not continuous draws from ns-3 stream.
+
+5. Pipeline compliance gap in folder-local implementation.
+- Planned stage `TTL sort + top-3 forwarding selection` is not implemented in this chunk.
+- This folder only has TTL hard-reject and priority helper, so readers can overestimate local pipeline completeness if this is not called out.
+
+6. Crowding filter collapses for low neighbor counts.
+- For `direct_neighbors <= 2`, base probability clamps to `1.0`.
+- Result: crowding does not reduce forwarding probability in that range.
+
+7. Hardcoded RSSI normalization bounds are not centralized.
+- `RSSI_MIN=-90` and `RSSI_MAX=-40` are local literals in C core.
+- This conflicts with split requirement to centralize policy thresholds in config.
+
+8. Forwarding-local noise helper can be confused with candidacy ratio logic.
+- `noise = crowding * 100` is not the PDF/Chunk 4 ratio-based candidacy metric.
+- Without explicit separation, readers may assume forwarding and candidacy formulas are unified.
+
+9. Legacy overloads can silently use default neighbor count.
+- `ShouldForwardCrowding(double)` and `ShouldForward(..., proximityThreshold)` use `m_defaultNeighbors`.
+- If caller omits explicit neighbor count, behavior is shaped by default attribute (`20`) rather than live topology.
+
+10. Header include hygiene risk.
 - `ble-forwarding-logic.h` uses `std::vector<int8_t>` but does not directly include `<vector>`.
 - Build may rely on transitive includes.
 
-5. Threshold validation gap in direct setter.
+11. Threshold validation gap in direct setter.
 - `SetProximityThreshold(double)` writes value directly with no local clamp/check.
 - Negative values are prevented only via ns-3 attribute checker, not direct API calls.
 
-6. Proximity gate bypass behavior is permissive.
+12. Proximity gate bypass behavior is permissive.
 - C proximity function returns `true` when any location pointer is null.
 - Full decision also skips proximity when current location pointer is absent.
 - This is intentional fallback behavior but can forward with incomplete location data.
 
-7. Boundary semantics may surprise users.
+13. Boundary semantics may surprise users.
 - Proximity forwarding requires `distance > threshold` (not `>=`).
 - At exact threshold, packet is dropped.
 
-8. Minor API/doc consistency issue.
+14. Minor API/doc consistency issue.
 - Comment in `ble_forwarding_logic.h` for noise-level function says “single RSSI reading” while signature uses sample array.
 
-9. Minor cleanup opportunity.
+15. Minor cleanup opportunity.
 - `<limits>` is included in `ble-forwarding-logic.cc` but unused.
 
 ## Practical Notes for Maintenance

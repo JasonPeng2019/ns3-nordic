@@ -1,294 +1,151 @@
 # ch06: `BleClusterManager`
 
-This chunk contains a single ns-3 object that stores and retrieves node-to-clusterhead assignments.
-
 ## Scope and File Inventory
 
-Only these files exist in this chunk:
+This chunk contains only:
 
 - `ble-cluster-manager.h`
 - `ble-cluster-manager.cc`
 
-## High-Level Behavior
+`BleClusterManager` currently implements a minimal `nodeId -> clusterheadId` assignment map.
 
-`BleClusterManager` is an in-memory lookup table:
+## Current Implementation Summary
 
-- key: `nodeId` (`uint32_t`)
-- value: `clusterheadId` (`uint32_t`)
+- Data model: `std::map<uint32_t, uint32_t> m_assignment`
+- Public operations:
+  - `SetClusterhead(nodeId, clusterheadId, hops, directCount)`
+  - `GetClusterhead(nodeId, clusterheadIdOut)`
+  - `Clear()`
+- Current behavior:
+  - `hops` and `directCount` are accepted but ignored.
+  - latest write silently overwrites any previous assignment for the same `nodeId`.
+  - no bounded path store, graph model, Dijkstra path insertion, loop checks, or recompute policy.
 
-It supports three operations:
+## PDF and `split.md` Mapping
 
-- set/update a node's clusterhead
-- query a node's clusterhead
-- clear all assignments
+### PDF Section 3 Step 7 (Cluster Formation)
 
-There is no persistence, ranking logic, or history tracking in this chunk.
+The protocol source PDF states:
 
-## Dependency Breakdown (All Files)
+> "Edge nodes align themselves with the Clusterhead from which they received the lower length path or the highest direct count message."
 
-### `ble-cluster-manager.h`
+It also states that nodes memorize paths, build a tree, and use Dijkstra when there are multiple interconnected paths to one cluster.
 
-Direct includes:
+### Ambiguity Resolution Locked by `split.md`
 
-- `ns3/object.h`
-  - Provides `ns3::Object` base class and ns-3 object/type infrastructure used by the class declaration.
-- `<map>`
-  - Provides `std::map` for internal assignment storage.
-- `<vector>`
-  - Included but not used in this header.
+The PDF phrase "lower length path or highest direct count" is ambiguous.  
+`split.md` Chunk 6 resolves this into a deterministic lexicographic ordering:
 
-Declared relationships:
+1. shortest path,
+2. then highest direct-count source,
+3. then lower clusterhead ID.
 
-- `class BleClusterManager : public Object`
-  - Inherits from ns-3 `Object`.
+This README follows the `split.md` locked ordering as canonical for implementation and tests.
 
-Private member dependencies:
+### Memorized vs Feasible Paths (PDF Terminology)
 
-- `std::map<uint32_t, uint32_t> m_assignment`
+- Memorized paths: all discovered/observed paths to clusterheads.
+- Feasible paths: bounded routable subset used by cluster-formation/routing logic.
 
-### `ble-cluster-manager.cc`
+`split.md` bounds (`max_paths_per_edge_per_clusterhead=4`, `max_clusterheads_tracked_per_edge=3`) apply to the feasible-path working set.
 
-Direct includes:
+### Dijkstra Scope Clarification
 
-- `"ble-cluster-manager.h"`
-  - Pulls in all class declarations and transitive dependencies from the header.
+PDF wording indicates Dijkstra is used for multiple interconnected paths to one cluster (per-cluster intent), not necessarily a full global all-target shortest-path computation every update.
 
-Used ns-3 facilities:
+## Conformance Against `split.md` Chunk 6
 
-- `NS_OBJECT_ENSURE_REGISTERED (BleClusterManager)`
-  - Registers the class with ns-3 runtime type system.
-- `TypeId`
-  - Used in `GetTypeId()` for runtime type metadata.
+Reference: `model/chunks/split.md` -> "Chunk 6: Cluster Formation + Path Management (Scalable Bounds)".
 
-Standard library usage in implementation:
+| Requirement | Status | Evidence in this chunk |
+|---|---|---|
+| Edge alignment rule (path, direct-count, clusterhead ID tie-break) | Missing | `SetClusterhead` ignores `hops`/`directCount`; simple overwrite only. |
+| Bounded feasible-path storage | Missing | no path store; only one `nodeId -> clusterheadId` map. |
+| Graph builder + Dijkstra shortest feasible route insertion | Missing | no graph representation or shortest-path logic. |
+| Loop-free routing tree entries per edge | Missing | no tree structure or loop validation. |
+| Recompute policy with debounce and topology-delta bypass | Missing | no recompute scheduler or topology-change tracking. |
+| Deliverables (`BleClusterManager` assignment tables + bounded path store + graph + loop checks) | Partial | class scaffold exists; required path-management behavior absent. |
 
-- `std::map::operator[]` for insert/update in `SetClusterhead`
-- `std::map::find` and iterator comparison for lookup in `GetClusterhead`
-- `std::map::clear` in `Clear`
+## Chunk 6 Exit Gate (Restated)
 
-## API and Function-by-Function Implementation
+From `split.md`, Chunk 6 is complete only when all are true:
 
-### `static TypeId GetTypeId (void)`
+1. 100% reachable edge nodes are assigned.
+2. Loop count in resulting trees is zero.
+3. Path-storage and recompute bounds are never violated in 20/150/1000 profiles.
 
-Purpose:
+Current status in this chunk: not met; this scaffold alone cannot satisfy these gates.
 
-- Exposes ns-3 type metadata for `BleClusterManager`.
+## Integration Ownership and Cross-Chunk Fit
 
-Implementation details:
+- Upstream decision logic overlap:
+  - `ch05` currently applies edge-alignment style ranking in `ble_engine_update_clusterhead_selection` (hop count, then direct connections, then sender ID).
+  - `ch06` currently does not make the decision; it stores whatever assignment it is given.
+- Wiring status:
+  - no in-repo call sites currently invoke `BleClusterManager::SetClusterhead`.
+  - module `wscript` still lists `ble-cluster-manager.*` as future/commented entries.
+- Downstream consumer status:
+  - no routing/metrics export path currently consumes this manager state in `ch06`.
 
-- Creates a static `TypeId` named `"ns3::BleClusterManager"`.
-- Sets parent to `Object` via `.SetParent<Object>()`.
-- Places class in group `"BleMeshDiscovery"` via `.SetGroupName(...)`.
-- Registers default constructor via `.AddConstructor<BleClusterManager>()`.
+So at present, `ch06` behaves as an isolated storage scaffold, not the active Cluster 6 decision engine.
 
-### `BleClusterManager::BleClusterManager () = default;`
+## API Notes (Behavioral Contracts)
 
-Purpose:
+### `SetClusterhead(uint32_t nodeId, uint32_t clusterheadId, uint16_t hops, uint32_t directCount)`
 
-- Default constructor with no custom initialization logic.
+- Current implementation stores only `nodeId -> clusterheadId`.
+- `hops` and `directCount` are currently dead parameters.
+- overwrite policy is unconditional and silent.
 
-Behavior:
+### `GetClusterhead(uint32_t nodeId, uint32_t &clusterheadId) const`
 
-- `m_assignment` starts empty.
+- Returns `true` and writes output on hit.
+- Returns `false` on miss and leaves `clusterheadId` unchanged.
+- Caller must check the boolean return to avoid stale output usage.
 
-### `BleClusterManager::~BleClusterManager () = default;`
+### `Clear()`
 
-Purpose:
+- Removes all assignments.
+- No API exists for per-node invalidation/removal.
 
-- Default destructor override for `Object` polymorphic destruction.
+## Open Spec Questions to Resolve in Chunk 6 Implementation
 
-Behavior:
+1. Topology-delta definition for `>10%` bypass:
+   - percent of what exactly (neighbor edges, assignment changes, feasible-path entries, or another metric)?
+2. Dijkstra invocation scope:
+   - per-cluster only (PDF intent) vs global graph recompute.
+3. Assignment validity contract:
+   - is this map storing only EDGE->CH assignments, or full role bindings including CH self-records?
+4. Ownership boundary with `ch05`:
+   - should selection logic move into `ch06`, or should `ch06` be defined as a passive store with explicit producer/consumer contracts?
 
-- Relies on RAII cleanup of `std::map`.
+## Embedded Prerequisites and Current Contradictions
 
-### `void SetClusterhead (uint32_t nodeId, uint32_t clusterheadId, uint16_t hops, uint32_t directCount)`
+Mandatory for embedded-ready Chunk 6 behavior:
 
-Purpose:
+- fixed bounds and preallocated storage for nodes/paths/clusterheads.
+- deterministic ranking and deterministic iteration order.
+- bounded recompute work with explicit debounce/reason counters.
+- loop-freedom checks and malformed-path rejection.
+- deterministic diagnostics and invariant counters.
 
-- Assigns or updates the clusterhead for `nodeId`.
+Current scaffold contradiction:
 
-Implementation details:
+- `std::map` is heap-backed and unbounded by default, which conflicts with no-heap/steady-state deterministic-memory expectations for embedded deployment.
 
-- Current implementation ignores `hops` and `directCount` entirely.
-- Stores assignment with:
-  - `m_assignment[nodeId] = clusterheadId;`
-- If `nodeId` already exists, prior value is overwritten.
+## Risks
 
-### `bool GetClusterhead (uint32_t nodeId, uint32_t &clusterheadId) const`
+1. Ignored `hops`/`directCount` can mislead callers into assuming ranking behavior exists.
+2. Integration gap: no active producer/consumer wiring means this class can silently diverge from runtime behavior.
+3. `std::map` introduces heap churn and violates embedded bounded-memory expectations.
+4. Silent overwrite hides churn and can mask instability under frequent reassignment.
+5. Validation is too weak:
+   - real invariant is not simply `nodeId != clusterheadId`; assignment should target a known/valid clusterhead set for the chosen state model.
+6. `GetClusterhead` miss path is a footgun if callers ignore the boolean and read stale output.
+7. No per-node removal API forces full reset or external workarounds.
+8. No observability hooks (counters/traces) for assignment changes or invalid updates.
 
-Purpose:
+## v2 Slotting Note
 
-- Retrieves clusterhead assignment for `nodeId`.
-
-Implementation details:
-
-- Performs `find(nodeId)` in `m_assignment`.
-- Returns `false` if node is missing.
-- On success:
-  - writes result into output reference `clusterheadId`
-  - returns `true`
-
-Important detail:
-
-- On `false`, `clusterheadId` is left unchanged by this function.
-
-### `void Clear ()`
-
-Purpose:
-
-- Removes all stored assignments.
-
-Implementation details:
-
-- Calls `m_assignment.clear()`.
-
-## Data Model and Control Flow
-
-Write path:
-
-1. Caller invokes `SetClusterhead(nodeId, clusterheadId, hops, directCount)`.
-2. Manager inserts or updates `m_assignment[nodeId]`.
-
-Read path:
-
-1. Caller invokes `GetClusterhead(nodeId, outClusterheadId)`.
-2. Manager checks map.
-3. Returns `true` with output value if found; else returns `false`.
-
-Reset path:
-
-1. Caller invokes `Clear()`.
-2. All assignments are erased.
-
-## Highlights
-
-- Minimal and deterministic implementation.
-- O(log N) insert/update/lookup behavior due to `std::map`.
-- Clean ns-3 type registration and construction path.
-- Easy to integrate as a shared state container in simulation components.
-
-## Conformance Against `split.md` Chunk 6 Plan
-
-Reference plan section:
-
-- `split.md` -> `Chunk 6: Cluster Formation + Path Management (Scalable Bounds)`
-
-Conformance verdict:
-
-- This implementation is **not yet conformant** with planned Chunk 6 behavior.
-- It matches only the documented scaffold status (`BleClusterManager` existence), not the required path-management feature set.
-
-Requirement-by-requirement comparison:
-
-1. Edge alignment rule (shortest path -> highest direct-count -> lower clusterhead ID)
-   - **Planned:** mandatory.
-   - **Current:** not implemented.
-   - **Deviation:** `SetClusterhead(...)` ignores both `hops` and `directCount`.
-
-2. Bounded feasible-path storage
-   - **Planned:** enforce `max_paths_per_edge_per_clusterhead=4`, `max_clusterheads_tracked_per_edge=3`.
-   - **Current:** no path store exists.
-   - **Deviation:** only a single `nodeId -> clusterheadId` map is stored.
-
-3. Graph builder + Dijkstra shortest feasible route insertion
-   - **Planned:** mandatory.
-   - **Current:** not implemented.
-   - **Deviation:** no graph representation, no shortest-path computation.
-
-4. Loop-free routing tree entries per edge
-   - **Planned:** mandatory.
-   - **Current:** not implemented.
-   - **Deviation:** no tree/path model exists to validate loop-freedom.
-
-5. Recompute policy with debounce and topology-delta bypass
-   - **Planned:** recompute no more often than every 5 cycles unless topology delta >10%.
-   - **Current:** not implemented.
-   - **Deviation:** no recompute scheduler, debounce, or topology-delta tracking.
-
-6. Deliverables expected from Chunk 6
-   - **Planned:** assignment tables + bounded path store + loop checks + Dijkstra integration.
-   - **Current:** assignment map only.
-   - **Deviation:** major deliverables are still missing.
-
-## Prerequisites (Embedded, Mandatory)
-
-These requirements are mandatory for an embedded-target implementation of Chunk 6 (or standard industry practice for safety/reliability-sensitive networking firmware).
-
-1. Memory determinism and hard bounds
-   - Use fixed upper bounds for all node/path structures (`MAX_NODES`, `MAX_CLUSTERHEADS_PER_EDGE`, `MAX_PATHS_PER_EDGE_PER_CLUSTERHEAD`, `MAX_PATH_HOPS`).
-   - No unbounded container growth at runtime.
-   - No heap allocation in steady-state operation; preallocate pools/buffers at init.
-   - Enforce and test overflow behavior when bounds are reached.
-
-2. Deterministic behavior and tie-break reproducibility
-   - Implement exact deterministic ranking rule: shortest path, then highest direct-count, then lowest clusterhead ID.
-   - Ensure stable deterministic iteration/order so identical inputs produce identical assignments.
-   - Define one canonical integer-domain comparison path (avoid floating tie-break behavior).
-
-3. Bounded runtime/WCET behavior
-   - Define worst-case execution time (WCET) budgets for assignment update, route recompute, and query operations.
-   - Use algorithms/data structures with predictable worst-case latency under configured max scale.
-   - Avoid recursion in routing/path logic.
-
-4. Path safety and loop prevention
-   - Validate every inserted path for loop-freedom.
-   - Reject malformed paths (duplicate node in path, invalid hop count, out-of-range node IDs).
-   - Maintain parent/next-hop state with explicit invariants that can be asserted in debug builds.
-
-5. Recompute control for CPU/power stability
-   - Recompute must be event-driven and debounce-limited (>=5 cycles between recomputes unless topology delta >10%).
-   - Track topology-change counters and recompute reasons.
-   - Cap recompute work per cycle to preserve real-time scheduling headroom.
-
-6. API and state contract strictness
-   - `SetClusterhead` parameters must either be fully used (`hops`, `directCount`) or removed from the API.
-   - Provide explicit remove/invalidate APIs for stale entries.
-   - Define invalid-ID and self-assignment policy and enforce it.
-
-7. Concurrency and ISR/task safety
-   - If accessed across tasks/ISRs, define single-writer ownership or lock strategy.
-   - Guarantee atomic visibility for reads during updates.
-   - Prohibit blocking locks in time-critical contexts.
-
-8. Fault handling and observability
-   - Add mandatory counters: bound-hit, loop-reject, invalid-input, recompute-trigger, recompute-skipped-debounce.
-   - Expose deterministic diagnostics for postmortem/root-cause analysis.
-   - Fail safely on invariant violation (drop update + increment error counter, no undefined behavior).
-
-9. Verification requirements
-   - Unit tests are required for: ranking/tie-break, bounds enforcement, Dijkstra correctness, loop-freedom, debounce policy.
-   - Add stress tests at target scale bounds with worst-case topology churn.
-   - Add static analysis/lint gate aligned with embedded C++ standards (for example MISRA/CERT-C++ profile used by your organization).
-   - Verify deterministic replay for fixed seeds and identical input timelines.
-
-## Potential Issues and Risks
-
-1. **Ignored parameters in `SetClusterhead`**
-   - `hops` and `directCount` are accepted but not used.
-   - Risk: callers may assume these influence selection/priority when they do not.
-
-2. **Unused header include (`<vector>`)**
-   - Adds avoidable compile dependency noise.
-
-3. **Silent overwrite semantics**
-   - Reassigning a `nodeId` replaces previous clusterhead with no warning or trace.
-   - Risk: hard to debug churn without instrumentation.
-
-4. **No validation constraints**
-   - No checks for invalid/self assignments (for example `nodeId == clusterheadId`) or reserved IDs.
-
-5. **No removal API for a single node**
-   - Only full `Clear()` exists.
-   - Risk: callers needing selective invalidation must reassign or rebuild state externally.
-
-6. **No observability hooks**
-   - No trace sources, counters, or attributes exposed via `TypeId`.
-   - Makes runtime introspection harder in larger experiments.
-
-## Suggested Improvements (If Needed)
-
-- Use or remove `hops`/`directCount` to align interface with behavior.
-- Remove unused `<vector>` include.
-- Add optional validation/assertion policy for assignments.
-- Add `RemoveClusterhead(nodeId)` and optional `HasClusterhead(nodeId)`.
-- Add trace sources or logging for assignment changes.
+The PDF describes FDMA/TDMA slotting after cluster formation, but also states this is out of project scope in v1.  
+For future integration, `ch01` already exposes hash-slot helpers (`ble_hash_map_edge_slot`, `ble_hash_next_slot_time_ms`) that `ch06`/routing logic can consume when this extension is enabled.

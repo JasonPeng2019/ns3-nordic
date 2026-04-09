@@ -1,354 +1,193 @@
 # ch05 BLE Discovery Engine (Portable C Core + ns-3 Wrapper)
 
 ## Scope
-This README is intentionally scoped **only** to files in this directory:
-
-- `ble_discovery_engine.h` (portable C public API)
+This README covers only files in `ch05/`:
+- `ble_discovery_engine.h` (portable C API)
 - `ble_discovery_engine.c` (portable C implementation)
-- `ble-discovery-engine.h` (ns-3 C++ wrapper API)
-- `ble-discovery-engine.cc` (ns-3 C++ wrapper implementation)
+- `ble-discovery-engine.h` (ns-3 wrapper API)
+- `ble-discovery-engine.cc` (ns-3 wrapper implementation)
 
-No assumptions here require reading files outside `ch05`; external modules are described from their usage/signatures in these files.
+Cross-chunk references are explicitly called out when they affect correctness.
+
+## Chunk 5 Ownership and PDF Mapping
+`split.md` Chunk 5 is "Election Announcement (3 Rounds) + Conflict Logic."  
+This directory implements that behavior inside `BleDiscoveryEngine` (integrated path), which is allowed by `split.md` "Component Placement and Ownership (Locked)."
+
+### PDF Section 3 Step Mapping
+| PDF Step | Behavior | Implemented Here | Notes |
+|---|---|---|---|
+| Step 4 | Election announcement broadcast | Yes | `ble_engine_start_election_rounds`, `ble_engine_should_send_election`, `ble_engine_send_election_packet` |
+| Step 5 | Conflict resolution (higher direct_connections; tie lower ID) | Yes | Implemented in `ble_engine_handle_election_packet` for candidate/clusterhead state |
+| Step 6 | Re-announcement / renouncement after loss | Yes | `ble_engine_start_renouncement_rounds`, `ble_engine_prepare_renouncement_packet`, `ble_engine_send_renouncement_packet` |
+| Step 7 | Edge alignment to chosen clusterhead | Partially integrated | `ble_engine_update_clusterhead_selection` uses hop-count-first ordering (Chunk 6 style rule) |
+
+### Important Rule Separation
+- Election conflict rule (Chunk 5): `direct_connections` wins; tie -> lower sender ID.
+- Edge alignment rule (Chunk 6): shortest path first, then direct_connections, then lower clusterhead ID.
+
+`ble_engine_handle_election_packet` applies the Chunk 5 conflict rule.  
+`ble_engine_update_clusterhead_selection` applies the Chunk 6 edge-alignment rule.  
+These are different rules and should not be conflated.
+
+## v1 Scope Boundary (split.md Hard Constraints)
+- v1 scope includes discovery/election/cluster-formation behavior.
+- Full FDMA/TDMA data-plane scheduling is explicitly out of scope in v1.
+- This chunk still contains a substantial data-phase subsystem (`Mode1/Mode2`, TDMA/FDMA slot gating). Treat this as ahead-of-scope implementation and do not count it as required Chunk 5 acceptance evidence.
 
 ## What This Chunk Implements
-`ch05` is the integration layer that turns multiple lower-level BLE mesh helpers into one runnable discovery/data engine.
+- C engine (`ble_discovery_engine.c/.h`):
+  - `NOISY -> NEIGHBOR -> DISCOVERY` phase loop
+  - 4-slot discovery dispatch
+  - election announcement forwarding path with PDSF updates
+  - renouncement flow
+  - state evaluation and clusterhead selection integration
+  - optional data-phase slot gating and slot-outcome counters
+- ns-3 wrapper (`ble-discovery-engine.cc/.h`):
+  - `TypeId` attributes and trace hooks
+  - scheduler wiring (`ScheduleNextTick` -> `RunTick`)
+  - packet/header conversion between ns-3 and C structs
 
-- The **C engine** (`ble_discovery_engine.c/.h`) owns protocol state and logic:
-  - phase machine (`NOISY -> NEIGHBOR -> DISCOVERY`)
-  - discovery-cycle slot dispatch and forwarding queue processing
-  - election/renouncement handling and clusterhead alignment
-  - optional data-phase slot gating and slot-outcome accounting
-  - metrics publishing and callback hooks
-- The **ns-3 wrapper** (`ble-discovery-engine.cc/.h`) exposes this C engine as an `ns3::Object`, maps ns-3 attributes into `ble_engine_config_t`, schedules periodic ticks, and converts packet/header formats across C and ns-3 boundaries.
+## Runtime Flow
+1. `Initialize` / `ble_engine_init`
+   - Initializes queue/cycle/node/election timing, assigns self slot, starts in `NOISY`.
+2. `RunTick` / `ble_engine_tick`
+   - Advances data-phase windows.
+   - Advances `NOISY` and `NEIGHBOR` micro-slots.
+   - Executes discovery cycle slots in `DISCOVERY`.
+3. `Receive` / `ble_engine_receive_packet`
+   - Classifies discovery/election packet.
+   - Runs election RX handling when applicable.
+   - Updates noisy/neighbor sampling and queues for forwarding.
+4. `ble_engine_cycle_complete`
+   - Increments cycle, prunes stale neighbors, publishes metrics.
+   - Calls `ble_engine_evaluate_state`.
+   - Re-enters `NOISY`.
 
-## High-Level Runtime Flow
-1. `Initialize()` / `ble_engine_init()` configure callbacks, defaults, queue, node, election state, slot assignments, and phase timing.
-2. `RunTick()` / `ble_engine_tick()` execute on each scheduled slot:
-   - updates `last_tick_time_ms`
-   - manages data-phase start/end/restart windows
-   - advances NOISY/NEIGHBOR micro-phase slots until DISCOVERY phase
-   - runs discovery slot actions (own-message slot or forwarding slots)
-3. RX path (`Receive()` / `ble_engine_receive_packet()`):
-   - optional data-phase gating
-   - election packet handling
-   - noisy/neighbor sampling updates
-   - enqueue for forwarding
-4. End of each discovery cycle (`ble_engine_cycle_complete()`):
-   - advance cycle counter, prune stale neighbors
-   - refresh election neighbor cache timeout
-   - publish metrics callback
-   - evaluate state transitions and re-enter NOISY phase
+## Election Round Semantics (Current Behavior)
+- `ble_engine_start_election_rounds` sets `election_rounds_remaining = 3` and sends immediately.
+- `ble_engine_should_send_election` gates to at most one election send per cycle.
+- `ble_engine_try_promote_clusterhead` promotes when `current_cycle > last_election_cycle_sent` and does not check `election_rounds_remaining`.
 
-## File-by-File Dependency Map
+This means the implementation can promote before all 3 rounds are sent.  
+Chunk 5 therefore remains **partial** for "exactly 3 rounds" until lifecycle tests prove otherwise and/or logic is tightened.
+
+## State Machine Mapping (BleMeshNodeState)
+State transitions are driven in `ble_engine_evaluate_state` using shared-node predicates (`ble_mesh_node_should_become_edge`, `ble_mesh_node_should_become_candidate`) from `model/shared/ble_mesh_node.c`.
+
+| From | Condition | To | Function Path |
+|---|---|---|---|
+| `INIT` | first evaluation | `DISCOVERY` | `ble_engine_evaluate_state` |
+| `DISCOVERY` or `EDGE` | candidate predicate true | `CLUSTERHEAD_CANDIDATE` | `ble_engine_evaluate_state` |
+| any non-edge | edge predicate true | `EDGE` | `ble_engine_evaluate_state` |
+| `CLUSTERHEAD_CANDIDATE` | stronger candidate heard | `EDGE` + renouncement rounds | `ble_engine_handle_election_packet` |
+| `CLUSTERHEAD_CANDIDATE` | promotion check passes | `CLUSTERHEAD` | `ble_engine_try_promote_clusterhead` |
+| `CLUSTERHEAD` | stronger peer heard | `EDGE` | `ble_engine_handle_election_packet` |
+| aligned node | selected CH renounces | `DISCOVERY` | `ble_engine_handle_clusterhead_renouncement` |
+
+### Candidacy Gate Cross-Chunk Note
+- This chunk does **not** call `ch04` `ble_election_should_become_candidate`.
+- It currently relies on shared-node candidacy logic (`ble_mesh_node_should_become_candidate`) in `model/shared/ble_mesh_node.c`.
+
+## File Inventory and Key Responsibilities
 
 ### `ble_discovery_engine.h`
-Direct includes:
-- `<stdint.h>`
-- `<stdbool.h>`
-- `ble_broadcast_timing.h`
-- `ble_discovery_cycle.h`
-- `ble_discovery_packet.h`
-- `ble_election.h`
-- `ble_forwarding_logic.h`
-- `ble_message_queue.h`
-- `ble_mesh_node.h`
-
-Primary dependency role:
-- Defines the central `ble_engine_t` that embeds types from all modules above.
-- Defines callbacks that expose `ble_discovery_packet_t`, `ble_connectivity_metrics_t`, and slot-event metadata.
+- Defines `ble_engine_config_t`, `ble_engine_t`, callbacks, API surface.
+- Exposes constants including `BLE_ENGINE_MAX_ELECTION_ROUNDS`.
 
 ### `ble_discovery_engine.c`
-Direct includes:
-- `ble_discovery_engine.h`
-- `<string.h>` (`memset`)
-- `<limits.h>` (`UINT32_MAX`, `UINT16_MAX`)
+- Implements election scheduling, conflict logic, renouncement flow, forwarding updates, state transitions, and phase timing.
 
-External module dependencies used by symbol family:
-- `ble_discovery_cycle_*`
-- `ble_queue_*` (`ble_message_queue`)
-- `ble_mesh_node_*`
-- `ble_election_*`
-- `ble_discovery_*` packet/path/GPS/TTL helpers
-- `ble_forwarding_*`
-- `ble_broadcast_timing_*`
+### `ble-discovery-engine.h`
+- Exposes ns-3 object API and trace interfaces.
 
-### `ble-discovery-engine.h` (ns-3 wrapper header)
-Direct includes:
-- `ns3/object.h`, `ns3/callback.h`, `ns3/event-id.h`, `ns3/packet.h`, `ns3/vector.h`, `ns3/nstime.h`, `ns3/traced-callback.h`
-- `ble-discovery-header-wrapper.h`
-- `extern "C" { #include "ns3/ble_discovery_engine.h" }`
+### `ble-discovery-engine.cc`
+- Maps ns-3 attributes to C config, schedules periodic ticks, and handles packet conversions.
 
-Primary dependency role:
-- Bridges ns-3 object system, tracing, events, and packet types to the C engine API.
+## Key API/Function Notes
 
-### `ble-discovery-engine.cc` (ns-3 wrapper impl)
-Direct includes:
-- `ble-discovery-engine.h`
-- `ns3/log.h`, `ns3/simulator.h`, `ns3/double.h`, `ns3/integer.h`, `ns3/uinteger.h`, `ns3/boolean.h`
-
-Primary dependency role:
-- Implements `TypeId` attributes/traces.
-- Converts ns-3 time to `uint32_t ms` for the C engine.
-- Converts between `BleDiscoveryHeaderWrapper` and C packet structs.
-
-## Public Data Types and Constants (`ble_discovery_engine.h`)
-
-### Callback Types
-- `ble_engine_send_callback`: engine -> platform TX hook
-- `ble_engine_log_callback`: optional log hook
-- `ble_engine_metrics_callback`: optional metrics hook
-- `ble_engine_slot_callback`: optional slot-outcome hook
-
-### Key Constants
-- Noise phase defaults: `BLE_ENGINE_DEFAULT_NOISE_SLOTS`, `BLE_ENGINE_DEFAULT_NOISE_SLOT_DURATION_MS`
-- Neighbor phase defaults: `BLE_ENGINE_DEFAULT_NEIGHBOR_SLOTS`, `BLE_ENGINE_DEFAULT_NEIGHBOR_SLOT_DURATION_MS`, `BLE_ENGINE_DEFAULT_NEIGHBOR_TIMEOUT_CYCLES`
-- Election defaults: `BLE_ENGINE_MAX_ELECTION_ROUNDS`
-- Data-phase defaults: `BLE_ENGINE_DEFAULT_TDMA_SLOTS`, `BLE_ENGINE_DEFAULT_FDMA_CHANNELS`, `BLE_ENGINE_DEFAULT_FRAME_DURATION_MS`, `BLE_ENGINE_DEFAULT_MODE_DURATION_MS`
-
-### Core Structs
-- `ble_engine_config_t`: static params + callbacks
-- `ble_engine_t`: full runtime state (cycle, queue, node, election, phase, data-slot bookkeeping, metrics snapshot)
-- `ble_engine_slot_event_t`: frame/slot/channel/iteration/outcome for tracing
-
-### Enums
-- `ble_engine_phase_t`: `NOISY`, `NEIGHBOR`, `DISCOVERY`
-- `ble_engine_slot_outcome_t`: `EMPTY`, `TX`, `RX`, `COLLISION`
-
-## Function Reference: Portable C API
-
-### Exported functions (`ble_discovery_engine.h` + implemented in `.c`)
-- `ble_engine_config_init`
-  - Purpose: zero config and apply defaults.
-  - Direct deps: `memset`, compile-time defaults.
-- `ble_engine_init`
-  - Purpose: validate config, initialize cycle/queue/node/election/timing, assign self slot, start in NOISY phase.
-  - Direct deps: discovery cycle setup, queue init, node init/state/slot assignment, election init, broadcast timing init, slot refresh.
+### Portable C API (selected behavior-critical functions)
 - `ble_engine_reset`
-  - Purpose: clear runtime state and return to NOISY phase.
-  - Direct deps: queue clear, cycle stop, node re-init/clear slots, election + timing re-init, slot refresh.
-- `ble_engine_tick`
-  - Purpose: one scheduling step; drives phase transitions, data-phase windows, and discovery cycle slots.
-  - Direct deps: node state query, data-phase helpers, phase-slot runner, discovery-cycle execute/advance.
+  - Re-initializes node and clears slots via `ble_mesh_node_clear_slots`.
+  - Does not reassign self slot (unlike `ble_engine_init`), creating init/reset asymmetry.
 - `ble_engine_receive_packet`
-  - Purpose: ingest one incoming packet with RSSI/time, update election/neighbor sampling, and queue for forwarding.
-  - Direct deps: slot gating, election handler, neighbor/election update helpers, queue enqueue, node counters.
-- `ble_engine_set_noise_level`
-  - Purpose: store measured noise at node model.
-  - Direct deps: `ble_mesh_node_set_noise_level`.
-- `ble_engine_mark_candidate_heard`
-  - Purpose: flag candidate visibility at node model.
-  - Direct deps: `ble_mesh_node_mark_candidate_heard`.
-- `ble_engine_set_crowding_factor`
-  - Purpose: clamp/store crowding factor and update neighbor timing crowding.
-  - Direct deps: `ble_broadcast_timing_set_crowding`.
-- `ble_engine_seed_random`
-  - Purpose: seed forwarding randomness.
-  - Direct deps: `ble_forwarding_set_random_seed`.
-- `ble_engine_set_gps`
-  - Purpose: set/clear local GPS.
-  - Direct deps: node GPS setters/clear.
-- `ble_engine_get_node`
-  - Purpose: read-only access to embedded node struct.
-- `ble_engine_record_slot_event`
-  - Purpose: manual slot outcome recording for assigned slot at `now_ms`.
-  - Direct deps: slot math, slot counters, optional slot callback.
-- `ble_engine_start_data_phase`
-  - Purpose: activate data-phase bookkeeping and reset slot counters.
-  - Direct deps: slot refresh.
-- `ble_engine_end_data_phase`
-  - Purpose: deactivate data phase.
-- `ble_engine_advance_slot_iteration`
-  - Purpose: force iteration `(iter + 1) % 3`.
-- `ble_engine_gate_and_record_slot`
-  - Purpose: enforce slot ownership and optional collision model, emit slot event, return outcome.
-  - Direct deps: slot-window check, collision bookkeeping, node collision stats, slot event emit.
+  - For election packets, dispatches to `ble_engine_handle_election_packet`.
+  - Then enqueues using `ble_queue_enqueue`.
+- `ble_engine_forward_next_message`
+  - Applies forwarding decision.
+  - Enforces PDSF soft cap stop (`pdsf >= BLE_DISCOVERY_MAX_CLUSTER_SIZE`) for election forwarding.
+  - Updates PDSF via `ble_election_update_pdsf`.
+  - This is soft-cap behavior only; hard membership cap validation is not implemented here.
+- `ble_engine_count_already_reached`
+  - Counts direct neighbors already present in packet path.
+  - This is the implementation of the PDF clause "excluding devices message has reached previously."
+- `ble_engine_update_clusterhead_selection`
+  - Implements edge alignment ranking: hop count, then direct_connections, then lower sender ID.
+  - Treat as Chunk 6-style behavior integrated into this runtime.
+- `ble_engine_handle_election_packet`
+  - Marks candidate heard.
+  - Handles incoming renouncement (`ble_engine_handle_clusterhead_renouncement`).
+  - In candidate/clusterhead state: compares local vs remote by direct_connections then sender ID.
+  - On loss: demotes to `EDGE`, cancels election rounds, starts renouncement rounds, aligns to winner.
+- `ble_engine_try_promote_clusterhead`
+  - Candidate promotion gate based on elapsed cycle since last election send.
+  - Does not require `election_rounds_remaining == 0`.
 
-### Internal static functions (`ble_discovery_engine.c`)
-- `ble_engine_log`: forwards to `log_cb` when set.
-- `ble_engine_slot_dispatch`: maps discovery slots to `ble_engine_transmit_own_message` or `ble_engine_forward_next_message`.
-- `ble_engine_cycle_complete`: end-of-cycle maintenance and phase restart.
-- `ble_engine_transmit_own_message`: sends renouncement/election if pending, else local discovery packet.
-- `ble_engine_forward_next_message`: dequeue policy + TTL/path/PDSF updates + optional data-slot gating.
-- `ble_engine_enter_phase`: initialize per-phase timing/listen behavior.
-- `ble_engine_run_phase_slot`: consumes one NOISY/NEIGHBOR micro-slot and transitions phase when complete.
-- `ble_engine_neighbor_timeout_ms`: computes election neighbor timeout from cycle duration.
-- `ble_engine_publish_metrics`: snapshots election metrics + local slot counters and publishes callback.
-- `ble_engine_evaluate_state`: state-machine transitions (DISCOVERY/EDGE/CANDIDATE/CLUSTERHEAD).
-- `ble_engine_start_election_rounds`: arm rounds and immediately send first election packet.
-- `ble_engine_cancel_election_rounds`: clear election-round counters.
-- `ble_engine_should_send_election`: per-cycle election send gate.
-- `ble_engine_prepare_election_packet`: fill election packet fields/score/PDSF.
-- `ble_engine_send_election_packet`: transmit prepared election packet and update counters.
-- `ble_engine_should_send_renouncement`: per-cycle renouncement send gate.
-- `ble_engine_prepare_renouncement_packet`: fill renouncement packet fields.
-- `ble_engine_send_renouncement_packet`: transmit renouncement and update counters.
-- `ble_engine_start_renouncement_rounds`: arm renouncement retries.
-- `ble_engine_cancel_renouncement_rounds`: clear renouncement retries.
-- `ble_engine_clear_selected_clusterhead`: clear CH alignment/slot and reset CH-selection metrics.
-- `ble_engine_try_promote_clusterhead`: candidate -> clusterhead promotion once one cycle elapsed after election send.
-- `ble_engine_update_clusterhead_selection`: select better CH by hop count, direct-connections, then lower sender ID.
-- `ble_engine_handle_clusterhead_renouncement`: clear alignment if selected CH renounces.
-- `ble_engine_count_already_reached`: count direct neighbors already in packet path.
-- `ble_engine_refresh_slots`: recompute next scheduled self+cluster slot times.
-- `ble_engine_emit_slot_event`: update slot counters and dispatch `slot_cb` event.
-- `ble_engine_record_slot_outcome`: increment TX/RX/COLLISION/EMPTY counters.
-- `ble_engine_is_in_slot`: frame/slot arithmetic for slot-ownership check.
-- `ble_engine_autonomous_slot_tick`: emits `EMPTY` outcomes when currently in assigned slots.
-- `ble_engine_handle_election_packet`: state-dependent reaction to election or renouncement messages.
+### ns-3 Wrapper (`BleDiscoveryEngine`)
+- `ScheduleNextTick` always uses `SlotDuration`.
+- `ble_engine_tick` internally advances NOISY/NEIGHBOR micro-phases using independent durations.
+- If `SlotDuration`, `NoiseSlotDuration`, and `NeighborSlotDuration` are not harmonized, timeline distortion can occur.
 
-## Function Reference: ns-3 Wrapper Class
-Class: `ns3::BleDiscoveryEngine` in `ble-discovery-engine.h/.cc`.
+## Cross-File Integration Contracts and Hazards
+- C engine requires `config.node_id != 0` and `config.send_cb != NULL`; wrapper enforces both.
+- Election packet handling depends on base-layout cast compatibility between `ble_discovery_packet_t` and `ble_election_packet_t`.
+- Wrapper RX classification is `header.IsElectionMessage()`. If the header mode flag drifts from wire type, wrong packet interpretation follows.
+  - Known upstream hazard: `ch01/ble-discovery-header-wrapper.cc` can reassign `m_isElection` from `is_clusterhead_message` during deserialize paths.
+- Renouncement correctness depends on wire flag initialization.
+  - Known upstream hazard: `ch01/ble_discovery_packet.c` `ble_election_packet_init` does not explicitly initialize `is_renouncement`.
+  - This chunk sets the flag explicitly for renouncement packets, but stale-memory behavior upstream can still leak incorrect renouncement state.
 
-### Public methods
-- `GetTypeId`:
-  - Registers attributes: `SlotDuration`, `InitialTtl`, `ProximityThreshold`, `NoiseSlotCount`, `NoiseSlotDuration`, `NeighborSlotCount`, `NeighborSlotDuration`, `NeighborTimeoutCycles`, `FdmaChannels`, `TdmaSlots`, `FrameDuration`, `Mode1Duration`, `Mode2Duration`, `EnableCollisionModel`, `EnableDataPhase`, `NodeId`.
-  - Registers trace sources: `MetricsUpdate`, `SlotOutcome`.
-- `BleDiscoveryEngine` (ctor): sets defaults, calls `ble_engine_config_init`.
-- `~BleDiscoveryEngine`: calls `Stop`.
-- `Initialize`: maps ns-3 attributes into `ble_engine_config_t`, installs static C callbacks, calls `ble_engine_init`.
-- `Start`: lazy-initializes if needed, schedules immediate first tick.
-- `Stop`: cancels scheduled event.
-- `SetSendCallback`: stores outbound packet callback.
-- `Receive`: unwraps header (discovery vs election) and calls `ble_engine_receive_packet` with current sim time.
-- `SetCrowdingFactor`, `SetNoiseLevel`, `MarkCandidateHeard`, `SetGpsLocation`, `SeedRandom`: thin passthroughs to C API.
-- `GetNode`: exposes `ble_engine_get_node`.
+## Chunk 5 Conformance (Against `chunks/split.md`)
 
-### Protected/private methods
-- `DoDispose`: stop scheduling then chain to `Object::DoDispose`.
-- `ScheduleNextTick`: schedule `RunTick` after `m_slotDuration`.
-- `RunTick`: call `ble_engine_tick(now_ms)` then reschedule.
-- `EngineSendHook`: static C callback trampoline to `HandleEngineSend`.
-- `EngineLogHook`: static C callback -> `NS_LOG_DEBUG`.
-- `EngineMetricsHook`: static C callback trampoline to `HandleMetricsUpdate`.
-- `EngineSlotHook`: static C callback that converts C slot event into traced `SlotOutcomeEvent`.
-- `HandleEngineSend`: C packet -> `BleDiscoveryHeaderWrapper` -> `ns3::Packet` and invoke `m_txCallback`.
-- `HandleMetricsUpdate`: fire metrics trace callback.
+| Requirement | Status | Evidence / Gap |
+|---|---|---|
+| Exactly 3 election rounds | Partial | Round counter exists, but promotion gate can preempt remaining rounds. |
+| Propagate/update `class_id`, `direct_connections`, `pdsf`, `last_pi`, `score`, `hash`, `path` | Implemented | Built in `ble_engine_prepare_election_packet`; updated during forwarding. |
+| Conflict rule `direct_connections` then lower ID | Implemented (for candidate/clusterhead conflict) | `ble_engine_handle_election_packet`. |
+| Renouncement after loss | Implemented | `ble_engine_start_renouncement_rounds` + renouncement send path. |
+| PDSF soft-cap retransmission stop | Implemented | Checked pre/post PDSF update in `ble_engine_forward_next_message`. |
+| Separate hard membership cap validation/reporting | Missing | No explicit hard-cap validation counters in this chunk. |
+| Required metrics: `pdsf_cap_stop_events`, `cluster_size_hard_cap_violations` | Missing | Not present in this directory. |
+| Deliverable naming (`BleElectionEngine`) | Satisfied via integrated runtime | Allowed by split "Component Placement and Ownership (Locked)". |
 
-## Cross-File Integration Contracts
-- C engine requires:
-  - `config.node_id != 0`
-  - `config.send_cb != NULL`
-- Wrapper enforces this by:
-  - requiring `NodeId` before `Initialize()`
-  - always wiring send/log/metrics/slot callbacks.
-- Election packets are passed by treating `ble_election_packet_t` as having `ble_discovery_packet_t` base layout at offset 0 (via casts in both RX and TX paths).
+## Chunk 5 Exit Gate Checklist
+From `split.md` Chunk 5 Exit Gate:
 
-## Chunk 5 Plan Fit (Against `chunks/split.md`)
-Reference: `split.md` section "Chunk 5: Election Announcement (3 Rounds) + Conflict Logic".
+1. No unresolved `CLUSTERHEAD_CANDIDATE` after final round + 1 settle cycle.
+2. In cap-stop tests, forwarded election packets after `pdsf >= cap` are zero.
 
-### What Matches
-- **3-round election scheduling exists**:
-  - `BLE_ENGINE_MAX_ELECTION_ROUNDS = 3`
-  - `ble_engine_start_election_rounds()` arms 3 rounds and immediately sends the first election packet.
-  - `ble_engine_should_send_election()` + `ble_engine_send_election_packet()` enforce at most one election send per cycle until rounds are exhausted.
-- **Election payload propagation/update is implemented**:
-  - Source build: `class_id`, `direct_connections`, `pdsf`, `last_pi`, `score`, `hash`, `path`.
-  - Forward path: TTL decrement, path append, PDSF update (`ble_election_update_pdsf`), cap check.
-- **Conflict resolver logic is implemented**:
-  - Candidate/clusterhead conflict winner: higher `direct_connections`; tie -> lower `sender_id`.
-- **Renouncement after loss is implemented**:
-  - Losing candidate starts renouncement rounds and broadcasts renouncement packets (`is_renouncement` set).
+Current status in `ch05` README scope:
+- Not proven by local `ch05` test artifacts.
+- Must be shown with deterministic test evidence before claiming Chunk 5 complete.
 
-### Where It Deviates / Is Incomplete
-- **Missing explicit hard-cap membership validation path in this chunk**:
-  - `PDSF` soft-cap forwarding stop exists, but this chunk does not expose separate hard cluster-membership cap invariants or violation counters.
-- **Missing explicit metrics required by chunk05 deliverables**:
-  - No dedicated counters in this chunk for:
-    - `pdsf_cap_stop_events`
-    - `cluster_size_hard_cap_violations`
-- **No chunk05 exit-gate enforcement in this directory**:
-  - No local test artifacts in `ch05` proving:
-    - exactly-3-round lifecycle in CI
-    - "no unresolved candidate after final round + 1 settle cycle"
-    - "forwarded election packets after `pdsf >= cap` are zero" as a gated assertion
-- **Component boundary differs from split wording**:
-  - `split.md` names flood scheduler deliverable as `BleElectionEngine`; this chunk implements election flow inside `BleDiscoveryEngine` with embedded `ble_election_state_t`.
+## Potential Issues / Risks
+1. Promotion can occur before 3-round completion.
+2. `ble_engine_reset` clears slots but does not reassign self slot.
+3. Wrapper tick cadence (`SlotDuration`) may not match micro-slot timing (`NoiseSlotDuration`, `NeighborSlotDuration`).
+4. Data-phase restart ordering can bypass intended `Mode2` wait in some timelines.
+5. Data-phase subsystem is ahead-of-v1 scope and may create confusion in acceptance reviews.
+6. Conflict rule and edge-alignment rule coexist in one chunk; reviewers can mis-audit if not separated.
+7. RX/TX cast contract is strict; layout mismatch is unsafe.
+8. Header mode-flag drift in `ch01` can misclassify packet type at wrapper receive entry.
+9. Renouncement flag initialization dependency in `ch01` can create stale-flag hazards.
+10. Collision model (`last-slot` local bookkeeping) is a lightweight approximation, not full multi-node collision modeling.
 
-## Highlights
-- Clean separation between **platform-agnostic core** and **ns-3 integration layer**.
-- Config defaults are centralized in `ble_engine_config_init`, then reinforced in `ble_engine_init` for zero values.
-- Engine is callback-driven and test-friendly (send/log/metrics/slot hooks + RNG seeding).
-- Discovery, election, forwarding, and slot-gating are integrated in a single state machine (`ble_engine_tick` + cycle callbacks).
-- Wrapper exposes meaningful trace points (`MetricsUpdate`, `SlotOutcome`) for simulation instrumentation.
-
-## Potential Issues / Implementation Risks
-1. **Mode2 wait is effectively bypassed by current tick order.**
-   - In `ble_engine_tick`, when `data_phase_active` is false and node is aligned/clusterhead, the early “start data phase” check can restart immediately on the next tick, before intended `mode2_duration_ms` wait logic matters.
-
-2. **`ble_engine_reset` clears slots but does not reassign self slot (unlike init).**
-   - `ble_engine_init` assigns self slot; `ble_engine_reset` calls `ble_mesh_node_clear_slots` and does not call `ble_mesh_node_assign_self_slot`.
-   - Depending on external state transitions, this can leave slot gating behavior different before vs after reset.
-
-3. **Tick cadence in wrapper may not match micro-slot durations.**
-   - Wrapper always schedules ticks by `SlotDuration`, while NOISY/NEIGHBOR phases use independent micro-slot durations/counts in engine timing config.
-   - If `SlotDuration` differs from micro-slot timings, simulated phase timing may be distorted.
-
-4. **Collision model is single-node and last-event based.**
-   - `ble_engine_gate_and_record_slot` marks collision only when current event matches same frame/slot/channel as the previous recorded event in that engine instance.
-   - This is lightweight but can under/over-approximate real multi-node collisions.
-
-5. **Election packet casting contract is strict.**
-   - RX/TX cast between `ble_discovery_packet_t*` and `ble_election_packet_t*`; callers must provide matching layout for election message types.
-   - Invalid caller-side packing/layout would break parsing.
-
-6. **Header/docs wording drift around “placeholder” mode behavior.**
-   - Headers/attributes describe mode durations as placeholders, but the C engine actively uses `mode1_duration_ms` / `mode2_duration_ms` in tick logic.
-
-7. **Naming overlap can confuse includes.**
-   - Both `ble_discovery_engine.h` (C) and `ble-discovery-engine.h` (C++) exist in same directory with near-identical names.
-   - Build/include scripts must be explicit to avoid accidental header selection.
-
-## Prerequisites (Embedded Deployment: Non-Negotiable Requirements)
-The following are strict design requirements for deploying this chunk on embedded targets.
-
-### Protocol and Behavior Requirements
-- Keep v1 discovery/election **single-channel only**; do not enable multi-channel behavior in this phase.
-- Keep v1 wire contract frozen (`ble-mesh-wire-v1.0.0`): no field additions/removals/reordering/encoding changes.
-- Enforce election conflict rule exactly: higher `direct_connections`; tie -> lower `node_id`.
-- Enforce `PDSF` soft-cap stop on election forwarding and track it with a dedicated counter.
-- Enforce hard membership cap as a separate invariant and track violations with a dedicated counter.
-- Preserve deterministic replay mode (`D0`) with fixed seed + fixed timing.
-
-### Timing and Scheduler Requirements
-- Provide a monotonic millisecond time source with bounded jitter relative to slot timing.
-- Use one scheduler owner per node engine instance; no concurrent writes to `ble_engine_t`.
-- Align tick cadence with phase micro-slot timing (`noise_slot_duration_ms`, `neighbor_slot_duration_ms`) or document and bound timing distortion.
-- Handle 32-bit millisecond wrap-around explicitly in system-level integration tests.
-
-### Memory and Data-Structure Requirements
-- Use bounded/static memory for queue/path/neighbor storage; no unbounded growth at runtime.
-- Define and enforce compile-time limits for:
-  - max queue depth
-  - max path length
-  - max tracked neighbors
-  - max retained election history entries
-- Protect all length/count arithmetic against overflow and bounds violations.
-
-### Concurrency, ISR, and Callback Requirements
-- Treat engine API as single-threaded unless protected by explicit external synchronization.
-- Do not call blocking I/O from `send_cb`, `log_cb`, `metrics_cb`, or `slot_cb`.
-- If callbacks cross ISR/task boundaries, use lock-free or bounded-latency queues with backpressure policy.
-- Define callback worst-case execution time budgets and verify they fit within slot deadlines.
-
-### Portability and Binary-Contract Requirements
-- Use fixed-width integer types only for wire-visible fields.
-- Define endian policy for serialization and test roundtrip on target architecture.
-- Add compile-time layout checks for base/extended packet compatibility used by casts.
-- Compile with warnings-as-errors and UB-focused flags in CI for host builds.
-
-### Safety, Reliability, and Quality Requirements
-- Add watchdog-safe integration: engine tick/callback path must be non-blocking and bounded.
-- Persist critical config defaults in one source of truth and version them.
-- Add mandatory tests for chunk05 gates:
-  - exactly 3 election rounds
-  - renouncement completion behavior
-  - zero forwarded election packets after `pdsf >= cap`
-  - no unresolved candidates after final round + 1 settle cycle
-- Run static analysis (at minimum clang-tidy/cppcheck; MISRA profile when safety/regulatory constraints apply).
-- Provide field diagnostics for election state transitions, cap-stop events, and conflict outcomes.
+## Cross-Chunk Audit Notes (2026-04-08)
+- `split.md` permits integrated placement; this chunk hosting election logic in `BleDiscoveryEngine` is acceptable.
+- Chunk 5 soft-cap/hard-cap metric separation remains incomplete.
+- State transition logic and candidacy predicate are sourced from shared node runtime (`model/shared/ble_mesh_node.*`), not directly from `ch04` election helper APIs.
 
 ## Practical Reading Order
-1. `ble_discovery_engine.h` for types/config/state and API surface.
-2. `ble_engine_init`, `ble_engine_tick`, `ble_engine_receive_packet` in `ble_discovery_engine.c` for core behavior.
-3. `ble_engine_forward_next_message` + election helpers for forwarding/election details.
-4. `ble-discovery-engine.cc` for ns-3 scheduling, attribute mapping, and packet conversion.
+1. `ble_discovery_engine.h` for types/config/API.
+2. `ble_engine_init`, `ble_engine_tick`, `ble_engine_receive_packet` in `ble_discovery_engine.c`.
+3. `ble_engine_handle_election_packet`, `ble_engine_forward_next_message`, and election/renouncement helpers.
+4. `ble-discovery-engine.cc` for wrapper timing and packet conversion.
